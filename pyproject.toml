@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "granular-music-visualizer"
+version = "0.1.0"
+description = "Live-first music analysis and diagnostic control center"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=2.2,<3", "scipy>=1.15,<2", "soundfile>=0.13,<1",
+  "pydantic>=2.10,<3", "psutil>=7,<8", "PySide6-Essentials>=6.8,<7",
+  "PyAudioWPatch>=0.2.12.7,<0.3; sys_platform == 'win32'",
+  "pycaw>=20240210; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.11,<1"]
+
+[project.scripts]
+gmv = "gmv.cli:main"
+
+[project.gui-scripts]
+gmv-control = "gmv.ui:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
