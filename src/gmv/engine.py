@@ -151,4 +151,6 @@ class Engine:
                 "peak_sampled_rss_mb": self.peak_memory_mb,
                 "advanced_status": self.advanced.state if self.advanced else "disabled",
                 "advanced_drops": self.advanced.queue.dropped if self.advanced else 0,
+                "advanced_jobs": self.advanced.jobs if self.advanced else 0,
+                "advanced_processing_ms": stats(self.advanced.times) if self.advanced else None,
                 "error": self.error}

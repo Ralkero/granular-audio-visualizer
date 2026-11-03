@@ -80,6 +80,7 @@ class MusicalEvent(Message):
     group_id: str | None = None
     method: str
     interval_end: float | None = None
+    measurements: tuple[tuple[str, float], ...] = ()
 
 
 class Status(Message):

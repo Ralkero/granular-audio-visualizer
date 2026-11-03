@@ -92,8 +92,7 @@ class ControlCenter(QMainWindow):
         self.logging = QCheckBox("Save analysis logs (audio recording is off)")
         self.logging.setChecked(True)
         self.advanced = QCheckBox("Delayed harmonic/percussive analysis — experimental, CPU only")
-        self.advanced.setEnabled(False)
-        self.advanced.setToolTip("Available after the immediate pipeline is validated")
+        self.advanced.setToolTip("Two-second delayed spectral HPSS; does not identify individual instruments")
         form.addRow("Source", self.source_type)
         form.addRow("Output device", self.devices)
         form.addRow("Application", self.apps)
@@ -114,6 +113,8 @@ class ControlCenter(QMainWindow):
         self.open_button, self.export_button = QPushButton("Open session folder"), QPushButton("Export logs…")
         self.open_button.clicked.connect(self.open_session)
         self.export_button.clicked.connect(self.export_session)
+        self.open_button.setEnabled(False)
+        self.export_button.setEnabled(False)
         for button in (self.start_button, self.stop_button, self.open_button, self.export_button):
             controls.addWidget(button)
         layout.addLayout(controls)
