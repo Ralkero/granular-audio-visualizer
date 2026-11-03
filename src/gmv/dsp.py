@@ -52,7 +52,7 @@ class Analyzer:
         self.window = np.hanning(self.size).astype(np.float32)
         self.freq = np.fft.rfftfreq(self.size, 1 / rate)
         self.masks = [(self.freq >= a) & (self.freq < min(b, rate / 2 + 1))
-                      for a, b in zip(config.band_edges, config.band_edges[1:])]
+                      for a, b in zip(config.band_edges, config.band_edges[1:], strict=False)]
         self.prev = None
         self.flux_history = deque(maxlen=max(8, round(12 / self.hop)))
         self.onsets = deque(maxlen=256)

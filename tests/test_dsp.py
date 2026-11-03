@@ -14,7 +14,7 @@ def analyze(audio, rate=48000):
     for pos in range(0, len(audio), 480):
         data = audio[pos:pos+480].astype(np.float32)
         block = AudioBlock(data.tobytes(), len(data), rate, data.shape[1], pos/rate, 0, 0)
-        for window, start, mono, gap in assembler.push(block):
+        for window, start, mono, _gap in assembler.push(block):
             frame, new_events = analyzer.process(window, start, mono, block, live=False)
             frames.append(frame)
             events.extend(new_events)

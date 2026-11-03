@@ -54,7 +54,7 @@ class SessionWriter:
                     self.count += 1
                     if isinstance(message, FeatureFrame):
                         row = message.model_dump()
-                        row.update(dict(zip((n + "_energy" for n in BAND_NAMES), row.pop("band_energy"))))
+                        row.update(dict(zip((n + "_energy" for n in BAND_NAMES), row.pop("band_energy"), strict=False)))
                         row["spectral_contrast_db"] = json.dumps(row["spectral_contrast_db"])
                         if writer is None:
                             writer = csv.DictWriter(features, fieldnames=list(row))

@@ -95,7 +95,8 @@ class SystemAudioSource(AudioSource):
                         clock.next_time = None
                         last_packet = [perf_counter()]
 
-                        def callback(data, frames, info, flags):
+                        def callback(data, frames, info, flags, rate=rate, channels=channels,
+                                     last_packet=last_packet):
                             now = perf_counter()
                             last_packet[0] = now
                             if flags:

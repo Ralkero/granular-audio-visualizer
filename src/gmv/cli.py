@@ -17,6 +17,7 @@ def main():
     commands.add_parser("ui")
     capture = commands.add_parser("capture")
     capture.add_argument("--device")
+    capture.add_argument("--pid", type=int, help="Capture this application's process tree")
     capture.add_argument("--seconds", type=float, default=30)
     file = commands.add_parser("file")
     file.add_argument("path")
@@ -54,8 +55,12 @@ def main():
             stop.set()
         worker.join()
         return
-    source = (SystemAudioSource(args.device) if args.command == "capture" else
-              FileAudioSource(args.path, realtime=args.realtime))
+    if args.command == "capture" and args.pid:
+        from .sources.application import ApplicationAudioSource
+        source = ApplicationAudioSource(args.pid)
+    else:
+        source = (SystemAudioSource(args.device) if args.command == "capture" else
+                  FileAudioSource(args.path, realtime=args.realtime))
     engine = Engine(source, AnalysisConfig(advanced=args.advanced),
                     session_root=Path(args.sessions), logging=not args.no_log)
     engine.start()

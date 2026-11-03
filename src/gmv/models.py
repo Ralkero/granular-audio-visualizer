@@ -24,7 +24,7 @@ class AnalysisConfig(FrozenModel):
             raise ValueError("hop_ms must not exceed window_ms")
         if len(self.band_edges) != 8 or self.band_edges[0] < 0:
             raise ValueError("Provide eight nonnegative frequency edges")
-        if any(a >= b for a, b in zip(self.band_edges, self.band_edges[1:])):
+        if any(a >= b for a, b in zip(self.band_edges, self.band_edges[1:], strict=False)):
             raise ValueError("Frequency edges must strictly increase")
         return self
 
