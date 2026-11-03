@@ -2,7 +2,9 @@
 from collections import deque
 from time import perf_counter
 from uuid import uuid4
+
 import numpy as np
+
 from .models import AnalysisConfig, FeatureFrame, MusicalEvent
 
 

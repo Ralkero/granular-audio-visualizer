@@ -1,5 +1,7 @@
 from time import perf_counter
+
 import soundfile as sf
+
 from .base import AudioBlock, AudioSource
 
 

@@ -1,6 +1,7 @@
 """In-process pub/sub. Subscribers receive immutable models in independent bounded queues."""
 from threading import Lock
 from time import perf_counter
+
 from .buffer import BoundedQueue
 
 

@@ -1,7 +1,9 @@
 import json
+from threading import Event
+
 import numpy as np
 import soundfile as sf
-from threading import Event
+
 from gmv.bus import EventBus
 from gmv.engine import Engine
 from gmv.session import replay

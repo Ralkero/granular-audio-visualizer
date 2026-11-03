@@ -1,15 +1,16 @@
 """Asynchronous analysis logging. No audio samples are persisted by this writer."""
 import csv
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Thread
 from time import perf_counter
+
 from .models import BAND_NAMES, FeatureFrame, MusicalEvent, Status
 
 
 def utc_now():
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def write_json(path, value):

@@ -2,8 +2,10 @@ from collections import deque
 from threading import Event, Thread
 from time import perf_counter
 from uuid import uuid4
+
 import numpy as np
 import psutil
+
 from .buffer import BoundedQueue
 from .bus import EventBus
 from .dsp import Analyzer, WindowAssembler

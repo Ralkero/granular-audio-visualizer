@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from gmv.dsp import Analyzer, WindowAssembler
 from gmv.models import AnalysisConfig
 from gmv.sources.base import AudioBlock

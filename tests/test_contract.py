@@ -1,8 +1,9 @@
 import pytest
 from pydantic import ValidationError
-from gmv.models import AnalysisConfig, Status
+
 from gmv.buffer import BoundedQueue
 from gmv.bus import EventBus
+from gmv.models import AnalysisConfig, Status
 
 
 def test_config_rejects_invalid_windows_and_bands():

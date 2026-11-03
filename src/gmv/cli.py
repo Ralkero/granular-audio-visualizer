@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from threading import Event
 from time import perf_counter
+
 from .engine import Engine
 from .models import AnalysisConfig
 from .sources.file import FileAudioSource
@@ -35,9 +36,10 @@ def main():
         print(json.dumps(list_output_devices(), indent=2))
         return
     if args.command == "replay":
+        from threading import Thread
+
         from .bus import EventBus
         from .session import replay
-        from threading import Thread
         bus = EventBus()
         q = bus.subscribe(256)
         stop = Event()

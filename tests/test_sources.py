@@ -1,6 +1,8 @@
 from threading import Event
+
 import numpy as np
 import soundfile as sf
+
 from gmv.buffer import BoundedQueue
 from gmv.sources.file import FileAudioSource
 from gmv.sources.windows import CaptureClock

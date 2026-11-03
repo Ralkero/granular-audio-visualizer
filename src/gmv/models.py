@@ -1,5 +1,6 @@
 """Versioned wire contract. Times are seconds on the session's audio timeline."""
 from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 

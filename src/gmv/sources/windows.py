@@ -1,6 +1,7 @@
 """Read-only endpoint discovery and shared-mode WASAPI capture; no render stream."""
 import sys
 from time import perf_counter
+
 from .base import AudioBlock, AudioSource
 
 
