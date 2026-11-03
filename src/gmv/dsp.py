@@ -13,6 +13,7 @@ class WindowAssembler:
         self.expected = None
         self.format = None
         self.resets = 0
+        self.reset_pending = False
 
     def push(self, block):
         fmt = (block.sample_rate, block.channels, block.segment)
@@ -26,15 +27,15 @@ class WindowAssembler:
             self.start = block.timestamp
             self.mono_start = block.capture_monotonic
             self.resets += 1
+            self.reset_pending = True
         self.format = fmt
         self.expected = block.timestamp + block.frames / block.sample_rate
         self.pending = np.concatenate((self.pending, audio), axis=0)
         size = round(block.sample_rate * self.config.window_ms / 1000)
         hop = round(block.sample_rate * self.config.hop_ms / 1000)
-        first = True
         while len(self.pending) >= size:
-            yield (self.pending[:size], self.start, self.mono_start, gap and first)
-            first = False
+            yield (self.pending[:size], self.start, self.mono_start, self.reset_pending)
+            self.reset_pending = False
             self.pending = self.pending[hop:]
             self.start += hop / block.sample_rate
             self.mono_start += hop / block.sample_rate
