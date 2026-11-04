@@ -11,6 +11,7 @@ from .bus import EventBus
 from .dsp import Analyzer, WindowAssembler
 from .models import AnalysisConfig, Status
 from .session import SessionWriter
+from .diagnostics import ResourceMonitor
 
 
 class Engine:
@@ -36,6 +37,7 @@ class Engine:
         self.started = perf_counter()
         self.threads = []
         self._log_error_reported = False
+        self.resources = {}
 
     def status(self, state, detail):
         self.state, self.detail = state, detail
@@ -61,13 +63,16 @@ class Engine:
         except Exception as exc:
             self.error = str(exc)
             self.stop_event.set()
-            if self.advanced:
-                self.advanced.close()
-            if self.recorder:
-                self.recorder.close()
-            if self.writer:
-                self.writer.close(self.metrics(), self.source)
-            self.done.set()
+            try:
+                for worker in (self.advanced, self.recorder):
+                    if worker:
+                        worker.close()
+                if self.writer:
+                    self.writer.close(self.metrics(), self.source)
+            except Exception as cleanup_error:
+                self.error += f"; cleanup failed: {cleanup_error}"
+            finally:
+                self.done.set()
             raise
 
     def _start(self):
@@ -112,6 +117,7 @@ class Engine:
         process = psutil.Process()
         process.cpu_percent()
         last_metrics = perf_counter()
+        resources = ResourceMonitor()
         try:
             while True:
                 block = self.audio.get()
@@ -129,6 +135,10 @@ class Engine:
                                     "discontinuity",
                                     "Audio gap/format change; analysis context reset",
                                 )
+                                self.status(
+                                    "capturing",
+                                    "Audio resumed; analysis context reset for the new segment",
+                                )
                             analyzer = Analyzer(
                                 block.sample_rate,
                                 block.channels,
@@ -142,15 +152,10 @@ class Engine:
                         if self.source.live:
                             frame = frame.model_copy(
                                 update={
-                                    "capture_to_publish_ms": max(
-                                        0,
-                                        (
-                                            perf_counter()
-                                            - mono
-                                            - len(window) / block.sample_rate / 2
-                                        )
-                                        * 1000,
+                                    "capture_to_publish_ms": (
+                                        perf_counter() - mono - len(window) / block.sample_rate / 2
                                     )
+                                    * 1000
                                 }
                             )
                         self.latest = self.bus.publish(frame)
@@ -168,6 +173,7 @@ class Engine:
                     self.cpu = process.cpu_percent()
                     self.memory_mb = process.memory_info().rss / 1024**2
                     self.peak_memory_mb = max(self.peak_memory_mb, self.memory_mb)
+                    self.resources = resources.sample()
                     last_metrics = perf_counter()
                     if self.writer and self.writer.error and not self._log_error_reported:
                         self._log_error_reported = True
@@ -233,6 +239,10 @@ class Engine:
             "process_cpu_percent": self.cpu,
             "rss_mb": self.memory_mb,
             "peak_sampled_rss_mb": self.peak_memory_mb,
+            "owned_process_resources": self.resources,
+            "logger_dropped_messages": self.writer.queue.dropped if self.writer else 0,
+            "native_dropped_packets": getattr(self.source, "native_drops", 0),
+            "queue_occupancy": len(self.audio),
             "advanced_status": self.advanced.state if self.advanced else "disabled",
             "advanced_drops": self.advanced.queue.dropped if self.advanced else 0,
             "advanced_jobs": self.advanced.jobs if self.advanced else 0,

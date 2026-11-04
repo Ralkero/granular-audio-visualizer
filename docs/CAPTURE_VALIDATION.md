@@ -8,16 +8,16 @@ Start `scripts/validate_capture.py --pid PID --pair-system --seconds 600 --outpu
 |---|---|---|
 | Spotify already playing | Launch Spotify and play normally; start system and process capture; confirm activity | Observed: both produced nonzero frames |
 | Spotify pause/resume with browser audible | User pauses Spotify ~20 s, leaves browser playing, then resumes. Process signal should go silent while system remains active | Observed user-assisted: zero Spotify peak during pause, nonzero system peak; Spotify signal resumed |
-| Start while paused | User pauses; start a NEW process capture; wait, then resume | Unrun |
-| Seek and track transition | User seeks then skips; ensure capture continues without process/format changes or invented gaps | Awaiting user-assisted observation |
-| Quit/restart | User chooses Spotify Exit/Quit (window close may only minimize), relaunches and resumes; source must reconnect only to an unambiguous same-executable root | Awaiting user-assisted observation |
-| Multiple roots / PID reuse | Inject ambiguous roots and creation-time mismatch; never select arbitrarily | Planned fault injection |
-| Repeated lifecycle | Start/stop several short sessions and check owned threads/children after shutdown | Planned automated integration |
+| Start while paused | User pauses; start a NEW process capture; wait, then resume | Observed: fresh capture silent, then resumed at ~20.3 s |
+| Seek and track transition | User seeks then skips; ensure capture continues without process/format changes or invented gaps | Observed: user performed action; capture continued |
+| Quit/restart | User chooses Spotify Exit/Quit (window close may only minimize), relaunches and resumes; source must reconnect only to an unambiguous same-executable root | Observed: new process root, reconnection and resumed activity |
+| Multiple roots / PID reuse | Inject ambiguous roots and creation-time mismatch; never select arbitrarily | Simulated ambiguous roots pass; PID creation identity remains enforced |
+| Repeated lifecycle | Start/stop several short sessions and check owned threads/children after shutdown | Observed: three cycles per source; no remaining capture threads/owned children |
 | Default output switch | User switches default output while playing; capture should reopen with a new segment | Physical test unrun; simulated change tested in Phase One |
 | Explicit device disconnection | User disconnects selected USB output; source must wait for that device, not broaden to another | Physical test unrun |
 | USB reconnect | User reconnects; verify timeline gap, segment reset, no synthetic transient | Physical test unrun |
-| 10-minute soak off/on | Repeat equivalent source/device/logging/UI settings, note content/load differences | Baseline paired run in progress |
-| Failures | Inject logger writes, helper exit, slow subscriber and advanced overload; preserve boundedness | Planned bounded tests |
+| 10-minute soak off/on | Repeat equivalent source/device/logging/UI settings, note content/load differences | Observed: 600 s advanced off complete; advanced on pending |
+| Failures | Inject logger writes, helper exit, slow subscriber and advanced overload; preserve boundedness | Simulated logger failure, helper launch failure and bounded subscriber tests pass; stale-worker test pending |
 
 Capture isolation is supported by the actual Spotify pause/resume contrast, not by an inactive unrelated process yielding silence. This does not establish zero leakage under every Windows routing configuration. No calibrated physical sound/display latency is measured.
 

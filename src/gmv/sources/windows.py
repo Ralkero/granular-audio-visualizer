@@ -22,6 +22,20 @@ def endpoint_snapshot():
     return AudioUtilities.GetSpeakers().id, tuple(sorted(d.id for d in devices))
 
 
+def selected_endpoint_id(loopback_name):
+    from pycaw.pycaw import AudioUtilities
+
+    name = loopback_name.removesuffix(" [Loopback]")
+    matches = [
+        d.id
+        for d in AudioUtilities.GetAllDevices(data_flow=0, device_state=1)
+        if d.FriendlyName == name
+    ]
+    if len(matches) != 1:
+        raise RuntimeError("Selected output endpoint is absent or ambiguous")
+    return matches[0]
+
+
 class CaptureClock:
     """Use a sample clock within each segment, flag ADC jumps and callback outages.
 
@@ -35,6 +49,7 @@ class CaptureClock:
         self.last_received = None
         self.next_adc = None
         self.segment = 0
+        self.callback_clock_error_ms = 0.0
 
     def stamp(self, frames, rate, info, now, flagged=False):
         adc, current = info.get("input_buffer_adc_time", 0), info.get("current_time", 0)
@@ -50,6 +65,7 @@ class CaptureClock:
             self.segment += 1
             self.next_time = max(self.next_time or 0, now - self.origin - age, 0)
         timestamp = self.next_time
+        self.callback_clock_error_ms = (now - self.origin - age - timestamp) * 1000
         self.next_time += frames / rate
         self.next_adc = adc + frames / rate if valid else None
         self.last_received = now
@@ -58,7 +74,8 @@ class CaptureClock:
             self.origin + timestamp,
             self.segment,
             gap,
-            "portaudio_adc_anchored_sample_clock" if valid else "callback_anchored_sample_clock",
+            ("portaudio_adc_anchored_sample_clock" if valid else "callback_anchored_sample_clock")
+            + ("_drift_warning" if abs(self.callback_clock_error_ms) > 100 else ""),
         )
 
 
@@ -70,6 +87,8 @@ class SystemAudioSource(AudioSource):
         self.recoveries = 0
         self.callback_flags = 0
         self.device_info = {}
+        self.endpoint_id = None
+        self.clock = None
 
     def describe(self):
         return {
@@ -78,6 +97,7 @@ class SystemAudioSource(AudioSource):
             "device": self.device_info,
             "recoveries": self.recoveries,
             "callback_flags": self.callback_flags,
+            "callback_clock_error_ms": self.clock.callback_clock_error_ms if self.clock else None,
         }
 
     def run(self, output, stop, status):
@@ -89,11 +109,18 @@ class SystemAudioSource(AudioSource):
 
         comtypes.CoInitialize()
         clock = CaptureClock(getattr(self, "timeline_origin", perf_counter()))
+        self.clock = clock
         try:
             while not stop.is_set():
                 try:
                     with pa.PyAudio() as audio:
                         if self.device_name:
+                            selected_id = selected_endpoint_id(self.device_name)
+                            if self.endpoint_id is not None and selected_id != self.endpoint_id:
+                                raise RuntimeError(
+                                    "A different endpoint has the selected name; explicitly select it to capture"
+                                )
+                            self.endpoint_id = selected_id
                             choices = [
                                 d
                                 for d in audio.get_loopback_device_info_generator()
