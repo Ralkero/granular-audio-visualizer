@@ -1,7 +1,9 @@
 """Process-tree loopback via an isolated, bounded NAudio helper. No Spotify API."""
+
 import struct
 import subprocess
 import sys
+import os
 from collections import deque
 from pathlib import Path
 from threading import Thread
@@ -11,14 +13,23 @@ from .base import AudioBlock, AudioSource
 
 
 HEADER = struct.Struct("<4sIIIqqI")
-HELPER = Path(__file__).resolve().parents[3] / "native/ProcessLoopback/bin/Release/net9.0-windows/ProcessLoopback.exe"
+HELPER = (
+    Path(__file__).resolve().parents[3]
+    / "native/ProcessLoopback/bin/Release/net9.0-windows/ProcessLoopback.exe"
+)
 
 
 def root_process(process):
     executable = process.exe()
     while True:
-        parent = process.parent()
-        if parent is None or parent.exe().casefold() != executable.casefold():
+        try:
+            parent = process.parent()
+            same_executable = (
+                parent is not None and parent.exe().casefold() == executable.casefold()
+            )
+        except (OSError, psutil.Error):
+            return process
+        if not same_executable:
             return process
         process = parent
 
@@ -29,6 +40,7 @@ def list_audio_applications():
     import comtypes
     from pycaw.pycaw import AudioUtilities, IAudioSessionControl2
     from pycaw.utils import AudioSession
+
     comtypes.CoInitialize()
     result = {}
     try:
@@ -36,11 +48,17 @@ def list_audio_applications():
             try:
                 sessions = device.AudioSessionManager.GetSessionEnumerator()
                 for index in range(sessions.GetCount()):
-                    session = AudioSession(sessions.GetSession(index).QueryInterface(IAudioSessionControl2))
-                    if session.ProcessId:
+                    session = AudioSession(
+                        sessions.GetSession(index).QueryInterface(IAudioSessionControl2)
+                    )
+                    if session.ProcessId and session.ProcessId != os.getpid():
                         process = root_process(psutil.Process(session.ProcessId))
-                        result[process.pid] = {"pid": process.pid, "name": process.name(),
-                                               "exe": process.exe(), "created": process.create_time()}
+                        result[process.pid] = {
+                            "pid": process.pid,
+                            "name": process.name(),
+                            "exe": process.exe(),
+                            "created": process.create_time(),
+                        }
             except (OSError, psutil.Error):
                 continue  # Device/session disappeared during enumeration.
     finally:
@@ -78,13 +96,19 @@ class ApplicationAudioSource(AudioSource):
 
     def __init__(self, pid, name=None, exe=None, created=None):
         if sys.platform != "win32" or sys.getwindowsversion().build < 20348:
-            raise RuntimeError("Process loopback requires Windows build 20348+. Choose Default system output.")
+            raise RuntimeError(
+                "Process loopback requires Windows build 20348+. Choose Default system output."
+            )
         if not HELPER.is_file():
-            raise RuntimeError("Process helper is unavailable. Run Build Process Capture.ps1, "
-                               "or choose Default system output.")
+            raise RuntimeError(
+                "Process helper is unavailable. Run Build Process Capture.ps1, "
+                "or choose Default system output."
+            )
         process = psutil.Process(pid)
         if created is not None and abs(process.create_time() - created) > 0.01:
-            raise RuntimeError("The selected process restarted. Refresh sources and select it again.")
+            raise RuntimeError(
+                "The selected process restarted. Refresh sources and select it again."
+            )
         self.pid = pid
         self.name, self.exe = name or process.name(), exe or process.exe()
         self.created = process.create_time()
@@ -92,9 +116,16 @@ class ApplicationAudioSource(AudioSource):
         self.restarts = 0
 
     def describe(self):
-        return {"kind": self.kind, "pid": self.pid, "process": self.name,
-                "process_tree": True, "sample_rate": 48000, "channels": 2,
-                "native_dropped_packets": self.native_drops, "restarts": self.restarts}
+        return {
+            "kind": self.kind,
+            "pid": self.pid,
+            "process": self.name,
+            "process_tree": True,
+            "sample_rate": 48000,
+            "channels": 2,
+            "native_dropped_packets": self.native_drops,
+            "restarts": self.restarts,
+        }
 
     def _alive(self):
         try:
@@ -119,11 +150,14 @@ class ApplicationAudioSource(AudioSource):
         return False
 
     def run(self, output, stop, status):
-        origin, segment = perf_counter(), 0
+        origin, segment = getattr(self, "timeline_origin", perf_counter()), 0
         try:
             while not stop.is_set():
                 if not self._alive():
-                    status("waiting", "Selected application closed. Waiting for an unambiguous restart of the same executable.")
+                    status(
+                        "waiting",
+                        "Selected application closed. Waiting for an unambiguous restart of the same executable.",
+                    )
                     while not stop.wait(1):
                         if self._find_restart():
                             break
@@ -132,12 +166,20 @@ class ApplicationAudioSource(AudioSource):
                 segment += 1
                 reader_errors, stderr = [], deque(maxlen=20)
                 last_packet = [perf_counter()]
-                helper = subprocess.Popen([str(HELPER), str(self.pid)], stdin=subprocess.PIPE,
-                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                          creationflags=subprocess.CREATE_NO_WINDOW)
+                helper = subprocess.Popen(
+                    [str(HELPER), str(self.pid)],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                )
 
-                def read_audio(helper=helper, segment=segment, reader_errors=reader_errors,
-                               last_packet=last_packet):
+                def read_audio(
+                    helper=helper,
+                    segment=segment,
+                    reader_errors=reader_errors,
+                    last_packet=last_packet,
+                ):
                     previous_sequence, next_timestamp = 0, None
                     try:
                         while not stop.is_set():
@@ -152,14 +194,29 @@ class ApplicationAudioSource(AudioSource):
                             valid_qpc = qpc > 0 and not flags & 4 and abs(now - qpc / 1e7) < 10
                             mono = qpc / 1e7 if valid_qpc else now - frames / rate
                             timestamp = max(0, mono - origin)
-                            gap = bool(dropped or flags & 1 or next_timestamp is None or
-                                       abs(timestamp - next_timestamp) > 2 / rate)
+                            gap = bool(
+                                dropped
+                                or flags & 1
+                                or next_timestamp is None
+                                or abs(timestamp - next_timestamp) > 2 / rate
+                            )
                             if not gap:
                                 timestamp = next_timestamp
                                 mono = origin + timestamp
-                            output.put(AudioBlock(data, frames, rate, channels, timestamp, mono, now,
-                                                  segment, gap,
-                                                  "wasapi_qpc" if valid_qpc else "pipe_arrival_estimate"))
+                            output.put(
+                                AudioBlock(
+                                    data,
+                                    frames,
+                                    rate,
+                                    channels,
+                                    timestamp,
+                                    mono,
+                                    now,
+                                    segment,
+                                    gap,
+                                    "wasapi_qpc" if valid_qpc else "pipe_arrival_estimate",
+                                )
+                            )
                             previous_sequence = sequence
                             next_timestamp = timestamp + frames / rate
                             last_packet[0] = now
@@ -186,13 +243,19 @@ class ApplicationAudioSource(AudioSource):
                             raise RuntimeError(reader_errors[0])
                         if helper.poll() is not None:
                             diagnostics.join(timeout=1)
-                            raise RuntimeError("Process capture stopped: " + "; ".join(stderr) +
-                                               ". Choose Default system output as fallback.")
+                            raise RuntimeError(
+                                "Process capture stopped: "
+                                + "; ".join(stderr)
+                                + ". Choose Default system output as fallback."
+                            )
                         quiet = perf_counter() - last_packet[0] > 1
                         if quiet != waiting:
-                            status("waiting" if quiet else "capturing",
-                                   "No application audio packets; waiting for playback" if quiet
-                                   else "Application audio resumed")
+                            status(
+                                "waiting" if quiet else "capturing",
+                                "No application audio packets; waiting for playback"
+                                if quiet
+                                else "Application audio resumed",
+                            )
                             waiting = quiet
                 finally:
                     try:

@@ -27,8 +27,16 @@ def test_slow_subscriber_is_isolated():
     bus = EventBus()
     slow, fast = bus.subscribe(1), bus.subscribe(10)
     for i in range(4):
-        bus.publish(Status(session_id="test", source="test", timestamp=i,
-                           detected_monotonic=0, state="test", detail="test"))
+        bus.publish(
+            Status(
+                session_id="test",
+                source="test",
+                timestamp=i,
+                detected_monotonic=0,
+                state="test",
+                detail="test",
+            )
+        )
     assert slow.dropped == 3 and fast.dropped == 0
     assert fast.get().sequence == 1 and slow.get().sequence == 4
     bus.unsubscribe(slow)

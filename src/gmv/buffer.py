@@ -1,4 +1,5 @@
 """Bounded queues; live producers discard oldest data rather than waiting on consumers."""
+
 from collections import deque
 from threading import Condition
 

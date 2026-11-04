@@ -1,0 +1,71 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "window_ms": {
+      "default": 46.44,
+      "maximum": 200,
+      "minimum": 20,
+      "title": "Window Ms",
+      "type": "number"
+    },
+    "hop_ms": {
+      "default": 20,
+      "maximum": 50,
+      "minimum": 5,
+      "title": "Hop Ms",
+      "type": "number"
+    },
+    "capture_ms": {
+      "default": 10,
+      "maximum": 50,
+      "minimum": 5,
+      "title": "Capture Ms",
+      "type": "number"
+    },
+    "queue_blocks": {
+      "default": 16,
+      "maximum": 128,
+      "minimum": 2,
+      "title": "Queue Blocks",
+      "type": "integer"
+    },
+    "silence_dbfs": {
+      "default": -65,
+      "maximum": -20,
+      "minimum": -120,
+      "title": "Silence Dbfs",
+      "type": "number"
+    },
+    "band_edges": {
+      "default": [
+        20,
+        60,
+        250,
+        500,
+        2000,
+        4000,
+        6000,
+        24000
+      ],
+      "items": {
+        "type": "number"
+      },
+      "title": "Band Edges",
+      "type": "array"
+    },
+    "advanced": {
+      "default": false,
+      "title": "Advanced",
+      "type": "boolean"
+    },
+    "debug_audio_seconds": {
+      "default": 0,
+      "maximum": 60,
+      "minimum": 0,
+      "title": "Debug Audio Seconds",
+      "type": "integer"
+    }
+  },
+  "title": "AnalysisConfig",
+  "type": "object"
+}

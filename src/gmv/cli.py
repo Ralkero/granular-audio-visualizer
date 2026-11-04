@@ -32,6 +32,7 @@ def main():
     args = parser.parse_args()
     if args.command == "ui":
         from .ui import main as ui_main
+
         return ui_main()
     if args.command == "devices":
         print(json.dumps(list_output_devices(), indent=2))
@@ -41,6 +42,7 @@ def main():
 
         from .bus import EventBus
         from .session import replay
+
         bus = EventBus()
         q = bus.subscribe(256)
         stop = Event()
@@ -57,12 +59,20 @@ def main():
         return
     if args.command == "capture" and args.pid:
         from .sources.application import ApplicationAudioSource
+
         source = ApplicationAudioSource(args.pid)
     else:
-        source = (SystemAudioSource(args.device) if args.command == "capture" else
-                  FileAudioSource(args.path, realtime=args.realtime))
-    engine = Engine(source, AnalysisConfig(advanced=args.advanced),
-                    session_root=Path(args.sessions), logging=not args.no_log)
+        source = (
+            SystemAudioSource(args.device)
+            if args.command == "capture"
+            else FileAudioSource(args.path, realtime=args.realtime)
+        )
+    engine = Engine(
+        source,
+        AnalysisConfig(advanced=args.advanced),
+        session_root=Path(args.sessions),
+        logging=not args.no_log,
+    )
     engine.start()
     deadline = perf_counter() + args.seconds if args.command == "capture" else float("inf")
     try:

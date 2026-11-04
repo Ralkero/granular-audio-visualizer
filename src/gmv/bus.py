@@ -1,4 +1,5 @@
 """In-process pub/sub. Subscribers receive immutable models in independent bounded queues."""
+
 from threading import Lock
 from time import perf_counter
 
@@ -26,8 +27,9 @@ class EventBus:
     def publish(self, message):
         with self._lock:
             self._sequence += 1
-            message = message.model_copy(update={
-                "published_monotonic": perf_counter(), "sequence": self._sequence})
+            message = message.model_copy(
+                update={"published_monotonic": perf_counter(), "sequence": self._sequence}
+            )
             for subscriber in self._subscribers:
                 subscriber.put(message)
         return message

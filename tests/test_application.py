@@ -10,9 +10,15 @@ def test_native_packet_protocol_preserves_qpc():
     assert seq == 5 and qpc == 123456789 and flags == 1
 
 
-@pytest.mark.parametrize("packet", [b"GMV", HEADER.pack(b"BAD!", 16, 48000, 2, 1, 0, 0),
-                                   HEADER.pack(b"GMV1", 16, 48000, 2, 1, 0, 0) + bytes(8),
-                                   HEADER.pack(b"GMV1", 2**30, 48000, 2, 1, 0, 0)])
+@pytest.mark.parametrize(
+    "packet",
+    [
+        b"GMV",
+        HEADER.pack(b"BAD!", 16, 48000, 2, 1, 0, 0),
+        HEADER.pack(b"GMV1", 16, 48000, 2, 1, 0, 0) + bytes(8),
+        HEADER.pack(b"GMV1", 2**30, 48000, 2, 1, 0, 0),
+    ],
+)
 def test_native_packet_rejects_bad_or_unbounded_data(packet):
     with pytest.raises(ValueError):
         read_packet(io.BytesIO(packet))

@@ -1,4 +1,5 @@
 """Versioned wire contract. Times are seconds on the session's audio timeline."""
+
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -17,6 +18,7 @@ class AnalysisConfig(FrozenModel):
     # Adjacent edges: sub-bass, bass, low mids, mids, upper mids, presence, air.
     band_edges: tuple[float, ...] = (20, 60, 250, 500, 2000, 4000, 6000, 24000)
     advanced: bool = False
+    debug_audio_seconds: int = Field(default=0, ge=0, le=60)
 
     @model_validator(mode="after")
     def check(self):

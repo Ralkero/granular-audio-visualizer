@@ -12,7 +12,7 @@ from gmv.sources.file import FileAudioSource
 
 def test_complete_file_pipeline_and_replay(tmp_path):
     path = tmp_path / "tone.wav"
-    sf.write(path, 0.3*np.sin(2*np.pi*440*np.arange(48000)/48000), 48000)
+    sf.write(path, 0.3 * np.sin(2 * np.pi * 440 * np.arange(48000) / 48000), 48000)
     engine = Engine(FileAudioSource(path, realtime=False), session_root=tmp_path)
     subscriber = engine.bus.subscribe()
     engine.start()

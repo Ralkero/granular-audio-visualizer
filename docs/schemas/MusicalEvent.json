@@ -1,0 +1,141 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "timestamp": {
+      "minimum": 0,
+      "title": "Timestamp",
+      "type": "number"
+    },
+    "detected_monotonic": {
+      "title": "Detected Monotonic",
+      "type": "number"
+    },
+    "published_monotonic": {
+      "default": 0,
+      "title": "Published Monotonic",
+      "type": "number"
+    },
+    "sequence": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "type": {
+      "const": "musical_event",
+      "default": "musical_event",
+      "title": "Type",
+      "type": "string"
+    },
+    "event_id": {
+      "title": "Event Id",
+      "type": "string"
+    },
+    "event_type": {
+      "title": "Event Type",
+      "type": "string"
+    },
+    "intensity": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Intensity",
+      "type": "number"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "analysis_tier": {
+      "default": "realtime",
+      "enum": [
+        "realtime",
+        "advanced"
+      ],
+      "title": "Analysis Tier",
+      "type": "string"
+    },
+    "related_event_ids": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Related Event Ids",
+      "type": "array"
+    },
+    "group_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Group Id"
+    },
+    "method": {
+      "title": "Method",
+      "type": "string"
+    },
+    "interval_end": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Interval End"
+    },
+    "measurements": {
+      "default": [],
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "type": "array"
+      },
+      "title": "Measurements",
+      "type": "array"
+    }
+  },
+  "required": [
+    "session_id",
+    "source",
+    "timestamp",
+    "detected_monotonic",
+    "event_id",
+    "event_type",
+    "intensity",
+    "confidence",
+    "method"
+  ],
+  "title": "MusicalEvent",
+  "type": "object"
+}

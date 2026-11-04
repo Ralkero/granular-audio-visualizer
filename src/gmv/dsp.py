@@ -1,4 +1,5 @@
 """Causal, CPU-only mixed-audio features. Candidate events are not instrument identities."""
+
 from collections import deque
 from time import perf_counter
 from uuid import uuid4
@@ -19,8 +20,12 @@ class WindowAssembler:
 
     def push(self, block):
         fmt = (block.sample_rate, block.channels, block.segment)
-        gap = (self.expected is None or block.discontinuity or fmt != self.format
-               or abs(block.timestamp - self.expected) > 2 / block.sample_rate)
+        gap = (
+            self.expected is None
+            or block.discontinuity
+            or fmt != self.format
+            or abs(block.timestamp - self.expected) > 2 / block.sample_rate
+        )
         audio = np.frombuffer(block.data, dtype="<f4").reshape(block.frames, block.channels)
         if not np.isfinite(audio).all():
             raise ValueError("Capture contains non-finite samples")
@@ -51,8 +56,10 @@ class Analyzer:
         self.hop = round(rate * config.hop_ms / 1000) / rate
         self.window = np.hanning(self.size).astype(np.float32)
         self.freq = np.fft.rfftfreq(self.size, 1 / rate)
-        self.masks = [(self.freq >= a) & (self.freq < min(b, rate / 2 + 1))
-                      for a, b in zip(config.band_edges, config.band_edges[1:], strict=False)]
+        self.masks = [
+            (self.freq >= a) & (self.freq < min(b, rate / 2 + 1))
+            for a, b in zip(config.band_edges, config.band_edges[1:], strict=False)
+        ]
         self.prev = None
         self.flux_history = deque(maxlen=max(8, round(12 / self.hop)))
         self.onsets = deque(maxlen=256)
@@ -79,9 +86,13 @@ class Analyzer:
             return
         lo, hi = max(1, round(60 / 200 / self.hop)), min(len(x) // 2, round(60 / 60 / self.hop))
         lags = range(lo, hi + 1)
-        scores = [float(np.dot(x[:-lag], x[lag:]) /
-                        (np.linalg.norm(x[:-lag]) * np.linalg.norm(x[lag:]) + 1e-12))
-                  for lag in lags]
+        scores = [
+            float(
+                np.dot(x[:-lag], x[lag:])
+                / (np.linalg.norm(x[:-lag]) * np.linalg.norm(x[lag:]) + 1e-12)
+            )
+            for lag in lags
+        ]
         index = int(np.argmax(scores))
         confidence = max(0.0, min(1.0, scores[index]))
         self.tempo_confidence = confidence
@@ -103,20 +114,38 @@ class Analyzer:
         weights = power / max(total, 1e-20)
         centroid = float(np.dot(self.freq, weights))
         bandwidth = float(np.sqrt(np.dot((self.freq - centroid) ** 2, weights)))
-        rolloff = float(self.freq[min(len(self.freq) - 1,
-                                     np.searchsorted(np.cumsum(weights), 0.85))]) if total else 0.0
+        rolloff = (
+            float(self.freq[min(len(self.freq) - 1, np.searchsorted(np.cumsum(weights), 0.85))])
+            if total
+            else 0.0
+        )
         # One-sided power, Hann power compensation -> mean-square units.
         energy_scale = 2 / (self.size * float(np.square(self.window).sum()))
         bands = tuple(float(power[m].sum() * energy_scale) for m in self.masks)
-        contrast = tuple(float(10 * np.log10((np.quantile(power[m], 0.9) + 1e-20) /
-                                             (np.quantile(power[m], 0.1) + 1e-20)))
-                         if np.any(m) else 0.0 for m in self.masks)
-        flux = (float(np.maximum(magnitude - self.prev, 0).sum() /
-                      max(magnitude.sum(), 1e-12)) if self.prev is not None else 0.0)
+        contrast = tuple(
+            float(
+                10
+                * np.log10(
+                    (np.quantile(power[m], 0.9) + 1e-20) / (np.quantile(power[m], 0.1) + 1e-20)
+                )
+            )
+            if np.any(m)
+            else 0.0
+            for m in self.masks
+        )
+        flux = (
+            float(np.maximum(magnitude - self.prev, 0).sum() / max(magnitude.sum(), 1e-12))
+            if self.prev is not None
+            else 0.0
+        )
         self.prev = magnitude
-        recent = np.asarray(list(self.flux_history)[-max(1, round(1 / self.hop)):])
-        threshold = max(0.12, float(np.median(recent) + 3 * np.median(
-            np.abs(recent - np.median(recent)))) if len(recent) else 0.12)
+        recent = np.asarray(list(self.flux_history)[-max(1, round(1 / self.hop)) :])
+        threshold = max(
+            0.12,
+            float(np.median(recent) + 3 * np.median(np.abs(recent - np.median(recent))))
+            if len(recent)
+            else 0.12,
+        )
         is_quiet = db < self.config.silence_dbfs
         strength = min(1.0, flux) if not is_quiet else 0.0
         self.flux_history.append(strength)
@@ -132,13 +161,19 @@ class Analyzer:
         group = None
 
         def emit(kind, confidence, value=None):
-            event = MusicalEvent(session_id=self.session_id, source=self.source,
-                                 timestamp=timestamp, detected_monotonic=perf_counter(),
-                                 event_id=uuid4().hex, event_type=kind,
-                                 intensity=intensity if value is None else float(np.clip(value, 0, 1)),
-                                 confidence=confidence, group_id=group,
-                                 related_event_ids=tuple(e.event_id for e in events[:1]),
-                                 method="mixed_audio_spectral_heuristic_v1")
+            event = MusicalEvent(
+                session_id=self.session_id,
+                source=self.source,
+                timestamp=timestamp,
+                detected_monotonic=perf_counter(),
+                event_id=uuid4().hex,
+                event_type=kind,
+                intensity=intensity if value is None else float(np.clip(value, 0, 1)),
+                confidence=confidence,
+                group_id=group,
+                related_event_ids=tuple(e.event_id for e in events[:1]),
+                method="mixed_audio_spectral_heuristic_v1",
+            )
             events.append(event)
 
         self.silence_duration = self.silence_duration + self.hop if is_quiet else 0.0
@@ -164,8 +199,12 @@ class Analyzer:
                 emit("beat_candidate", self.tempo_confidence * 0.7, strength)
         if not is_quiet and db - self.previous_db > 6:
             emit("energy_rise", 0.65)
-        if (self.previous_centroid is not None and not is_quiet and
-                abs(centroid - self.previous_centroid) > 1500 and strength > 0.2):
+        if (
+            self.previous_centroid is not None
+            and not is_quiet
+            and abs(centroid - self.previous_centroid) > 1500
+            and strength > 0.2
+        ):
             emit("spectral_change", 0.55)
         if abs(intensity - self.last_intensity) > 0.25 and timestamp - self.last_change > 1:
             emit("intensity_change", 0.6)
@@ -175,19 +214,37 @@ class Analyzer:
             self.onsets.popleft()
         done = perf_counter()
         frame = FeatureFrame(
-            session_id=self.session_id, source=self.source, timestamp=timestamp,
-            detected_monotonic=done, window_end=end, sample_rate=self.rate,
-            channels=self.channels, segment=block.segment, rms=rms, peak=peak,
-            loudness_dbfs=float(db), short_term_loudness_dbfs=float(short_db),
-            spectral_centroid_hz=centroid, spectral_bandwidth_hz=bandwidth,
-            spectral_rolloff_hz=rolloff, spectral_contrast_db=contrast,
+            session_id=self.session_id,
+            source=self.source,
+            timestamp=timestamp,
+            detected_monotonic=done,
+            window_end=end,
+            sample_rate=self.rate,
+            channels=self.channels,
+            segment=block.segment,
+            rms=rms,
+            peak=peak,
+            loudness_dbfs=float(db),
+            short_term_loudness_dbfs=float(short_db),
+            spectral_centroid_hz=centroid,
+            spectral_bandwidth_hz=bandwidth,
+            spectral_rolloff_hz=rolloff,
+            spectral_contrast_db=contrast,
             zero_crossing_rate=float(np.mean(np.diff(np.signbit(audio), axis=0))),
-            band_energy=bands, spectral_flux=flux, transient_strength=strength,
-            onset_strength=strength, dynamic_intensity=intensity, silence=self.silent,
-            tempo_bpm=self.tempo, tempo_confidence=self.tempo_confidence,
-            rhythmic_density=len(self.onsets) / 4, queue_latency_ms=max(0, queue_ms),
+            band_energy=bands,
+            spectral_flux=flux,
+            transient_strength=strength,
+            onset_strength=strength,
+            dynamic_intensity=intensity,
+            silence=self.silent,
+            tempo_bpm=self.tempo,
+            tempo_confidence=self.tempo_confidence,
+            rhythmic_density=len(self.onsets) / 4,
+            queue_latency_ms=max(0, queue_ms),
             dsp_ms=(done - began) * 1000,
-            capture_to_publish_ms=max(0, (done - capture_mono - len(audio) / self.rate / 2)
-                                      * 1000) if live else None,
-            timestamp_quality=block.timestamp_quality)
+            capture_to_publish_ms=max(0, (done - capture_mono - len(audio) / self.rate / 2) * 1000)
+            if live
+            else None,
+            timestamp_quality=block.timestamp_quality,
+        )
         return frame, events

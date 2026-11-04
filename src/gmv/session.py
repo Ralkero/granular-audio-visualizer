@@ -1,4 +1,5 @@
 """Asynchronous analysis logging. No audio samples are persisted by this writer."""
+
 import csv
 import json
 from datetime import UTC, datetime
@@ -19,28 +20,41 @@ def write_json(path, value):
 
 class SessionWriter:
     def __init__(self, root, session_id, bus, config, source):
-        self.path = Path(root) / ("session_" + datetime.now().strftime("%Y-%m-%d_%H%M%S")
-                                  + "_" + session_id[:8])
+        self.path = Path(root) / (
+            "session_" + datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_" + session_id[:8]
+        )
         (self.path / "debug").mkdir(parents=True)
         (self.path / "advanced_analysis").mkdir()
         self.bus, self.queue = bus, bus.subscribe(4096)
         self.error = None
         self.count = 0
-        self.manifest = {"schema_version": "1.0", "session_id": session_id,
-                         "started_utc": utc_now(), "stopped_utc": None,
-                         "raw_audio_saved": False, "configuration": config.model_dump(),
-                         "source": source.describe(), "complete": False}
+        self.manifest = {
+            "schema_version": "1.0",
+            "session_id": session_id,
+            "started_utc": utc_now(),
+            "stopped_utc": None,
+            "raw_audio_saved": False,
+            "configuration": config.model_dump(),
+            "source": source.describe(),
+            "complete": False,
+        }
         write_json(self.path / "manifest.json", self.manifest)
         self.thread = Thread(target=self._run, name="session-writer", daemon=True)
         self.thread.start()
 
     def _run(self):
         try:
-            with (self.path / "messages.jsonl").open("w", encoding="utf-8") as messages, \
-                 (self.path / "realtime_features.csv").open("w", newline="", encoding="utf-8") as features, \
-                 (self.path / "realtime_events.jsonl").open("w", encoding="utf-8") as events, \
-                 (self.path / "advanced_analysis" / "mixed_hpss.jsonl").open("w", encoding="utf-8") as advanced, \
-                 (self.path / "debug" / "errors.log").open("w", encoding="utf-8") as errors:
+            with (
+                (self.path / "messages.jsonl").open("w", encoding="utf-8") as messages,
+                (self.path / "realtime_features.csv").open(
+                    "w", newline="", encoding="utf-8"
+                ) as features,
+                (self.path / "realtime_events.jsonl").open("w", encoding="utf-8") as events,
+                (self.path / "advanced_analysis" / "mixed_hpss.jsonl").open(
+                    "w", encoding="utf-8"
+                ) as advanced,
+                (self.path / "debug" / "errors.log").open("w", encoding="utf-8") as errors,
+            ):
                 writer = None
                 flushed = perf_counter()
                 while True:
@@ -54,7 +68,15 @@ class SessionWriter:
                     self.count += 1
                     if isinstance(message, FeatureFrame):
                         row = message.model_dump()
-                        row.update(dict(zip((n + "_energy" for n in BAND_NAMES), row.pop("band_energy"), strict=False)))
+                        row.update(
+                            dict(
+                                zip(
+                                    (n + "_energy" for n in BAND_NAMES),
+                                    row.pop("band_energy"),
+                                    strict=False,
+                                )
+                            )
+                        )
                         row["spectral_contrast_db"] = json.dumps(row["spectral_contrast_db"])
                         if writer is None:
                             writer = csv.DictWriter(features, fieldnames=list(row))
@@ -78,9 +100,15 @@ class SessionWriter:
         self.thread.join(timeout=10)
         if self.thread.is_alive():
             self.error = "Log writer did not finish within 10 seconds"
-        self.manifest.update(stopped_utc=utc_now(), complete=not bool(self.error),
-                             log_messages=self.count, log_dropped_messages=self.queue.dropped,
-                             error=self.error)
+        self.manifest.update(
+            stopped_utc=utc_now(),
+            complete=not bool(self.error),
+            outcome="error" if performance["error"] or self.error else "completed",
+            raw_audio_saved=performance.get("debug_audio_saved_seconds", 0) > 0,
+            log_messages=self.count,
+            log_dropped_messages=self.queue.dropped,
+            error=self.error,
+        )
         write_json(self.path / "manifest.json", self.manifest)
         write_json(self.path / "capture_info.json", source.describe())
         write_json(self.path / "performance.json", performance)
@@ -88,9 +116,11 @@ class SessionWriter:
             f"# Analysis session\n\nSource: {source.kind}\n\n"
             f"Messages: {self.count}; logger drops: {self.queue.dropped}.\n\n"
             f"Capture blocks dropped: {performance['dropped_blocks']}.\n\n"
-            f"Raw audio saved: no. Advanced analysis: {performance['advanced_status']}.\n\n"
+            f"Raw audio saved: {self.manifest['raw_audio_saved']}. Advanced analysis: {performance['advanced_status']}.\n\n"
             "Timing estimates refer to the capture timeline. Physical playback latency was not measured.\n\n"
-            f"Writer error: {self.error or 'none'}.\n", encoding="utf-8")
+            f"Writer error: {self.error or 'none'}.\n",
+            encoding="utf-8",
+        )
 
 
 def replay(path, bus, stop, *, speed=1.0):

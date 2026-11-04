@@ -1,4 +1,5 @@
 """Phase One diagnostic control center; no artistic renderer."""
+
 import sys
 import zipfile
 from pathlib import Path
@@ -22,6 +23,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -43,6 +45,7 @@ class Discovery(QObject):
             devices = list_output_devices()
             try:
                 from .sources.application import list_audio_applications
+
                 apps = list_audio_applications()
             except ImportError:
                 pass
@@ -71,11 +74,19 @@ class ControlCenter(QMainWindow):
         setup = QGroupBox("Audio source and analysis settings")
         form = QFormLayout(setup)
         self.source_type = QComboBox()
-        self.source_type.addItems(["Default system output", "Specific output device",
-                                   "Application / process tree", "Audio file"])
+        self.source_type.addItems(
+            [
+                "Default system output",
+                "Specific output device",
+                "Application / process tree",
+                "Audio file",
+            ]
+        )
         self.devices, self.apps = QComboBox(), QComboBox()
         self.file_path = QLineEdit()
-        self.file_path.setPlaceholderText("Choose a WAV, FLAC, OGG, or another supported audio file")
+        self.file_path.setPlaceholderText(
+            "Choose a WAV, FLAC, OGG, or another supported audio file"
+        )
         self.browse = QPushButton("Choose file…")
         self.browse.clicked.connect(self.choose_file)
         file_row = QHBoxLayout()
@@ -89,10 +100,19 @@ class ControlCenter(QMainWindow):
         self.hop_ms.setRange(5, 50)
         self.hop_ms.setValue(20)
         self.band_edges = QLineEdit("20, 60, 250, 500, 2000, 4000, 6000, 24000")
-        self.logging = QCheckBox("Save analysis logs (audio recording is off)")
+        self.logging = QCheckBox("Save analysis logs")
         self.logging.setChecked(True)
+        self.debug_audio = QSpinBox()
+        self.debug_audio.setRange(0, 60)
+        self.debug_audio.setSpecialValueText("Off — no audio saved")
+        self.debug_audio.setSuffix(" seconds")
+        self.debug_audio.setToolTip(
+            "Explicit opt-in. Saves at most this many seconds of audio in the session's debug folder."
+        )
         self.advanced = QCheckBox("Delayed harmonic/percussive analysis — experimental, CPU only")
-        self.advanced.setToolTip("Two-second delayed spectral HPSS; does not identify individual instruments")
+        self.advanced.setToolTip(
+            "Two-second delayed spectral HPSS; does not identify individual instruments"
+        )
         form.addRow("Source", self.source_type)
         form.addRow("Output device", self.devices)
         form.addRow("Application", self.apps)
@@ -100,17 +120,24 @@ class ControlCenter(QMainWindow):
         form.addRow("Window / hop (ms)", self._row(self.window_ms, self.hop_ms, self.refresh))
         form.addRow("Frequency band edges (Hz)", self.band_edges)
         form.addRow(self.logging)
+        form.addRow("Optional debug recording", self.debug_audio)
         form.addRow(self.advanced)
         layout.addWidget(setup)
         self.source_note = QLabel()
         self.source_note.setWordWrap(True)
         layout.addWidget(self.source_note)
         controls = QHBoxLayout()
-        self.start_button, self.stop_button = QPushButton("Start analysis"), QPushButton("Stop analysis")
+        self.start_button, self.stop_button = (
+            QPushButton("Start analysis"),
+            QPushButton("Stop analysis"),
+        )
         self.start_button.clicked.connect(self.start_analysis)
         self.stop_button.clicked.connect(self.stop_analysis)
         self.stop_button.setEnabled(False)
-        self.open_button, self.export_button = QPushButton("Open session folder"), QPushButton("Export logs…")
+        self.open_button, self.export_button = (
+            QPushButton("Open session folder"),
+            QPushButton("Export logs…"),
+        )
         self.open_button.clicked.connect(self.open_session)
         self.export_button.clicked.connect(self.export_session)
         self.open_button.setEnabled(False)
@@ -141,7 +168,9 @@ class ControlCenter(QMainWindow):
         self.events = QPlainTextEdit()
         self.events.setReadOnly(True)
         self.events.setMaximumBlockCount(200)
-        self.events.setPlaceholderText("Timestamped events appear here. Instrument labels are candidates.")
+        self.events.setPlaceholderText(
+            "Timestamped events appear here. Instrument labels are candidates."
+        )
         layout.addWidget(self.events, 1)
         self.session_label = QLabel("Session logs are local. No raw audio is saved.")
         self.session_label.setWordWrap(True)
@@ -168,7 +197,9 @@ class ControlCenter(QMainWindow):
         self.browse.setEnabled(index == 3)
         self.source_note.setText(
             "Application capture includes the selected process tree. If unavailable, select Default system output."
-            if index == 2 else "Capture uses your existing playback configuration. Volume and routing are unchanged.")
+            if index == 2
+            else "Capture uses your existing playback configuration. Volume and routing are unchanged."
+        )
 
     def refresh_sources(self):
         self.refresh.setEnabled(False)
@@ -189,7 +220,12 @@ class ControlCenter(QMainWindow):
             self.status_label.setText("Source discovery: " + error)
 
     def choose_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Choose audio file", "", "Audio files (*.wav *.flac *.ogg *.mp3 *.aiff);;All files (*)")
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Choose audio file",
+            "",
+            "Audio files (*.wav *.flac *.ogg *.mp3 *.aiff);;All files (*)",
+        )
         if path:
             self.file_path.setText(path)
 
@@ -197,9 +233,13 @@ class ControlCenter(QMainWindow):
         if self.engine is not None and not self.engine.done.is_set():
             return
         try:
-            config = AnalysisConfig(window_ms=self.window_ms.value(), hop_ms=self.hop_ms.value(),
-                                    band_edges=tuple(float(v.strip()) for v in self.band_edges.text().split(",")),
-                                    advanced=self.advanced.isChecked())
+            config = AnalysisConfig(
+                window_ms=self.window_ms.value(),
+                hop_ms=self.hop_ms.value(),
+                band_edges=tuple(float(v.strip()) for v in self.band_edges.text().split(",")),
+                advanced=self.advanced.isChecked(),
+                debug_audio_seconds=self.debug_audio.value(),
+            )
             index = self.source_type.currentIndex()
             if index == 3:
                 if not Path(self.file_path.text()).is_file():
@@ -207,27 +247,46 @@ class ControlCenter(QMainWindow):
                 source = FileAudioSource(self.file_path.text(), realtime=True)
             elif index == 2:
                 from .sources.application import ApplicationAudioSource
+
                 app = self.apps.currentData()
                 if not app:
-                    raise ValueError("No audio application selected. Refresh sources or choose Default system output.")
+                    raise ValueError(
+                        "No audio application selected. Refresh sources or choose Default system output."
+                    )
                 source = ApplicationAudioSource(**app)
             else:
                 if index == 1 and not self.devices.currentData():
                     raise ValueError("No output device selected")
                 source = SystemAudioSource(self.devices.currentData() if index == 1 else None)
-            self.engine = Engine(source, config, session_root=ROOT / "sessions", logging=self.logging.isChecked())
+            self.engine = Engine(
+                source, config, session_root=ROOT / "sessions", logging=self.logging.isChecked()
+            )
             self.subscription = self.engine.bus.subscribe(256)
             self.engine.start()
             self.session_path = self.engine.writer.path if self.engine.writer else None
-            self.session_label.setText(str(self.session_path) if self.session_path else "Session logging disabled")
+            self.session_label.setText(
+                "Session: " + self.session_path.name
+                if self.session_path
+                else "Session logging disabled"
+            )
+            self.session_label.setToolTip(str(self.session_path or ""))
             self.events.clear()
             self.set_running(True)
         except Exception as exc:
             self.status_label.setText("Unable to start: " + str(exc))
 
     def set_running(self, running):
-        for widget in (self.start_button, self.source_type, self.window_ms, self.hop_ms,
-                       self.band_edges, self.logging, self.advanced, self.refresh):
+        for widget in (
+            self.start_button,
+            self.source_type,
+            self.window_ms,
+            self.hop_ms,
+            self.band_edges,
+            self.logging,
+            self.advanced,
+            self.debug_audio,
+            self.refresh,
+        ):
             widget.setEnabled(not running)
         self.stop_button.setEnabled(running)
         if not running:
@@ -253,18 +312,25 @@ class ControlCenter(QMainWindow):
             if isinstance(message, FeatureFrame):
                 latest = message
             elif isinstance(message, MusicalEvent):
-                self.events.appendPlainText(f"{message.timestamp:9.3f}s  {message.event_type}  "
-                                            f"confidence {message.confidence:.2f}  [{message.analysis_tier}]")
+                self.events.appendPlainText(
+                    f"{message.timestamp:9.3f}s  {message.event_type}  "
+                    f"confidence {message.confidence:.2f}  [{message.analysis_tier}]"
+                )
             else:
                 self.status_label.setText(message.state.capitalize() + ": " + message.detail)
         if latest:
-            self.activity.setText(f"{'Silence / low activity' if latest.silence else 'Audio detected'}  |  "
-                                  f"{latest.sample_rate} Hz, {latest.channels} channels  |  {latest.timestamp:.2f}s")
-            self.level.setValue(round(max(0, min(100, (latest.loudness_dbfs+80)/80*100))))
+            self.activity.setText(
+                f"{'Silence / low activity' if latest.silence else 'Audio detected'}  |  "
+                f"{latest.sample_rate} Hz, {latest.channels} channels  |  {latest.timestamp:.2f}s"
+            )
+            self.level.setValue(round(max(0, min(100, (latest.loudness_dbfs + 80) / 80 * 100))))
             self.level.setFormat(f"{latest.loudness_dbfs:.1f} dBFS")
-            self.transient.setValue(round(latest.transient_strength*100))
-            self.tempo.setText(f"{latest.tempo_bpm:.1f} BPM • confidence {latest.tempo_confidence:.2f} (preliminary)"
-                               if latest.tempo_bpm else "Uncertain — collecting rhythmic context")
+            self.transient.setValue(round(latest.transient_strength * 100))
+            self.tempo.setText(
+                f"{latest.tempo_bpm:.1f} BPM • confidence {latest.tempo_confidence:.2f} (preliminary)"
+                if latest.tempo_bpm
+                else "Uncertain — collecting rhythmic context"
+            )
         if self.engine.state == "waiting":
             self.level.setValue(0)
             self.activity.setText("No audio packets — waiting for playback")
@@ -275,8 +341,12 @@ class ControlCenter(QMainWindow):
             f"DSP p95: {dsp['p95']:.2f} ms  |  Capture-center age p95: {latency['p95']:.1f} ms (estimated)\n"
             f"CPU: {self.engine.cpu:.1f}% of one core  |  Memory: {self.engine.memory_mb:.1f} MB  |  "
             f"Dropped buffers: {metrics['dropped_blocks']}  |  UI drops: {self.subscription.dropped}"
-            if dsp and latency else "Waiting for performance measurements")
-        self.advanced_status.setText(metrics["advanced_status"] + "; stem separation is not running")
+            if dsp and latency
+            else "Waiting for performance measurements"
+        )
+        self.advanced_status.setText(
+            metrics["advanced_status"] + "; stem separation is not running"
+        )
         self.open_button.setEnabled(self.session_path is not None)
         self.export_button.setEnabled(self.session_path is not None and self.engine.done.is_set())
         if self.engine.done.is_set():
@@ -293,12 +363,18 @@ class ControlCenter(QMainWindow):
     def export_session(self):
         if not self.session_path or not self.engine.done.is_set():
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Export analysis package", "analysis.zip", "ZIP (*.zip)")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export analysis package", "analysis.zip", "ZIP (*.zip)"
+        )
         if path:
             try:
                 with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
                     for file in self.session_path.rglob("*"):
-                        if file.is_file() and file.resolve() != Path(path).resolve():
+                        if (
+                            file.is_file()
+                            and file.resolve() != Path(path).resolve()
+                            and "audio" not in file.relative_to(self.session_path).parts
+                        ):
                             archive.write(file, file.relative_to(self.session_path))
                 self.status_label.setText("Exported " + path)
             except Exception as exc:

@@ -23,8 +23,13 @@ class Engine:
         self.stop_event, self.done = Event(), Event()
         self.writer = None
         self.advanced = None
+        self.recorder = None
         self.frame_count, self.event_count, self.discontinuities = 0, 0, 0
-        self.dsp_times, self.ages, self.queue_times = deque(maxlen=4096), deque(maxlen=4096), deque(maxlen=4096)
+        self.dsp_times, self.ages, self.queue_times = (
+            deque(maxlen=4096),
+            deque(maxlen=4096),
+            deque(maxlen=4096),
+        )
         self.state, self.detail, self.error = "ready", "Ready", None
         self.latest = None
         self.cpu, self.memory_mb, self.peak_memory_mb = 0.0, 0.0, 0.0
@@ -37,24 +42,59 @@ class Engine:
         if state == "error":
             self.error = detail
         now = perf_counter()
-        self.bus.publish(Status(session_id=self.session_id, source=self.source.kind,
-                                timestamp=max(0, now-self.started), detected_monotonic=now,
-                                state=state, detail=detail))
+        self.bus.publish(
+            Status(
+                session_id=self.session_id,
+                source=self.source.kind,
+                timestamp=max(0, now - self.started),
+                detected_monotonic=now,
+                state=state,
+                detail=detail,
+            )
+        )
 
     def start(self):
         if self.threads:
             raise RuntimeError("Create a new Engine for each session")
+        try:
+            self._start()
+        except Exception as exc:
+            self.error = str(exc)
+            self.stop_event.set()
+            if self.advanced:
+                self.advanced.close()
+            if self.recorder:
+                self.recorder.close()
+            if self.writer:
+                self.writer.close(self.metrics(), self.source)
+            self.done.set()
+            raise
+
+    def _start(self):
         self.started = perf_counter()
+        self.source.timeline_origin = self.started
+        if hasattr(self.source, "block_ms"):
+            self.source.block_ms = self.config.capture_ms
+        if self.config.debug_audio_seconds and not self.logging:
+            raise ValueError("Enable session logging before opting into debug audio recording")
         if self.logging:
-            self.writer = SessionWriter(self.session_root, self.session_id, self.bus,
-                                        self.config, self.source)
+            self.writer = SessionWriter(
+                self.session_root, self.session_id, self.bus, self.config, self.source
+            )
+        if self.config.debug_audio_seconds:
+            from .recording import DebugRecorder
+
+            self.recorder = DebugRecorder(self.writer.path, self.config.debug_audio_seconds)
         if self.config.advanced:
             from .advanced import AdvancedWorker
+
             self.advanced = AdvancedWorker(self.bus, self.session_id, self.source.kind)
             self.advanced.start()
         self.status("starting", "Opening audio source")
-        self.threads = [Thread(target=self._capture, name="capture", daemon=True),
-                        Thread(target=self._analyze, name="analysis", daemon=True)]
+        self.threads = [
+            Thread(target=self._capture, name="capture", daemon=True),
+            Thread(target=self._analyze, name="analysis", daemon=True),
+        ]
         for thread in self.threads:
             thread.start()
 
@@ -78,19 +118,41 @@ class Engine:
                 if block is None and self.audio.closed:
                     break
                 if block is not None:
+                    if self.recorder:
+                        self.recorder.offer(block)
                     queue_ms = (perf_counter() - block.received_monotonic) * 1000
                     for window, start, mono, reset in assembler.push(block):
                         if analyzer is None or reset:
                             if analyzer is not None:
                                 self.discontinuities += 1
-                                self.status("discontinuity", "Audio gap/format change; analysis context reset")
-                            analyzer = Analyzer(block.sample_rate, block.channels, self.config,
-                                                self.session_id, self.source.kind)
-                        frame, events = analyzer.process(window, start, mono, block,
-                                                         queue_ms, self.source.live)
+                                self.status(
+                                    "discontinuity",
+                                    "Audio gap/format change; analysis context reset",
+                                )
+                            analyzer = Analyzer(
+                                block.sample_rate,
+                                block.channels,
+                                self.config,
+                                self.session_id,
+                                self.source.kind,
+                            )
+                        frame, events = analyzer.process(
+                            window, start, mono, block, queue_ms, self.source.live
+                        )
                         if self.source.live:
-                            frame = frame.model_copy(update={"capture_to_publish_ms": max(0,
-                                (perf_counter()-mono-len(window)/block.sample_rate/2)*1000)})
+                            frame = frame.model_copy(
+                                update={
+                                    "capture_to_publish_ms": max(
+                                        0,
+                                        (
+                                            perf_counter()
+                                            - mono
+                                            - len(window) / block.sample_rate / 2
+                                        )
+                                        * 1000,
+                                    )
+                                }
+                            )
                         self.latest = self.bus.publish(frame)
                         for event in events:
                             self.bus.publish(event)
@@ -118,9 +180,16 @@ class Engine:
             self.audio.close()
             self.threads[0].join(timeout=5)
             if self.threads[0].is_alive():
-                self.status("error", "Capture worker has not stopped; restart application before recapturing")
+                self.status(
+                    "error",
+                    "Capture worker has not stopped; restart application before recapturing",
+                )
             if self.advanced:
                 self.advanced.close()
+            if self.recorder:
+                self.recorder.close()
+                if self.recorder.error:
+                    self.status("error", "Debug recording failed: " + self.recorder.error)
             self.status("error" if self.error else "stopped", self.error or "Session complete")
             if self.writer:
                 try:
@@ -139,18 +208,36 @@ class Engine:
     def metrics(self):
         def stats(values):
             values = list(values)
-            return {"samples": len(values), "p50": float(np.percentile(values, 50)),
-                    "p95": float(np.percentile(values, 95)), "max": max(values)} if values else None
-        return {"frames": self.frame_count, "events": self.event_count,
-                "dropped_blocks": self.audio.dropped, "dropped_audio_frames": self.audio.dropped_frames,
-                "queue_high_water": self.audio.high_water, "discontinuities": self.discontinuities,
-                "dsp_ms": stats(self.dsp_times), "queue_ms": stats(self.queue_times),
-                "estimated_capture_center_to_publish_ms": stats(self.ages),
-                "timing_scope": "latest 4096 frames; callback clock estimate, not physical output latency",
-                "process_cpu_percent": self.cpu, "rss_mb": self.memory_mb,
-                "peak_sampled_rss_mb": self.peak_memory_mb,
-                "advanced_status": self.advanced.state if self.advanced else "disabled",
-                "advanced_drops": self.advanced.queue.dropped if self.advanced else 0,
-                "advanced_jobs": self.advanced.jobs if self.advanced else 0,
-                "advanced_processing_ms": stats(self.advanced.times) if self.advanced else None,
-                "error": self.error}
+            return (
+                {
+                    "samples": len(values),
+                    "p50": float(np.percentile(values, 50)),
+                    "p95": float(np.percentile(values, 95)),
+                    "max": max(values),
+                }
+                if values
+                else None
+            )
+
+        return {
+            "frames": self.frame_count,
+            "events": self.event_count,
+            "dropped_blocks": self.audio.dropped,
+            "dropped_audio_frames": self.audio.dropped_frames,
+            "queue_high_water": self.audio.high_water,
+            "discontinuities": self.discontinuities,
+            "dsp_ms": stats(self.dsp_times),
+            "queue_ms": stats(self.queue_times),
+            "estimated_capture_center_to_publish_ms": stats(self.ages),
+            "timing_scope": "latest 4096 frames; callback clock estimate, not physical output latency",
+            "process_cpu_percent": self.cpu,
+            "rss_mb": self.memory_mb,
+            "peak_sampled_rss_mb": self.peak_memory_mb,
+            "advanced_status": self.advanced.state if self.advanced else "disabled",
+            "advanced_drops": self.advanced.queue.dropped if self.advanced else 0,
+            "advanced_jobs": self.advanced.jobs if self.advanced else 0,
+            "advanced_processing_ms": stats(self.advanced.times) if self.advanced else None,
+            "debug_audio_saved_seconds": self.recorder.saved_seconds if self.recorder else 0,
+            "debug_audio_dropped_blocks": self.recorder.queue.dropped if self.recorder else 0,
+            "error": self.error,
+        }

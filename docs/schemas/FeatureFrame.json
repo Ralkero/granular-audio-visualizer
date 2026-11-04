@@ -1,0 +1,205 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "timestamp": {
+      "minimum": 0,
+      "title": "Timestamp",
+      "type": "number"
+    },
+    "detected_monotonic": {
+      "title": "Detected Monotonic",
+      "type": "number"
+    },
+    "published_monotonic": {
+      "default": 0,
+      "title": "Published Monotonic",
+      "type": "number"
+    },
+    "sequence": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "type": {
+      "const": "feature_frame",
+      "default": "feature_frame",
+      "title": "Type",
+      "type": "string"
+    },
+    "window_end": {
+      "title": "Window End",
+      "type": "number"
+    },
+    "sample_rate": {
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "channels": {
+      "title": "Channels",
+      "type": "integer"
+    },
+    "segment": {
+      "default": 0,
+      "title": "Segment",
+      "type": "integer"
+    },
+    "rms": {
+      "title": "Rms",
+      "type": "number"
+    },
+    "peak": {
+      "title": "Peak",
+      "type": "number"
+    },
+    "loudness_dbfs": {
+      "title": "Loudness Dbfs",
+      "type": "number"
+    },
+    "short_term_loudness_dbfs": {
+      "title": "Short Term Loudness Dbfs",
+      "type": "number"
+    },
+    "spectral_centroid_hz": {
+      "title": "Spectral Centroid Hz",
+      "type": "number"
+    },
+    "spectral_bandwidth_hz": {
+      "title": "Spectral Bandwidth Hz",
+      "type": "number"
+    },
+    "spectral_rolloff_hz": {
+      "title": "Spectral Rolloff Hz",
+      "type": "number"
+    },
+    "spectral_contrast_db": {
+      "items": {
+        "type": "number"
+      },
+      "title": "Spectral Contrast Db",
+      "type": "array"
+    },
+    "zero_crossing_rate": {
+      "title": "Zero Crossing Rate",
+      "type": "number"
+    },
+    "band_energy": {
+      "items": {
+        "type": "number"
+      },
+      "title": "Band Energy",
+      "type": "array"
+    },
+    "spectral_flux": {
+      "title": "Spectral Flux",
+      "type": "number"
+    },
+    "transient_strength": {
+      "title": "Transient Strength",
+      "type": "number"
+    },
+    "onset_strength": {
+      "title": "Onset Strength",
+      "type": "number"
+    },
+    "dynamic_intensity": {
+      "title": "Dynamic Intensity",
+      "type": "number"
+    },
+    "silence": {
+      "title": "Silence",
+      "type": "boolean"
+    },
+    "tempo_bpm": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tempo Bpm"
+    },
+    "tempo_confidence": {
+      "default": 0,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Tempo Confidence",
+      "type": "number"
+    },
+    "rhythmic_density": {
+      "default": 0,
+      "title": "Rhythmic Density",
+      "type": "number"
+    },
+    "queue_latency_ms": {
+      "default": 0,
+      "title": "Queue Latency Ms",
+      "type": "number"
+    },
+    "dsp_ms": {
+      "default": 0,
+      "title": "Dsp Ms",
+      "type": "number"
+    },
+    "capture_to_publish_ms": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Capture To Publish Ms"
+    },
+    "timestamp_quality": {
+      "default": "sample_clock",
+      "title": "Timestamp Quality",
+      "type": "string"
+    }
+  },
+  "required": [
+    "session_id",
+    "source",
+    "timestamp",
+    "detected_monotonic",
+    "window_end",
+    "sample_rate",
+    "channels",
+    "rms",
+    "peak",
+    "loudness_dbfs",
+    "short_term_loudness_dbfs",
+    "spectral_centroid_hz",
+    "spectral_bandwidth_hz",
+    "spectral_rolloff_hz",
+    "spectral_contrast_db",
+    "zero_crossing_rate",
+    "band_energy",
+    "spectral_flux",
+    "transient_strength",
+    "onset_strength",
+    "dynamic_intensity",
+    "silence"
+  ],
+  "title": "FeatureFrame",
+  "type": "object"
+}

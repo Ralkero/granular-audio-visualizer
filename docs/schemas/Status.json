@@ -1,0 +1,63 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "timestamp": {
+      "minimum": 0,
+      "title": "Timestamp",
+      "type": "number"
+    },
+    "detected_monotonic": {
+      "title": "Detected Monotonic",
+      "type": "number"
+    },
+    "published_monotonic": {
+      "default": 0,
+      "title": "Published Monotonic",
+      "type": "number"
+    },
+    "sequence": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "type": {
+      "const": "status",
+      "default": "status",
+      "title": "Type",
+      "type": "string"
+    },
+    "state": {
+      "title": "State",
+      "type": "string"
+    },
+    "detail": {
+      "title": "Detail",
+      "type": "string"
+    }
+  },
+  "required": [
+    "session_id",
+    "source",
+    "timestamp",
+    "detected_monotonic",
+    "state",
+    "detail"
+  ],
+  "title": "Status",
+  "type": "object"
+}
