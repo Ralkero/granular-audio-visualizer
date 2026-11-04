@@ -30,7 +30,7 @@ Install Python 3.14 and `uv`, then run `./Setup.ps1`. Dependency versions are pi
 .venv\Scripts\python.exe scripts\benchmark.py
 ```
 
-Each run produces an independent session under `sessions/`: manifest, capture information, feature CSV, realtime event JSONL, replayable message JSONL, performance JSON, summary, advanced output and error log. Session files, recordings, helper binaries and machine-specific evidence are ignored by Git. This repository is local; no remote publication is configured.
+Each run produces an independent session under `sessions/`: manifest, capture information, feature CSV, realtime event JSONL, replayable message JSONL, performance JSON, summary, advanced output and error log. Session files, recordings, helper binaries and machine-specific evidence are ignored by Git. The canonical repository is [Ralkero/granular-audio-visualizer](https://github.com/Ralkero/granular-audio-visualizer); completed development milestones are committed and pushed there as the project progresses.
 
 ## Analysis interface
 
