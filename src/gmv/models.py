@@ -18,12 +18,20 @@ class AnalysisConfig(FrozenModel):
     # Adjacent edges: sub-bass, bass, low mids, mids, upper mids, presence, air.
     band_edges: tuple[float, ...] = (20, 60, 250, 500, 2000, 4000, 6000, 24000)
     advanced: bool = False
+    experimental_beat_phase: bool = False
     debug_audio_seconds: int = Field(default=0, ge=0, le=60)
+    analysis_channel_weights: tuple[float, ...] | None = None
 
     @model_validator(mode="after")
     def check(self):
         if self.hop_ms > self.window_ms:
             raise ValueError("hop_ms must not exceed window_ms")
+        if self.analysis_channel_weights is not None and (
+            not self.analysis_channel_weights
+            or any(w < 0 for w in self.analysis_channel_weights)
+            or sum(self.analysis_channel_weights) <= 0
+        ):
+            raise ValueError("Analysis weights require nonnegative coefficients with positive sum")
         if len(self.band_edges) != 8 or self.band_edges[0] < 0:
             raise ValueError("Provide eight nonnegative frequency edges")
         if any(a >= b for a, b in zip(self.band_edges, self.band_edges[1:], strict=False)):
@@ -32,13 +40,18 @@ class AnalysisConfig(FrozenModel):
 
 
 class Message(FrozenModel):
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.1"] = "1.1"
     session_id: str
     source: str
     timestamp: float = Field(ge=0)
     detected_monotonic: float
     published_monotonic: float = 0
     sequence: int = Field(default=0, ge=0)
+    segment: int | None = None
+    evidence_monotonic: float | None = None
+    age_at_publication_ms: float | None = None
+    replayed: bool = False
+    original_published_monotonic: float | None = None
 
 
 class FeatureFrame(Message):
@@ -69,6 +82,13 @@ class FeatureFrame(Message):
     dsp_ms: float = 0
     capture_to_publish_ms: float | None = None
     timestamp_quality: str = "sample_clock"
+    analysis_rms: float | None = None
+    analysis_weights: tuple[float, ...] = ()
+    measurement_semantics: str = "raw_channel_mean_v1; analysis_fixed_power_v1"
+    band_flux: tuple[float, ...] = ()
+    attack_energy_ratio: float = 0
+    beat_locked: bool = False
+    beat_phase: float | None = None
 
 
 class MusicalEvent(Message):
@@ -83,6 +103,15 @@ class MusicalEvent(Message):
     method: str
     interval_end: float | None = None
     measurements: tuple[tuple[str, float], ...] = ()
+    provenance: Literal[
+        "mixed_signal_heuristic",
+        "harmonic_percussive_proxy",
+        "model_estimated_stem",
+        "legacy_unknown",
+    ] = "mixed_signal_heuristic"
+    confidence_interpretation: str = "uncalibrated_heuristic_score"
+    evidence_kind: Literal["observed", "candidate", "predicted", "context"] = "candidate"
+    intended_use: Literal["immediate", "context", "retrospective"] = "immediate"
 
 
 class Status(Message):

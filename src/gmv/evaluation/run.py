@@ -123,6 +123,9 @@ def main():
     parser.add_argument("--output", required=True)
     parser.add_argument("--import-manifest")
     parser.add_argument(
+        "--beat-phase", action="store_true", help="Evaluate the opt-in phase prototype"
+    )
+    parser.add_argument(
         "--export-fixtures", help="Explicitly generate original synthetic WAVs and annotations"
     )
     args = parser.parse_args()
@@ -136,7 +139,11 @@ def main():
             (folder / (fixture.name + ".json")).write_text(
                 json.dumps(fixture.manifest(), indent=2), encoding="utf-8"
             )
-        results.append(evaluate(fixture, args.detector))
+        results.append(
+            evaluate(
+                fixture, args.detector, AnalysisConfig(experimental_beat_phase=args.beat_phase)
+            )
+        )
     report = {
         "code_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
         "detector": args.detector,
@@ -148,7 +155,7 @@ def main():
         ).hexdigest(),
         "corpus_version": CORPUS_VERSION,
         "split": args.split,
-        "configuration": AnalysisConfig().model_dump(),
+        "configuration": AnalysisConfig(experimental_beat_phase=args.beat_phase).model_dump(),
         "matching": "mir_eval.util.match_events one-to-one; mix references deduplicated",
         "aggregate": {
             str(ms): aggregate([r["onsets"][str(ms)] for r in results]) for ms in (25, 50)

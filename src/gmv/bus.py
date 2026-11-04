@@ -27,8 +27,18 @@ class EventBus:
     def publish(self, message):
         with self._lock:
             self._sequence += 1
+            now = perf_counter()
+            age = (
+                (now - message.evidence_monotonic) * 1000
+                if message.evidence_monotonic is not None and not message.replayed
+                else None
+            )
             message = message.model_copy(
-                update={"published_monotonic": perf_counter(), "sequence": self._sequence}
+                update={
+                    "published_monotonic": now,
+                    "sequence": self._sequence,
+                    "age_at_publication_ms": age,
+                }
             )
             for subscriber in self._subscribers:
                 subscriber.put(message)

@@ -74,6 +74,19 @@ class Analyzer:
         self.last_intensity = 0.0
         self.last_change = -1e6
         self.previous_centroid = None
+        self.previous_rms = 0.0
+        self.previous_bands = np.zeros(7)
+        weights = config.analysis_channel_weights
+        if weights is not None and len(weights) != channels:
+            raise ValueError("Analysis coefficient count must match source channels")
+        # Fixed power coefficients, not amplitude mixing or dynamic quiet-channel selection.
+        self.channel_weights = np.asarray(
+            weights if weights is not None else [1 / min(channels, 2)] * channels
+        )
+        self.phase = None
+        self.phase_period = None
+        self.beat_locked = False
+        self.last_prediction = -1e6
 
     def estimate_tempo(self, timestamp):
         if timestamp - self.last_tempo < 1 or len(self.flux_history) * self.hop < 4:
@@ -103,6 +116,7 @@ class Analyzer:
         timestamp = start + len(audio) / self.rate / 2
         end = start + len(audio) / self.rate
         rms = float(np.sqrt(np.mean(np.square(audio), dtype=np.float64)))
+        analysis_rms = float(np.sqrt(np.dot(np.mean(audio**2, axis=0), self.channel_weights)))
         peak = float(np.max(np.abs(audio)))
         db = max(-120.0, 20 * np.log10(max(rms, 1e-6)))
         self.energy.append(rms * rms)
@@ -138,6 +152,15 @@ class Analyzer:
             if self.prev is not None
             else 0.0
         )
+        band_magnitude = np.array([magnitude[m].sum() for m in self.masks])
+        band_flux = np.maximum(band_magnitude - self.previous_bands, 0) / np.maximum(
+            band_magnitude, 1e-12
+        )
+        self.previous_bands = band_magnitude
+        # Independent energy-rise measurement: sustain and spectral movement can have flux
+        # without a new attack. Absolute/raw level semantics remain unchanged.
+        attack_ratio = max(0.0, (analysis_rms - self.previous_rms) / max(analysis_rms, 1e-9))
+        self.previous_rms = analysis_rms
         self.prev = magnitude
         recent = np.asarray(list(self.flux_history)[-max(1, round(1 / self.hop)) :])
         threshold = max(
@@ -160,11 +183,11 @@ class Analyzer:
         events = []
         group = None
 
-        def emit(kind, confidence, value=None):
+        def emit(kind, confidence, value=None, event_time=None):
             event = MusicalEvent(
                 session_id=self.session_id,
                 source=self.source,
-                timestamp=timestamp,
+                timestamp=timestamp if event_time is None else event_time,
                 detected_monotonic=perf_counter(),
                 event_id=uuid4().hex,
                 event_type=kind,
@@ -172,7 +195,17 @@ class Analyzer:
                 confidence=confidence,
                 group_id=group,
                 related_event_ids=tuple(e.event_id for e in events[:1]),
-                method="mixed_audio_spectral_heuristic_v1",
+                method="mixed_audio_attack_v2",
+                segment=block.segment,
+                evidence_monotonic=capture_mono
+                + (timestamp if event_time is None else event_time)
+                - start
+                if live and kind != "beat_prediction"
+                else None,
+                evidence_kind="predicted"
+                if kind == "beat_prediction"
+                else ("observed" if kind == "onset" else "candidate"),
+                intended_use="context" if kind == "beat_prediction" else "immediate",
             )
             events.append(event)
 
@@ -183,7 +216,12 @@ class Analyzer:
         elif not is_quiet and self.silent:
             self.silent = False
             emit("audio_resumed", 0.95)
-        if not is_quiet and flux > threshold and timestamp - self.last_onset >= 0.09:
+        if (
+            not is_quiet
+            and flux > threshold
+            and attack_ratio > 0.08
+            and timestamp - self.last_onset >= 0.045
+        ):
             self.last_onset = timestamp
             self.onsets.append(timestamp)
             group = uuid4().hex
@@ -195,8 +233,39 @@ class Analyzer:
                 emit("snare_like_candidate", 0.35, strength)
             if sum(bands[4:]) / band_sum > 0.35:
                 emit("high_frequency_percussion_candidate", 0.45, strength)
-            if self.tempo is not None and self.tempo_confidence >= 0.5:
-                emit("beat_candidate", self.tempo_confidence * 0.7, strength)
+            if self.beat_locked and self.phase_period is not None:
+                distance = abs(
+                    (timestamp - self.phase + self.phase_period / 2) % self.phase_period
+                    - self.phase_period / 2
+                )
+                if distance < 0.05:
+                    emit("beat_observed", min(0.7, self.tempo_confidence), strength)
+        # Circular concentration of recent attacks estimates beat phase separately from tempo.
+        self.beat_locked = False
+        if (
+            self.config.experimental_beat_phase
+            and self.tempo is not None
+            and self.tempo_confidence >= 0.45
+            and timestamp - self.last_onset < 1.25
+        ):
+            period = 60 / self.tempo
+            recent_onsets = np.asarray([t for t in self.onsets if t > timestamp - 4])
+            if len(recent_onsets) >= 6:
+                vector = np.mean(np.exp(2j * np.pi * recent_onsets / period))
+                if abs(vector) > 0.72:
+                    self.phase = float(np.angle(vector) % (2 * np.pi) * period / (2 * np.pi))
+                    self.phase_period = period
+                    self.beat_locked = True
+                    future = self.phase + (np.floor((end - self.phase) / period) + 1) * period
+                    if future - self.last_prediction > period * 0.5:
+                        emit(
+                            "beat_prediction",
+                            min(0.7, self.tempo_confidence * abs(vector)),
+                            event_time=float(future),
+                        )
+                        self.last_prediction = future
+        if not self.beat_locked:
+            self.phase = self.phase_period = None
         if not is_quiet and db - self.previous_db > 6:
             emit("energy_rise", 0.65)
         if (
@@ -233,7 +302,7 @@ class Analyzer:
             zero_crossing_rate=float(np.mean(np.diff(np.signbit(audio), axis=0))),
             band_energy=bands,
             spectral_flux=flux,
-            transient_strength=strength,
+            transient_strength=attack_ratio,
             onset_strength=strength,
             dynamic_intensity=intensity,
             silence=self.silent,
@@ -242,9 +311,18 @@ class Analyzer:
             rhythmic_density=len(self.onsets) / 4,
             queue_latency_ms=max(0, queue_ms),
             dsp_ms=(done - began) * 1000,
-            capture_to_publish_ms=max(0, (done - capture_mono - len(audio) / self.rate / 2) * 1000)
+            capture_to_publish_ms=(done - capture_mono - len(audio) / self.rate / 2) * 1000
             if live
             else None,
             timestamp_quality=block.timestamp_quality,
+            evidence_monotonic=capture_mono + len(audio) / self.rate / 2 if live else None,
+            analysis_rms=analysis_rms,
+            analysis_weights=tuple(self.channel_weights),
+            band_flux=tuple(band_flux),
+            attack_energy_ratio=attack_ratio,
+            beat_locked=self.beat_locked,
+            beat_phase=float((timestamp - self.phase) % self.phase_period / self.phase_period)
+            if self.beat_locked
+            else None,
         )
         return frame, events

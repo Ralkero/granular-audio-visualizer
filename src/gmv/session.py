@@ -7,7 +7,7 @@ from pathlib import Path
 from threading import Thread
 from time import perf_counter
 
-from .models import BAND_NAMES, FeatureFrame, MusicalEvent, Status
+from .models import BAND_NAMES, FeatureFrame, MusicalEvent
 
 
 def utc_now():
@@ -29,7 +29,7 @@ class SessionWriter:
         self.error = None
         self.count = 0
         self.manifest = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "session_id": session_id,
             "started_utc": utc_now(),
             "stopped_utc": None,
@@ -124,9 +124,10 @@ class SessionWriter:
 
 
 def replay(path, bus, stop, *, speed=1.0):
+    from .contract import parse_message
+
     if speed <= 0:
         raise ValueError("Replay speed must be positive")
-    models = {"feature_frame": FeatureFrame, "musical_event": MusicalEvent, "status": Status}
     first, started = None, perf_counter()
     with Path(path).open(encoding="utf-8") as file:
         while not stop.is_set():
@@ -136,10 +137,18 @@ def replay(path, bus, stop, *, speed=1.0):
             if len(line) > 1_000_000:
                 raise ValueError("Replay message exceeds size limit")
             data = json.loads(line)
-            message = models[data["type"]].model_validate(data)
+            message = parse_message(data)
             # Replay publication order, preserving original evidence timestamps (Tier B may be late).
             first = message.published_monotonic if first is None else first
             delay = (message.published_monotonic - first) / speed
             if stop.wait(max(0, started + delay - perf_counter())):
                 break
-            bus.publish(message)
+            bus.publish(
+                message.model_copy(
+                    update={
+                        "replayed": True,
+                        "original_published_monotonic": message.original_published_monotonic
+                        or message.published_monotonic,
+                    }
+                )
+            )
