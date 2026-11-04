@@ -1,0 +1,300 @@
+{
+  "model": "htdemucs/955717e8",
+  "revision": "cbc8a9b1a87023b7fd74e7b3412e6321c0eab003",
+  "weight_sha256": "d9fa14133cfcc034a6758923bb3a8ca9f8dfd0b582134643bbf83f72c17576dd",
+  "device": "cpu",
+  "torch_threads": 4,
+  "inference_workers": 0,
+  "load_seconds_excluding_imports": 0.3344958000088809,
+  "model_segment_seconds": 7.8,
+  "sample_rate": 44100,
+  "sources": [
+    "drums",
+    "bass",
+    "other",
+    "vocals"
+  ],
+  "jobs": [
+    {
+      "fixture": "dense@0s",
+      "inference_seconds": 5.296325600007549,
+      "input_seconds": 6,
+      "new_usable_seconds_in_1s_overlap_schedule": 5,
+      "offline_rtf": 0.8827209333345915,
+      "overlapping_schedule_rtf": 1.0592651200015097,
+      "earliest_oldest_sample_age_seconds": 11.296325600007549,
+      "scores": {
+        "drums": {
+          "reference_rms": 0.02476437331740723,
+          "estimated_rms": 0.05087035288946953,
+          "estimated_power_fraction_of_mix": 1.000529991105544,
+          "absent_reference": false,
+          "si_sdr_db": -5.122383708086861,
+          "best_lag_within_50ms_ms": 0.0,
+          "other_reference_projection_fraction": {
+            "bass": 0.7646500209546129
+          }
+        },
+        "bass": {
+          "reference_rms": 0.044420127979297015,
+          "estimated_rms": 0.0020251068921153486,
+          "estimated_power_fraction_of_mix": 0.0015856105032065653,
+          "absent_reference": false,
+          "si_sdr_db": -26.7222145425175,
+          "best_lag_within_50ms_ms": 1.3151927437641724,
+          "other_reference_projection_fraction": {
+            "drums": 0.0004164113878480537
+          }
+        },
+        "other": {
+          "reference_rms": 0.0,
+          "estimated_rms": 0.0021824242627712597,
+          "estimated_power_fraction_of_mix": 0.0018415307407002007,
+          "absent_reference": true,
+          "other_reference_projection_fraction": {
+            "drums": 0.011998468618111954,
+            "bass": 0.00239964584833941
+          }
+        },
+        "vocals": {
+          "reference_rms": 0.0,
+          "estimated_rms": 0.0020529454503803125,
+          "estimated_power_fraction_of_mix": 0.0016295039965187603,
+          "absent_reference": true,
+          "other_reference_projection_fraction": {
+            "drums": 1.512702841290802e-05,
+            "bass": 0.002209518523202763
+          }
+        }
+      }
+    },
+    {
+      "fixture": "dense@5s",
+      "inference_seconds": 5.12365910000517,
+      "input_seconds": 6,
+      "new_usable_seconds_in_1s_overlap_schedule": 5,
+      "offline_rtf": 0.853943183334195,
+      "overlapping_schedule_rtf": 1.024731820001034,
+      "earliest_oldest_sample_age_seconds": 11.12365910000517,
+      "scores": {
+        "drums": {
+          "reference_rms": 0.02582226592868659,
+          "estimated_rms": 0.053112846222060445,
+          "estimated_power_fraction_of_mix": 1.0005888196157235,
+          "absent_reference": false,
+          "si_sdr_db": -5.127037496135754,
+          "best_lag_within_50ms_ms": 0.0,
+          "other_reference_projection_fraction": {
+            "bass": 0.7650286939482918
+          }
+        },
+        "bass": {
+          "reference_rms": 0.046395310535240715,
+          "estimated_rms": 0.0022128246586421213,
+          "estimated_power_fraction_of_mix": 0.0017368027590634154,
+          "absent_reference": false,
+          "si_sdr_db": -25.577245537890008,
+          "best_lag_within_50ms_ms": 1.1337868480725624,
+          "other_reference_projection_fraction": {
+            "drums": 0.00029420532680222294
+          }
+        },
+        "other": {
+          "reference_rms": 0.0,
+          "estimated_rms": 0.0022979907228961234,
+          "estimated_power_fraction_of_mix": 0.0018730658155096313,
+          "absent_reference": true,
+          "other_reference_projection_fraction": {
+            "drums": 0.007091964722262626,
+            "bass": 0.002746087478356619
+          }
+        },
+        "vocals": {
+          "reference_rms": 0.0,
+          "estimated_rms": 0.0022499703776777806,
+          "estimated_power_fraction_of_mix": 0.001795602065916141,
+          "absent_reference": true,
+          "other_reference_projection_fraction": {
+            "drums": 1.4176201046225713e-05,
+            "bass": 0.0024137118590221523
+          }
+        }
+      }
+    },
+    {
+      "fixture": "quiet_loud@0s",
+      "inference_seconds": 5.191760799993062,
+      "input_seconds": 6,
+      "new_usable_seconds_in_1s_overlap_schedule": 5,
+      "offline_rtf": 0.8652934666655104,
+      "overlapping_schedule_rtf": 1.0383521599986125,
+      "earliest_oldest_sample_age_seconds": 11.191760799993062,
+      "scores": {
+        "drums": {
+          "reference_rms": 0.0005348029244630615,
+          "estimated_rms": 0.0010933916508739615,
+          "estimated_power_fraction_of_mix": 1.010656604098541,
+          "absent_reference": false,
+          "si_sdr_db": -4.867324643494158,
+          "best_lag_within_50ms_ms": 0.0,
+          "other_reference_projection_fraction": {
+            "bass": 0.750647505182829
+          }
+        },
+        "bass": {
+          "reference_rms": 0.0009470403171801999,
+          "estimated_rms": 2.1609592072751614e-05,
+          "estimated_power_fraction_of_mix": 0.0003947710066429746,
+          "absent_reference": false,
+          "si_sdr_db": -32.78428534027844,
+          "best_lag_within_50ms_ms": 0.6349206349206349,
+          "other_reference_projection_fraction": {
+            "drums": 0.012374779741242287
+          }
+        },
+        "other": {
+          "reference_rms": 0.0,
+          "estimated_rms": 6.170788653764872e-05,
+          "estimated_power_fraction_of_mix": 0.003219092500126701,
+          "absent_reference": true,
+          "other_reference_projection_fraction": {
+            "drums": 0.016030378047604942,
+            "bass": 0.0024914231757405835
+          }
+        },
+        "vocals": {
+          "reference_rms": 0.0,
+          "estimated_rms": 2.4202716935305017e-05,
+          "estimated_power_fraction_of_mix": 0.0004951996791678503,
+          "absent_reference": true,
+          "other_reference_projection_fraction": {
+            "drums": 0.00031315328224498383,
+            "bass": 0.006769240405960551
+          }
+        }
+      }
+    },
+    {
+      "fixture": "quiet_loud@6s",
+      "inference_seconds": 5.0875901999970665,
+      "input_seconds": 6,
+      "new_usable_seconds_in_1s_overlap_schedule": 5,
+      "offline_rtf": 0.8479316999995111,
+      "overlapping_schedule_rtf": 1.0175180399994133,
+      "earliest_oldest_sample_age_seconds": 11.087590199997067,
+      "scores": {
+        "drums": {
+          "reference_rms": 0.01403831047449557,
+          "estimated_rms": 0.03059613731245341,
+          "estimated_power_fraction_of_mix": 0.9909186157360674,
+          "absent_reference": false,
+          "si_sdr_db": -5.616281474842385,
+          "best_lag_within_50ms_ms": 0.0,
+          "other_reference_projection_fraction": {
+            "bass": 0.7808903366064986
+          }
+        },
+        "bass": {
+          "reference_rms": 0.02734279946962788,
+          "estimated_rms": 0.0007307866168366327,
+          "estimated_power_fraction_of_mix": 0.0005653090724520378,
+          "absent_reference": false,
+          "si_sdr_db": -28.806481578952543,
+          "best_lag_within_50ms_ms": 0.5668934240362812,
+          "other_reference_projection_fraction": {
+            "drums": 0.008694558807719606
+          }
+        },
+        "other": {
+          "reference_rms": 0.0,
+          "estimated_rms": 0.00196765782194201,
+          "estimated_power_fraction_of_mix": 0.0040983018047197955,
+          "absent_reference": true,
+          "other_reference_projection_fraction": {
+            "drums": 0.017931884730887488,
+            "bass": 0.005477591161562498
+          }
+        },
+        "vocals": {
+          "reference_rms": 0.0,
+          "estimated_rms": 0.0006302260498168075,
+          "estimated_power_fraction_of_mix": 0.0004204336667192596,
+          "absent_reference": true,
+          "other_reference_projection_fraction": {
+            "drums": 2.8959348776224185e-05,
+            "bass": 0.00439861005797513
+          }
+        }
+      }
+    },
+    {
+      "fixture": "sustain_negative@0s",
+      "inference_seconds": 5.173466499996721,
+      "input_seconds": 6,
+      "new_usable_seconds_in_1s_overlap_schedule": 5,
+      "offline_rtf": 0.8622444166661202,
+      "overlapping_schedule_rtf": 1.0346932999993441,
+      "earliest_oldest_sample_age_seconds": 11.17346649999672,
+      "scores": {
+        "drums": {
+          "reference_rms": 0.0,
+          "estimated_rms": 0.00010267330722900119,
+          "estimated_power_fraction_of_mix": 1.3210226773464154e-06,
+          "absent_reference": true,
+          "other_reference_projection_fraction": {
+            "other": 9.135065558448904e-05
+          }
+        },
+        "bass": {
+          "reference_rms": 0.0,
+          "estimated_rms": 0.000241440109641861,
+          "estimated_power_fraction_of_mix": 7.304895533645072e-06,
+          "absent_reference": true,
+          "other_reference_projection_fraction": {
+            "other": 0.0007159076062985293
+          }
+        },
+        "other": {
+          "reference_rms": 0.0893310396700431,
+          "estimated_rms": 0.0891678179151265,
+          "estimated_power_fraction_of_mix": 0.9963489052433682,
+          "absent_reference": false,
+          "si_sdr_db": 40.894315848619634,
+          "best_lag_within_50ms_ms": 0.0,
+          "other_reference_projection_fraction": {}
+        },
+        "vocals": {
+          "reference_rms": 0.0,
+          "estimated_rms": 0.0002800944189351976,
+          "estimated_power_fraction_of_mix": 9.831144530508204e-06,
+          "absent_reference": true,
+          "other_reference_projection_fraction": {
+            "other": 0.2214727615101363
+          }
+        }
+      }
+    }
+  ],
+  "shared_1s_context_boundary_rms_difference": {
+    "drums": 0.0009348505409434438,
+    "bass": 0.0002032837364822626,
+    "other": 0.0004980132216587663,
+    "vocals": 0.00019785352924373
+  },
+  "saved_estimated_audio": false,
+  "alignment": "48k to 44.1k scipy resample_poly 147/160; zero-phase offline conversion; no timeline shift; full six-second future context required for earliest samples",
+  "limitations": "Original synthetic signals, not professional music; SI-SDR scale invariant and projection leakage confounded by correlated references; no vocals reference present",
+  "resources": {
+    "peak_sampled_worker_rss_mib": 1388.9296875,
+    "scope": "isolated launcher plus all its owned descendants",
+    "mean_sampled_worker_cpu_one_core_percent": 350.2856630824372,
+    "sample_interval_seconds": 0.1,
+    "parent_inclusive_wall_seconds": 31.0422133999964,
+    "remaining_worker": false
+  },
+  "fixture_hashes": {
+    "dense": "4d6d72a2776d870501854f7e0ba45286d746eb60115fc8b3f2d2136eebada237",
+    "quiet_loud": "6d92787c1e07bd56054e63dd09fc2797ef91e0b51b0d67880b83c314f7081cf1",
+    "sustain_negative": "814aaafee353d2714548b46950a44e56b85a6508faf1df9abafabef066583b93"
+  }
+}
