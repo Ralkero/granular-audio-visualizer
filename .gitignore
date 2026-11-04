@@ -9,3 +9,6 @@ local-evidence/
 native/**/bin/
 native/**/obj/
 dist/
+.separation-venv/
+.model-cache/
+separated/

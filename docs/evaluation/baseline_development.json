@@ -1,0 +1,7162 @@
+{
+  "code_commit": "6d30da28242b4a34b56a221cfc6513fa9cd62bc7",
+  "detector": "baseline",
+  "baseline_source_commit": "6d30da28242b4a34b56a221cfc6513fa9cd62bc7",
+  "detector_source_sha256": "b35cc443cbbbd1b2a9edfb536251bf66664d5fb0bb20c6bd6affe27cfa015860",
+  "corpus_version": "synthetic-v1",
+  "split": "development",
+  "configuration": {
+    "window_ms": 46.44,
+    "hop_ms": 20,
+    "capture_ms": 10,
+    "queue_blocks": 16,
+    "silence_dbfs": -65,
+    "band_edges": [
+      20,
+      60,
+      250,
+      500,
+      2000,
+      4000,
+      6000,
+      24000
+    ],
+    "advanced": false,
+    "debug_audio_seconds": 0
+  },
+  "matching": "mir_eval.util.match_events one-to-one; mix references deduplicated",
+  "aggregate": {
+    "25": {
+      "tp": 479,
+      "fp": 17,
+      "fn": 86,
+      "duplicates": 0,
+      "precision": 0.9657258064516129,
+      "recall": 0.8477876106194691,
+      "f1": 0.9029217719132894,
+      "timing_bias_ms": -10.907861691117857,
+      "median_absolute_error_ms": 16.781249999999524,
+      "p95_absolute_error_ms": 16.781250000208914
+    },
+    "50": {
+      "tp": 479,
+      "fp": 17,
+      "fn": 86,
+      "duplicates": 0,
+      "precision": 0.9657258064516129,
+      "recall": 0.8477876106194691,
+      "f1": 0.9029217719132894,
+      "timing_bias_ms": -10.907861691117857,
+      "median_absolute_error_ms": 16.781249999999524,
+      "p95_absolute_error_ms": 16.781250000208914
+    }
+  },
+  "fixtures": [
+    {
+      "fixture": {
+        "id": "development_isolated_bass",
+        "category": "isolated_bass",
+        "split": "development",
+        "rate": 48000,
+        "channels": 2,
+        "duration": 16.0,
+        "sha256_float32_le": "f450ae42f9b18605443def784cd7aa62b6e98b2fabc75e4ce6c8ca936e04f64f",
+        "mixed_onsets": [
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          3.5,
+          4.0,
+          4.5,
+          5.0,
+          5.5,
+          6.0,
+          6.5,
+          7.0,
+          7.5,
+          8.0,
+          8.5,
+          9.0,
+          9.5,
+          10.0,
+          10.5,
+          11.0,
+          11.5,
+          12.0,
+          12.5,
+          13.0,
+          13.5,
+          14.0,
+          14.5
+        ],
+        "class_events": [
+          [
+            0.5,
+            "bass_transient_candidate"
+          ],
+          [
+            1.0,
+            "bass_transient_candidate"
+          ],
+          [
+            1.5,
+            "bass_transient_candidate"
+          ],
+          [
+            2.0,
+            "bass_transient_candidate"
+          ],
+          [
+            2.5,
+            "bass_transient_candidate"
+          ],
+          [
+            3.0,
+            "bass_transient_candidate"
+          ],
+          [
+            3.5,
+            "bass_transient_candidate"
+          ],
+          [
+            4.0,
+            "bass_transient_candidate"
+          ],
+          [
+            4.5,
+            "bass_transient_candidate"
+          ],
+          [
+            5.0,
+            "bass_transient_candidate"
+          ],
+          [
+            5.5,
+            "bass_transient_candidate"
+          ],
+          [
+            6.0,
+            "bass_transient_candidate"
+          ],
+          [
+            6.5,
+            "bass_transient_candidate"
+          ],
+          [
+            7.0,
+            "bass_transient_candidate"
+          ],
+          [
+            7.5,
+            "bass_transient_candidate"
+          ],
+          [
+            8.0,
+            "bass_transient_candidate"
+          ],
+          [
+            8.5,
+            "bass_transient_candidate"
+          ],
+          [
+            9.0,
+            "bass_transient_candidate"
+          ],
+          [
+            9.5,
+            "bass_transient_candidate"
+          ],
+          [
+            10.0,
+            "bass_transient_candidate"
+          ],
+          [
+            10.5,
+            "bass_transient_candidate"
+          ],
+          [
+            11.0,
+            "bass_transient_candidate"
+          ],
+          [
+            11.5,
+            "bass_transient_candidate"
+          ],
+          [
+            12.0,
+            "bass_transient_candidate"
+          ],
+          [
+            12.5,
+            "bass_transient_candidate"
+          ],
+          [
+            13.0,
+            "bass_transient_candidate"
+          ],
+          [
+            13.5,
+            "bass_transient_candidate"
+          ],
+          [
+            14.0,
+            "bass_transient_candidate"
+          ],
+          [
+            14.5,
+            "bass_transient_candidate"
+          ]
+        ],
+        "tempo_intervals": [],
+        "beats": [],
+        "provenance": "Original procedural waveforms; CC0-1.0; no third-party samples",
+        "annotation": "Exact synthesis start samples; mixed coincident attacks deduplicated",
+        "uncertainty_seconds": 2.0833333333333333e-05,
+        "corpus_version": "synthetic-v1"
+      },
+      "onsets": {
+        "25": {
+          "tp": 29,
+          "fp": 9,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.7631578947368421,
+          "recall": 1.0,
+          "f1": 0.8656716417910447,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        },
+        "50": {
+          "tp": 29,
+          "fp": 9,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.7631578947368421,
+          "recall": 1.0,
+          "f1": 0.8656716417910447,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        }
+      },
+      "classes": {
+        "bass_transient_candidate": {
+          "tp": 29,
+          "fp": 9,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.7631578947368421,
+          "recall": 1.0,
+          "f1": 0.8656716417910447,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        },
+        "snare_like_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "high_frequency_percussion_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        }
+      },
+      "rhythm": {
+        "tempo_intervals": [],
+        "false_tempo_frames_on_nonrhythmic": null,
+        "observed_beat_50ms": {
+          "tp": 0,
+          "fp": 28,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.0,
+          "recall": 0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "predicted_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "continuity": null
+      },
+      "predicted_onsets": [
+        0.48321875000000014,
+        0.9832187500000005,
+        1.483218750000001,
+        1.9832187500000014,
+        2.1032187500000012,
+        2.4832187500000016,
+        2.983218750000002,
+        3.4832187500000025,
+        3.6032187500000026,
+        3.983218750000003,
+        4.483218749999993,
+        4.983218749999982,
+        5.1032187499999795,
+        5.483218749999971,
+        5.983218749999961,
+        6.48321874999995,
+        6.6032187499999475,
+        6.983218749999939,
+        7.483218749999929,
+        7.983218749999918,
+        8.103218749999916,
+        8.483218749999908,
+        8.983218749999898,
+        9.483218749999887,
+        9.603218749999884,
+        9.983218749999876,
+        10.483218749999866,
+        10.983218749999855,
+        11.103218749999852,
+        11.483218749999844,
+        11.983218749999834,
+        12.483218749999823,
+        12.60321874999982,
+        12.983218749999812,
+        13.483218749999802,
+        13.983218749999791,
+        14.103218749999789,
+        14.48321874999978
+      ],
+      "performance": {
+        "frames": 798,
+        "dsp_p95_ms": 1.204644992685644,
+        "dsp_total_ms": 813.2305996405194
+      },
+      "raw_rms_mean": 0.038122486902165874
+    },
+    {
+      "fixture": {
+        "id": "development_snare_noise",
+        "category": "snare_noise",
+        "split": "development",
+        "rate": 48000,
+        "channels": 2,
+        "duration": 16.0,
+        "sha256_float32_le": "ad8cb0b300c77e37f29b046856aa632a3298870914b3327fccd714fb0315a0a6",
+        "mixed_onsets": [
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          3.5,
+          4.0,
+          4.5,
+          5.0,
+          5.5,
+          6.0,
+          6.5,
+          7.0,
+          7.5,
+          8.0,
+          8.5,
+          9.0,
+          9.5,
+          10.0,
+          10.5,
+          11.0,
+          11.5,
+          12.0,
+          12.5,
+          13.0,
+          13.5,
+          14.0,
+          14.5
+        ],
+        "class_events": [
+          [
+            0.5,
+            "snare_like_candidate"
+          ],
+          [
+            1.0,
+            "snare_like_candidate"
+          ],
+          [
+            1.5,
+            "snare_like_candidate"
+          ],
+          [
+            2.0,
+            "snare_like_candidate"
+          ],
+          [
+            2.5,
+            "snare_like_candidate"
+          ],
+          [
+            3.0,
+            "snare_like_candidate"
+          ],
+          [
+            3.5,
+            "snare_like_candidate"
+          ],
+          [
+            4.0,
+            "snare_like_candidate"
+          ],
+          [
+            4.5,
+            "snare_like_candidate"
+          ],
+          [
+            5.0,
+            "snare_like_candidate"
+          ],
+          [
+            5.5,
+            "snare_like_candidate"
+          ],
+          [
+            6.0,
+            "snare_like_candidate"
+          ],
+          [
+            6.5,
+            "snare_like_candidate"
+          ],
+          [
+            7.0,
+            "snare_like_candidate"
+          ],
+          [
+            7.5,
+            "snare_like_candidate"
+          ],
+          [
+            8.0,
+            "snare_like_candidate"
+          ],
+          [
+            8.5,
+            "snare_like_candidate"
+          ],
+          [
+            9.0,
+            "snare_like_candidate"
+          ],
+          [
+            9.5,
+            "snare_like_candidate"
+          ],
+          [
+            10.0,
+            "snare_like_candidate"
+          ],
+          [
+            10.5,
+            "snare_like_candidate"
+          ],
+          [
+            11.0,
+            "snare_like_candidate"
+          ],
+          [
+            11.5,
+            "snare_like_candidate"
+          ],
+          [
+            12.0,
+            "snare_like_candidate"
+          ],
+          [
+            12.5,
+            "snare_like_candidate"
+          ],
+          [
+            13.0,
+            "snare_like_candidate"
+          ],
+          [
+            13.5,
+            "snare_like_candidate"
+          ],
+          [
+            14.0,
+            "snare_like_candidate"
+          ],
+          [
+            14.5,
+            "snare_like_candidate"
+          ]
+        ],
+        "tempo_intervals": [],
+        "beats": [],
+        "provenance": "Original procedural waveforms; CC0-1.0; no third-party samples",
+        "annotation": "Exact synthesis start samples; mixed coincident attacks deduplicated",
+        "uncertainty_seconds": 2.0833333333333333e-05,
+        "corpus_version": "synthetic-v1"
+      },
+      "onsets": {
+        "25": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        },
+        "50": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        }
+      },
+      "classes": {
+        "bass_transient_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "snare_like_candidate": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        },
+        "high_frequency_percussion_candidate": {
+          "tp": 0,
+          "fp": 27,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.0,
+          "recall": 0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        }
+      },
+      "rhythm": {
+        "tempo_intervals": [],
+        "false_tempo_frames_on_nonrhythmic": null,
+        "observed_beat_50ms": {
+          "tp": 0,
+          "fp": 21,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.0,
+          "recall": 0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "predicted_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "continuity": null
+      },
+      "predicted_onsets": [
+        0.48321875000000014,
+        0.9832187500000005,
+        1.483218750000001,
+        1.9832187500000014,
+        2.4832187500000016,
+        2.983218750000002,
+        3.4832187500000025,
+        3.983218750000003,
+        4.483218749999993,
+        4.983218749999982,
+        5.483218749999971,
+        5.983218749999961,
+        6.48321874999995,
+        6.983218749999939,
+        7.483218749999929,
+        7.983218749999918,
+        8.483218749999908,
+        8.983218749999898,
+        9.483218749999887,
+        9.983218749999876,
+        10.483218749999866,
+        10.983218749999855,
+        11.483218749999844,
+        11.983218749999834,
+        12.483218749999823,
+        12.983218749999812,
+        13.483218749999802,
+        13.983218749999791,
+        14.48321874999978
+      ],
+      "performance": {
+        "frames": 798,
+        "dsp_p95_ms": 1.1681749892886728,
+        "dsp_total_ms": 792.4118001683382
+      },
+      "raw_rms_mean": 0.005402945241893399
+    },
+    {
+      "fixture": {
+        "id": "development_high_percussion",
+        "category": "high_percussion",
+        "split": "development",
+        "rate": 48000,
+        "channels": 2,
+        "duration": 16.0,
+        "sha256_float32_le": "23da527701e095c80a744701c8d4917fbe844b8fe1dd104688c414445292edfd",
+        "mixed_onsets": [
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          3.5,
+          4.0,
+          4.5,
+          5.0,
+          5.5,
+          6.0,
+          6.5,
+          7.0,
+          7.5,
+          8.0,
+          8.5,
+          9.0,
+          9.5,
+          10.0,
+          10.5,
+          11.0,
+          11.5,
+          12.0,
+          12.5,
+          13.0,
+          13.5,
+          14.0,
+          14.5
+        ],
+        "class_events": [
+          [
+            0.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            1.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            1.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            3.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            3.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            4.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            4.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            5.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            5.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            7.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            7.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            9.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            9.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            10.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            10.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            11.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            11.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            13.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            13.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.5,
+            "high_frequency_percussion_candidate"
+          ]
+        ],
+        "tempo_intervals": [],
+        "beats": [],
+        "provenance": "Original procedural waveforms; CC0-1.0; no third-party samples",
+        "annotation": "Exact synthesis start samples; mixed coincident attacks deduplicated",
+        "uncertainty_seconds": 2.0833333333333333e-05,
+        "corpus_version": "synthetic-v1"
+      },
+      "onsets": {
+        "25": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        },
+        "50": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        }
+      },
+      "classes": {
+        "bass_transient_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "snare_like_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "high_frequency_percussion_candidate": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        }
+      },
+      "rhythm": {
+        "tempo_intervals": [],
+        "false_tempo_frames_on_nonrhythmic": null,
+        "observed_beat_50ms": {
+          "tp": 0,
+          "fp": 21,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.0,
+          "recall": 0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "predicted_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "continuity": null
+      },
+      "predicted_onsets": [
+        0.48321875000000014,
+        0.9832187500000005,
+        1.483218750000001,
+        1.9832187500000014,
+        2.4832187500000016,
+        2.983218750000002,
+        3.4832187500000025,
+        3.983218750000003,
+        4.483218749999993,
+        4.983218749999982,
+        5.483218749999971,
+        5.983218749999961,
+        6.48321874999995,
+        6.983218749999939,
+        7.483218749999929,
+        7.983218749999918,
+        8.483218749999908,
+        8.983218749999898,
+        9.483218749999887,
+        9.983218749999876,
+        10.483218749999866,
+        10.983218749999855,
+        11.483218749999844,
+        11.983218749999834,
+        12.483218749999823,
+        12.983218749999812,
+        13.483218749999802,
+        13.983218749999791,
+        14.48321874999978
+      ],
+      "performance": {
+        "frames": 798,
+        "dsp_p95_ms": 1.1601549987972248,
+        "dsp_total_ms": 798.792300032801
+      },
+      "raw_rms_mean": 0.003995294143722588
+    },
+    {
+      "fixture": {
+        "id": "development_simultaneous",
+        "category": "simultaneous",
+        "split": "development",
+        "rate": 48000,
+        "channels": 2,
+        "duration": 16.0,
+        "sha256_float32_le": "719df56aca2cb2052fcfa13c8c5e8d6c1974d1a3634e6bf4340e9a0aeb1b011e",
+        "mixed_onsets": [
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          3.5,
+          4.0,
+          4.5,
+          5.0,
+          5.5,
+          6.0,
+          6.5,
+          7.0,
+          7.5,
+          8.0,
+          8.5,
+          9.0,
+          9.5,
+          10.0,
+          10.5,
+          11.0,
+          11.5,
+          12.0,
+          12.5,
+          13.0,
+          13.5,
+          14.0,
+          14.5
+        ],
+        "class_events": [
+          [
+            0.5,
+            "bass_transient_candidate"
+          ],
+          [
+            0.5,
+            "snare_like_candidate"
+          ],
+          [
+            0.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            1.0,
+            "bass_transient_candidate"
+          ],
+          [
+            1.0,
+            "snare_like_candidate"
+          ],
+          [
+            1.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            1.5,
+            "bass_transient_candidate"
+          ],
+          [
+            1.5,
+            "snare_like_candidate"
+          ],
+          [
+            1.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.0,
+            "bass_transient_candidate"
+          ],
+          [
+            2.0,
+            "snare_like_candidate"
+          ],
+          [
+            2.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.5,
+            "bass_transient_candidate"
+          ],
+          [
+            2.5,
+            "snare_like_candidate"
+          ],
+          [
+            2.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            3.0,
+            "bass_transient_candidate"
+          ],
+          [
+            3.0,
+            "snare_like_candidate"
+          ],
+          [
+            3.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            3.5,
+            "bass_transient_candidate"
+          ],
+          [
+            3.5,
+            "snare_like_candidate"
+          ],
+          [
+            3.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            4.0,
+            "bass_transient_candidate"
+          ],
+          [
+            4.0,
+            "snare_like_candidate"
+          ],
+          [
+            4.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            4.5,
+            "bass_transient_candidate"
+          ],
+          [
+            4.5,
+            "snare_like_candidate"
+          ],
+          [
+            4.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            5.0,
+            "bass_transient_candidate"
+          ],
+          [
+            5.0,
+            "snare_like_candidate"
+          ],
+          [
+            5.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            5.5,
+            "bass_transient_candidate"
+          ],
+          [
+            5.5,
+            "snare_like_candidate"
+          ],
+          [
+            5.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.0,
+            "bass_transient_candidate"
+          ],
+          [
+            6.0,
+            "snare_like_candidate"
+          ],
+          [
+            6.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.5,
+            "bass_transient_candidate"
+          ],
+          [
+            6.5,
+            "snare_like_candidate"
+          ],
+          [
+            6.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            7.0,
+            "bass_transient_candidate"
+          ],
+          [
+            7.0,
+            "snare_like_candidate"
+          ],
+          [
+            7.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            7.5,
+            "bass_transient_candidate"
+          ],
+          [
+            7.5,
+            "snare_like_candidate"
+          ],
+          [
+            7.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.0,
+            "bass_transient_candidate"
+          ],
+          [
+            8.0,
+            "snare_like_candidate"
+          ],
+          [
+            8.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.5,
+            "bass_transient_candidate"
+          ],
+          [
+            8.5,
+            "snare_like_candidate"
+          ],
+          [
+            8.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            9.0,
+            "bass_transient_candidate"
+          ],
+          [
+            9.0,
+            "snare_like_candidate"
+          ],
+          [
+            9.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            9.5,
+            "bass_transient_candidate"
+          ],
+          [
+            9.5,
+            "snare_like_candidate"
+          ],
+          [
+            9.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            10.0,
+            "bass_transient_candidate"
+          ],
+          [
+            10.0,
+            "snare_like_candidate"
+          ],
+          [
+            10.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            10.5,
+            "bass_transient_candidate"
+          ],
+          [
+            10.5,
+            "snare_like_candidate"
+          ],
+          [
+            10.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            11.0,
+            "bass_transient_candidate"
+          ],
+          [
+            11.0,
+            "snare_like_candidate"
+          ],
+          [
+            11.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            11.5,
+            "bass_transient_candidate"
+          ],
+          [
+            11.5,
+            "snare_like_candidate"
+          ],
+          [
+            11.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.0,
+            "bass_transient_candidate"
+          ],
+          [
+            12.0,
+            "snare_like_candidate"
+          ],
+          [
+            12.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.5,
+            "bass_transient_candidate"
+          ],
+          [
+            12.5,
+            "snare_like_candidate"
+          ],
+          [
+            12.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            13.0,
+            "bass_transient_candidate"
+          ],
+          [
+            13.0,
+            "snare_like_candidate"
+          ],
+          [
+            13.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            13.5,
+            "bass_transient_candidate"
+          ],
+          [
+            13.5,
+            "snare_like_candidate"
+          ],
+          [
+            13.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.0,
+            "bass_transient_candidate"
+          ],
+          [
+            14.0,
+            "snare_like_candidate"
+          ],
+          [
+            14.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.5,
+            "bass_transient_candidate"
+          ],
+          [
+            14.5,
+            "snare_like_candidate"
+          ],
+          [
+            14.5,
+            "high_frequency_percussion_candidate"
+          ]
+        ],
+        "tempo_intervals": [],
+        "beats": [],
+        "provenance": "Original procedural waveforms; CC0-1.0; no third-party samples",
+        "annotation": "Exact synthesis start samples; mixed coincident attacks deduplicated",
+        "uncertainty_seconds": 2.0833333333333333e-05,
+        "corpus_version": "synthetic-v1"
+      },
+      "onsets": {
+        "25": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        },
+        "50": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        }
+      },
+      "classes": {
+        "bass_transient_candidate": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        },
+        "snare_like_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 29,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "high_frequency_percussion_candidate": {
+          "tp": 10,
+          "fp": 0,
+          "fn": 19,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 0.3448275862068966,
+          "f1": 0.5128205128205128,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000088356,
+          "median_absolute_error_ms": 16.781250000065917,
+          "p95_absolute_error_ms": 16.78125000020998,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999997527,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000091674,
+            -16.78125000017694,
+            -16.781250000198256,
+            -16.781250000219572
+          ]
+        }
+      },
+      "rhythm": {
+        "tempo_intervals": [],
+        "false_tempo_frames_on_nonrhythmic": null,
+        "observed_beat_50ms": {
+          "tp": 0,
+          "fp": 21,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.0,
+          "recall": 0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "predicted_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "continuity": null
+      },
+      "predicted_onsets": [
+        0.48321875000000014,
+        0.9832187500000005,
+        1.483218750000001,
+        1.9832187500000014,
+        2.4832187500000016,
+        2.983218750000002,
+        3.4832187500000025,
+        3.983218750000003,
+        4.483218749999993,
+        4.983218749999982,
+        5.483218749999971,
+        5.983218749999961,
+        6.48321874999995,
+        6.983218749999939,
+        7.483218749999929,
+        7.983218749999918,
+        8.483218749999908,
+        8.983218749999898,
+        9.483218749999887,
+        9.983218749999876,
+        10.483218749999866,
+        10.983218749999855,
+        11.483218749999844,
+        11.983218749999834,
+        12.483218749999823,
+        12.983218749999812,
+        13.483218749999802,
+        13.983218749999791,
+        14.48321874999978
+      ],
+      "performance": {
+        "frames": 798,
+        "dsp_p95_ms": 1.1719150032149628,
+        "dsp_total_ms": 796.776300019701
+      },
+      "raw_rms_mean": 0.01396976661409296
+    },
+    {
+      "fixture": {
+        "id": "development_dense",
+        "category": "dense",
+        "split": "development",
+        "rate": 48000,
+        "channels": 2,
+        "duration": 16.0,
+        "sha256_float32_le": "4d6d72a2776d870501854f7e0ba45286d746eb60115fc8b3f2d2136eebada237",
+        "mixed_onsets": [
+          0.5,
+          0.583333,
+          0.666667,
+          0.75,
+          0.833333,
+          0.916667,
+          1.0,
+          1.083333,
+          1.166667,
+          1.25,
+          1.333333,
+          1.416667,
+          1.5,
+          1.583333,
+          1.666667,
+          1.75,
+          1.833333,
+          1.916667,
+          2.0,
+          2.083333,
+          2.166667,
+          2.25,
+          2.333333,
+          2.416667,
+          2.5,
+          2.583333,
+          2.666667,
+          2.75,
+          2.833333,
+          2.916667,
+          3.0,
+          3.083333,
+          3.166667,
+          3.25,
+          3.333333,
+          3.416667,
+          3.5,
+          3.583333,
+          3.666667,
+          3.75,
+          3.833333,
+          3.916667,
+          4.0,
+          4.083333,
+          4.166667,
+          4.25,
+          4.333333,
+          4.416667,
+          4.5,
+          4.583333,
+          4.666667,
+          4.75,
+          4.833333,
+          4.916667,
+          5.0,
+          5.083333,
+          5.166667,
+          5.25,
+          5.333333,
+          5.416667,
+          5.5,
+          5.583333,
+          5.666667,
+          5.75,
+          5.833333,
+          5.916667,
+          6.0,
+          6.083333,
+          6.166667,
+          6.25,
+          6.333333,
+          6.416667,
+          6.5,
+          6.583333,
+          6.666667,
+          6.75,
+          6.833333,
+          6.916667,
+          7.0,
+          7.083333,
+          7.166667,
+          7.25,
+          7.333333,
+          7.416667,
+          7.5,
+          7.583333,
+          7.666667,
+          7.75,
+          7.833333,
+          7.916667,
+          8.0,
+          8.083333,
+          8.166667,
+          8.25,
+          8.333333,
+          8.416667,
+          8.5,
+          8.583333,
+          8.666667,
+          8.75,
+          8.833333,
+          8.916667,
+          9.0,
+          9.083333,
+          9.166667,
+          9.25,
+          9.333333,
+          9.416667,
+          9.5,
+          9.583333,
+          9.666667,
+          9.75,
+          9.833333,
+          9.916667,
+          10.0,
+          10.083333,
+          10.166667,
+          10.25,
+          10.333333,
+          10.416667,
+          10.5,
+          10.583333,
+          10.666667,
+          10.75,
+          10.833333,
+          10.916667,
+          11.0,
+          11.083333,
+          11.166667,
+          11.25,
+          11.333333,
+          11.416667,
+          11.5,
+          11.583333,
+          11.666667,
+          11.75,
+          11.833333,
+          11.916667,
+          12.0,
+          12.083333,
+          12.166667,
+          12.25,
+          12.333333,
+          12.416667,
+          12.5,
+          12.583333,
+          12.666667,
+          12.75,
+          12.833333,
+          12.916667,
+          13.0,
+          13.083333,
+          13.166667,
+          13.25,
+          13.333333,
+          13.416667,
+          13.5,
+          13.583333,
+          13.666667,
+          13.75,
+          13.833333,
+          13.916667,
+          14.0,
+          14.083333,
+          14.166667,
+          14.25,
+          14.333333,
+          14.416667,
+          14.5,
+          14.583333,
+          14.666667,
+          14.75,
+          14.833333,
+          14.916667
+        ],
+        "class_events": [
+          [
+            0.5,
+            "bass_transient_candidate"
+          ],
+          [
+            0.5833333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            0.6666666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            0.75,
+            "bass_transient_candidate"
+          ],
+          [
+            0.8333333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            0.9166666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            1.0,
+            "bass_transient_candidate"
+          ],
+          [
+            1.0833333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            1.1666666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            1.25,
+            "bass_transient_candidate"
+          ],
+          [
+            1.3333333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            1.4166666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            1.5,
+            "bass_transient_candidate"
+          ],
+          [
+            1.5833333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            1.6666666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            1.75,
+            "bass_transient_candidate"
+          ],
+          [
+            1.8333333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            1.9166666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.0,
+            "bass_transient_candidate"
+          ],
+          [
+            2.0833333333333335,
+            "snare_like_candidate"
+          ],
+          [
+            2.1666666666666665,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.25,
+            "bass_transient_candidate"
+          ],
+          [
+            2.3333333333333335,
+            "snare_like_candidate"
+          ],
+          [
+            2.4166666666666665,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.5,
+            "bass_transient_candidate"
+          ],
+          [
+            2.5833333333333335,
+            "snare_like_candidate"
+          ],
+          [
+            2.6666666666666665,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.75,
+            "bass_transient_candidate"
+          ],
+          [
+            2.8333333333333335,
+            "snare_like_candidate"
+          ],
+          [
+            2.9166666666666665,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            3.0,
+            "bass_transient_candidate"
+          ],
+          [
+            3.0833333333333335,
+            "snare_like_candidate"
+          ],
+          [
+            3.1666666666666665,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            3.25,
+            "bass_transient_candidate"
+          ],
+          [
+            3.3333333333333335,
+            "snare_like_candidate"
+          ],
+          [
+            3.4166666666666665,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            3.5,
+            "bass_transient_candidate"
+          ],
+          [
+            3.5833333333333335,
+            "snare_like_candidate"
+          ],
+          [
+            3.6666666666666665,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            3.75,
+            "bass_transient_candidate"
+          ],
+          [
+            3.8333333333333335,
+            "snare_like_candidate"
+          ],
+          [
+            3.9166666666666665,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            4.0,
+            "bass_transient_candidate"
+          ],
+          [
+            4.083333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            4.166666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            4.25,
+            "bass_transient_candidate"
+          ],
+          [
+            4.333333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            4.416666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            4.5,
+            "bass_transient_candidate"
+          ],
+          [
+            4.583333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            4.666666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            4.75,
+            "bass_transient_candidate"
+          ],
+          [
+            4.833333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            4.916666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            5.0,
+            "bass_transient_candidate"
+          ],
+          [
+            5.083333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            5.166666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            5.25,
+            "bass_transient_candidate"
+          ],
+          [
+            5.333333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            5.416666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            5.5,
+            "bass_transient_candidate"
+          ],
+          [
+            5.583333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            5.666666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            5.75,
+            "bass_transient_candidate"
+          ],
+          [
+            5.833333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            5.916666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.0,
+            "bass_transient_candidate"
+          ],
+          [
+            6.083333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            6.166666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.25,
+            "bass_transient_candidate"
+          ],
+          [
+            6.333333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            6.416666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.5,
+            "bass_transient_candidate"
+          ],
+          [
+            6.583333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            6.666666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.75,
+            "bass_transient_candidate"
+          ],
+          [
+            6.833333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            6.916666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            7.0,
+            "bass_transient_candidate"
+          ],
+          [
+            7.083333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            7.166666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            7.25,
+            "bass_transient_candidate"
+          ],
+          [
+            7.333333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            7.416666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            7.5,
+            "bass_transient_candidate"
+          ],
+          [
+            7.583333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            7.666666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            7.75,
+            "bass_transient_candidate"
+          ],
+          [
+            7.833333333333333,
+            "snare_like_candidate"
+          ],
+          [
+            7.916666666666667,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.0,
+            "bass_transient_candidate"
+          ],
+          [
+            8.083333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            8.166666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.25,
+            "bass_transient_candidate"
+          ],
+          [
+            8.333333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            8.416666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.5,
+            "bass_transient_candidate"
+          ],
+          [
+            8.583333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            8.666666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.75,
+            "bass_transient_candidate"
+          ],
+          [
+            8.833333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            8.916666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            9.0,
+            "bass_transient_candidate"
+          ],
+          [
+            9.083333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            9.166666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            9.25,
+            "bass_transient_candidate"
+          ],
+          [
+            9.333333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            9.416666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            9.5,
+            "bass_transient_candidate"
+          ],
+          [
+            9.583333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            9.666666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            9.75,
+            "bass_transient_candidate"
+          ],
+          [
+            9.833333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            9.916666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            10.0,
+            "bass_transient_candidate"
+          ],
+          [
+            10.083333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            10.166666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            10.25,
+            "bass_transient_candidate"
+          ],
+          [
+            10.333333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            10.416666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            10.5,
+            "bass_transient_candidate"
+          ],
+          [
+            10.583333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            10.666666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            10.75,
+            "bass_transient_candidate"
+          ],
+          [
+            10.833333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            10.916666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            11.0,
+            "bass_transient_candidate"
+          ],
+          [
+            11.083333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            11.166666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            11.25,
+            "bass_transient_candidate"
+          ],
+          [
+            11.333333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            11.416666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            11.5,
+            "bass_transient_candidate"
+          ],
+          [
+            11.583333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            11.666666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            11.75,
+            "bass_transient_candidate"
+          ],
+          [
+            11.833333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            11.916666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.0,
+            "bass_transient_candidate"
+          ],
+          [
+            12.083333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            12.166666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.25,
+            "bass_transient_candidate"
+          ],
+          [
+            12.333333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            12.416666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.5,
+            "bass_transient_candidate"
+          ],
+          [
+            12.583333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            12.666666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.75,
+            "bass_transient_candidate"
+          ],
+          [
+            12.833333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            12.916666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            13.0,
+            "bass_transient_candidate"
+          ],
+          [
+            13.083333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            13.166666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            13.25,
+            "bass_transient_candidate"
+          ],
+          [
+            13.333333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            13.416666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            13.5,
+            "bass_transient_candidate"
+          ],
+          [
+            13.583333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            13.666666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            13.75,
+            "bass_transient_candidate"
+          ],
+          [
+            13.833333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            13.916666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.0,
+            "bass_transient_candidate"
+          ],
+          [
+            14.083333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            14.166666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.25,
+            "bass_transient_candidate"
+          ],
+          [
+            14.333333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            14.416666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.5,
+            "bass_transient_candidate"
+          ],
+          [
+            14.583333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            14.666666666666666,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.75,
+            "bass_transient_candidate"
+          ],
+          [
+            14.833333333333334,
+            "snare_like_candidate"
+          ],
+          [
+            14.916666666666666,
+            "high_frequency_percussion_candidate"
+          ]
+        ],
+        "tempo_intervals": [
+          [
+            0.5,
+            15,
+            180
+          ]
+        ],
+        "beats": [
+          0.5,
+          0.8333333333333333,
+          1.1666666666666665,
+          1.4999999999999998,
+          1.833333333333333,
+          2.166666666666666,
+          2.4999999999999996,
+          2.833333333333333,
+          3.166666666666666,
+          3.499999999999999,
+          3.8333333333333326,
+          4.166666666666666,
+          4.499999999999999,
+          4.833333333333332,
+          5.166666666666666,
+          5.499999999999999,
+          5.833333333333332,
+          6.166666666666665,
+          6.499999999999998,
+          6.833333333333332,
+          7.166666666666665,
+          7.499999999999998,
+          7.833333333333332,
+          8.166666666666664,
+          8.499999999999998,
+          8.833333333333332,
+          9.166666666666664,
+          9.499999999999998,
+          9.833333333333332,
+          10.166666666666664,
+          10.499999999999998,
+          10.83333333333333,
+          11.166666666666664,
+          11.499999999999998,
+          11.83333333333333,
+          12.166666666666664,
+          12.499999999999996,
+          12.83333333333333,
+          13.166666666666664,
+          13.499999999999996,
+          13.83333333333333,
+          14.166666666666664,
+          14.499999999999996,
+          14.83333333333333
+        ],
+        "provenance": "Original procedural waveforms; CC0-1.0; no third-party samples",
+        "annotation": "Exact synthesis start samples; mixed coincident attacks deduplicated",
+        "uncertainty_seconds": 2.0833333333333333e-05,
+        "corpus_version": "synthetic-v1"
+      },
+      "onsets": {
+        "25": {
+          "tp": 116,
+          "fp": 0,
+          "fn": 58,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 0.6666666666666666,
+          "f1": 0.8,
+          "correct_empty": false,
+          "timing_bias_ms": -3.447750000084383,
+          "median_absolute_error_ms": 8.333499999999106,
+          "p95_absolute_error_ms": 16.781250000158288,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -0.1142499999998714,
+            -6.781249999999739,
+            9.88575000000036,
+            -16.781249999999524,
+            -0.11424999999953833,
+            -6.781249999999295,
+            9.885750000000693,
+            -16.781249999999083,
+            -0.11424999999909424,
+            -6.781249999998851,
+            9.885750000001137,
+            -16.781249999998636,
+            -0.1142499999988722,
+            -6.781249999998629,
+            9.885750000001359,
+            -16.781249999998415,
+            -0.11424999999842811,
+            -6.781249999998185,
+            9.885750000001803,
+            -16.78124999999797,
+            -0.11424999999798402,
+            -6.7812499999977405,
+            9.885750000002247,
+            -16.781249999997527,
+            -0.11424999999753993,
+            -6.781249999997296,
+            9.885750000002691,
+            -16.781249999997083,
+            -0.11424999999842811,
+            -6.781250000002181,
+            9.88574999999603,
+            -16.781250000007297,
+            -0.11425000000908625,
+            -6.7812500000128395,
+            9.885749999985372,
+            -16.781250000017955,
+            -0.11425000001974439,
+            -6.781250000023498,
+            9.885749999974713,
+            -16.781250000028614,
+            -0.11425000003040253,
+            -6.781250000034156,
+            9.885749999964055,
+            -16.78125000003927,
+            -0.11425000004106067,
+            -6.781250000044814,
+            9.885749999953397,
+            -16.78125000004993,
+            -0.11425000005171881,
+            -6.781250000055472,
+            9.885749999942739,
+            -16.781250000060588,
+            -0.11425000006237696,
+            -6.78125000006613,
+            9.88574999993208,
+            -16.781250000071246,
+            -0.1142500000730351,
+            -6.781250000076788,
+            9.885749999921423,
+            -16.781250000081904,
+            -0.11425000008280506,
+            -6.781250000086558,
+            9.885749999911653,
+            -16.781250000091674,
+            -0.1142500000934632,
+            -6.7812500000972165,
+            9.885749999900995,
+            -16.781250000102332,
+            -0.11425000010412134,
+            -6.781250000107875,
+            9.885749999890336,
+            -16.78125000011299,
+            -0.11425000011477948,
+            -6.781250000118533,
+            9.885749999879678,
+            -16.78125000012365,
+            -0.11425000012543762,
+            -6.781250000129191,
+            9.88574999986902,
+            -16.781250000134307,
+            -0.11425000013609576,
+            -6.781250000139849,
+            9.885749999858362,
+            -16.781250000144965,
+            -0.1142500001467539,
+            -6.781250000150507,
+            9.885749999847704,
+            -16.781250000155623,
+            -0.11425000015741205,
+            -6.781250000161165,
+            9.885749999837046,
+            -16.78125000016628,
+            -0.11425000016807019,
+            -6.7812500001718234,
+            9.885749999826388,
+            -16.78125000017694,
+            -0.11425000017872833,
+            -6.781250000182482,
+            9.88574999981573,
+            -16.781250000187597,
+            -0.11425000018938647,
+            -6.78125000019314,
+            9.885749999805071,
+            -16.781250000198256,
+            -0.11425000020004461,
+            -6.781250000203798,
+            9.885749999794413,
+            -16.781250000208914,
+            -0.11425000021070275,
+            -6.781250000214456,
+            9.885749999783755,
+            -16.781250000219572,
+            -0.11425000022136089,
+            -6.781250000225114,
+            9.885749999773097
+          ]
+        },
+        "50": {
+          "tp": 116,
+          "fp": 0,
+          "fn": 58,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 0.6666666666666666,
+          "f1": 0.8,
+          "correct_empty": false,
+          "timing_bias_ms": -3.447750000084383,
+          "median_absolute_error_ms": 8.333499999999106,
+          "p95_absolute_error_ms": 16.781250000158288,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -0.1142499999998714,
+            -6.781249999999739,
+            9.88575000000036,
+            -16.781249999999524,
+            -0.11424999999953833,
+            -6.781249999999295,
+            9.885750000000693,
+            -16.781249999999083,
+            -0.11424999999909424,
+            -6.781249999998851,
+            9.885750000001137,
+            -16.781249999998636,
+            -0.1142499999988722,
+            -6.781249999998629,
+            9.885750000001359,
+            -16.781249999998415,
+            -0.11424999999842811,
+            -6.781249999998185,
+            9.885750000001803,
+            -16.78124999999797,
+            -0.11424999999798402,
+            -6.7812499999977405,
+            9.885750000002247,
+            -16.781249999997527,
+            -0.11424999999753993,
+            -6.781249999997296,
+            9.885750000002691,
+            -16.781249999997083,
+            -0.11424999999842811,
+            -6.781250000002181,
+            9.88574999999603,
+            -16.781250000007297,
+            -0.11425000000908625,
+            -6.7812500000128395,
+            9.885749999985372,
+            -16.781250000017955,
+            -0.11425000001974439,
+            -6.781250000023498,
+            9.885749999974713,
+            -16.781250000028614,
+            -0.11425000003040253,
+            -6.781250000034156,
+            9.885749999964055,
+            -16.78125000003927,
+            -0.11425000004106067,
+            -6.781250000044814,
+            9.885749999953397,
+            -16.78125000004993,
+            -0.11425000005171881,
+            -6.781250000055472,
+            9.885749999942739,
+            -16.781250000060588,
+            -0.11425000006237696,
+            -6.78125000006613,
+            9.88574999993208,
+            -16.781250000071246,
+            -0.1142500000730351,
+            -6.781250000076788,
+            9.885749999921423,
+            -16.781250000081904,
+            -0.11425000008280506,
+            -6.781250000086558,
+            9.885749999911653,
+            -16.781250000091674,
+            -0.1142500000934632,
+            -6.7812500000972165,
+            9.885749999900995,
+            -16.781250000102332,
+            -0.11425000010412134,
+            -6.781250000107875,
+            9.885749999890336,
+            -16.78125000011299,
+            -0.11425000011477948,
+            -6.781250000118533,
+            9.885749999879678,
+            -16.78125000012365,
+            -0.11425000012543762,
+            -6.781250000129191,
+            9.88574999986902,
+            -16.781250000134307,
+            -0.11425000013609576,
+            -6.781250000139849,
+            9.885749999858362,
+            -16.781250000144965,
+            -0.1142500001467539,
+            -6.781250000150507,
+            9.885749999847704,
+            -16.781250000155623,
+            -0.11425000015741205,
+            -6.781250000161165,
+            9.885749999837046,
+            -16.78125000016628,
+            -0.11425000016807019,
+            -6.7812500001718234,
+            9.885749999826388,
+            -16.78125000017694,
+            -0.11425000017872833,
+            -6.781250000182482,
+            9.88574999981573,
+            -16.781250000187597,
+            -0.11425000018938647,
+            -6.78125000019314,
+            9.885749999805071,
+            -16.781250000198256,
+            -0.11425000020004461,
+            -6.781250000203798,
+            9.885749999794413,
+            -16.781250000208914,
+            -0.11425000021070275,
+            -6.781250000214456,
+            9.885749999783755,
+            -16.781250000219572,
+            -0.11425000022136089,
+            -6.781250000225114,
+            9.885749999773097
+          ]
+        }
+      },
+      "classes": {
+        "bass_transient_candidate": {
+          "tp": 58,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -11.781250000083713,
+          "median_absolute_error_ms": 11.781250000111099,
+          "p95_absolute_error_ms": 16.781250000189196,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -6.781249999999739,
+            -16.781249999999524,
+            -6.781249999999295,
+            -16.781249999999083,
+            -6.781249999998851,
+            -16.781249999998636,
+            -6.781249999998629,
+            -16.781249999998415,
+            -6.781249999998185,
+            -16.78124999999797,
+            -6.7812499999977405,
+            -16.781249999997527,
+            -6.781249999997296,
+            -16.781249999997083,
+            -6.781250000002181,
+            -16.781250000007297,
+            -6.7812500000128395,
+            -16.781250000017955,
+            -6.781250000023498,
+            -16.781250000028614,
+            -6.781250000034156,
+            -16.78125000003927,
+            -6.781250000044814,
+            -16.78125000004993,
+            -6.781250000055472,
+            -16.781250000060588,
+            -6.78125000006613,
+            -16.781250000071246,
+            -6.781250000076788,
+            -16.781250000081904,
+            -6.781250000086558,
+            -16.781250000091674,
+            -6.7812500000972165,
+            -16.781250000102332,
+            -6.781250000107875,
+            -16.78125000011299,
+            -6.781250000118533,
+            -16.78125000012365,
+            -6.781250000129191,
+            -16.781250000134307,
+            -6.781250000139849,
+            -16.781250000144965,
+            -6.781250000150507,
+            -16.781250000155623,
+            -6.781250000161165,
+            -16.78125000016628,
+            -6.7812500001718234,
+            -16.78125000017694,
+            -6.781250000182482,
+            -16.781250000187597,
+            -6.78125000019314,
+            -16.781250000198256,
+            -6.781250000203798,
+            -16.781250000208914,
+            -6.781250000214456,
+            -16.781250000219572,
+            -6.781250000225114
+          ]
+        },
+        "snare_like_candidate": {
+          "tp": 58,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": 4.885416666581156,
+          "median_absolute_error_ms": 4.999999999997229,
+          "p95_absolute_error_ms": 9.885416666668045,
+          "timing_errors_ms": [
+            -0.11458333333325132,
+            9.88541666666698,
+            -0.11458333333269621,
+            9.885416666667535,
+            -0.11458333333225212,
+            9.885416666667979,
+            -0.11458333333225212,
+            9.885416666667979,
+            -0.11458333333180803,
+            9.885416666668423,
+            -0.11458333333136395,
+            9.885416666668867,
+            -0.11458333333091986,
+            9.885416666669311,
+            -0.11458333333180803,
+            9.88541666666265,
+            -0.11458333334246618,
+            9.885416666651992,
+            -0.11458333335312432,
+            9.885416666641333,
+            -0.11458333336378246,
+            9.885416666630675,
+            -0.1145833333744406,
+            9.885416666620017,
+            -0.11458333338509874,
+            9.885416666609359,
+            -0.11458333339575688,
+            9.8854166665987,
+            -0.11458333340641502,
+            9.885416666588043,
+            -0.11458333341707316,
+            9.885416666577385,
+            -0.1145833334277313,
+            9.885416666566726,
+            -0.11458333343838945,
+            9.885416666556068,
+            -0.11458333344904759,
+            9.88541666654541,
+            -0.11458333345970573,
+            9.885416666534752,
+            -0.11458333347036387,
+            9.885416666524094,
+            -0.11458333348102201,
+            9.885416666513436,
+            -0.11458333349168015,
+            9.885416666502778,
+            -0.11458333350233829,
+            9.88541666649212,
+            -0.11458333351299643,
+            9.885416666481461,
+            -0.11458333352365457,
+            9.885416666470803,
+            -0.11458333353431271,
+            9.885416666460145,
+            -0.11458333354497086,
+            9.885416666449487,
+            -0.114583333555629,
+            9.885416666438829
+          ]
+        },
+        "high_frequency_percussion_candidate": {
+          "tp": 0,
+          "fp": 57,
+          "fn": 58,
+          "duplicates": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        }
+      },
+      "rhythm": {
+        "tempo_intervals": [
+          {
+            "bpm": 180,
+            "start": 0.5,
+            "end": 15,
+            "strict_accuracy_after_4s": 0.0,
+            "octave_tolerant_accuracy_after_4s": 0.0,
+            "stable_estimate_seconds": null
+          }
+        ],
+        "false_tempo_frames_on_nonrhythmic": null,
+        "observed_beat_50ms": {
+          "tp": 22,
+          "fp": 65,
+          "fn": 22,
+          "duplicates": 0,
+          "precision": 0.25287356321839083,
+          "recall": 0.5,
+          "f1": 0.33587786259541985,
+          "correct_empty": false,
+          "timing_bias_ms": -3.4479166667817718,
+          "median_absolute_error_ms": 13.333333333329644,
+          "p95_absolute_error_ms": 16.781250000193637,
+          "timing_errors_ms": [
+            -16.78125000000641,
+            9.88541666665288,
+            -16.781250000027725,
+            9.885416666631563,
+            -16.781250000048153,
+            9.885416666610247,
+            -16.78125000006947,
+            9.885416666588931,
+            -16.781250000089898,
+            9.885416666568503,
+            -16.781250000111214,
+            9.885416666547187,
+            -16.78125000013253,
+            9.885416666527647,
+            -16.781250000153847,
+            9.88541666650633,
+            -16.781250000173387,
+            9.885416666485014,
+            -16.781250000194703,
+            9.885416666463698,
+            -16.78125000021602,
+            9.885416666442381
+          ]
+        },
+        "predicted_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 44,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "continuity": {
+          "cmlc": 0.0,
+          "cmlt": 0.0,
+          "amlc": 0.011494252873563218,
+          "amlt": 0.2413793103448276
+        }
+      },
+      "predicted_onsets": [
+        0.48321875000000014,
+        0.5832187500000001,
+        0.7432187500000003,
+        0.8432187500000003,
+        0.9832187500000005,
+        1.0832187500000006,
+        1.2432187500000007,
+        1.3432187500000008,
+        1.483218750000001,
+        1.583218750000001,
+        1.7432187500000011,
+        1.8432187500000012,
+        1.9832187500000014,
+        2.0832187500000012,
+        2.2432187500000014,
+        2.3432187500000015,
+        2.4832187500000016,
+        2.5832187500000017,
+        2.743218750000002,
+        2.843218750000002,
+        2.983218750000002,
+        3.083218750000002,
+        3.2432187500000023,
+        3.3432187500000023,
+        3.4832187500000025,
+        3.5832187500000026,
+        3.7432187500000027,
+        3.843218750000003,
+        3.983218750000003,
+        4.083218750000001,
+        4.243218749999998,
+        4.343218749999996,
+        4.483218749999993,
+        4.583218749999991,
+        4.743218749999987,
+        4.843218749999985,
+        4.983218749999982,
+        5.08321874999998,
+        5.2432187499999765,
+        5.343218749999974,
+        5.483218749999971,
+        5.583218749999969,
+        5.743218749999966,
+        5.843218749999964,
+        5.983218749999961,
+        6.083218749999959,
+        6.243218749999955,
+        6.343218749999953,
+        6.48321874999995,
+        6.583218749999948,
+        6.7432187499999445,
+        6.843218749999942,
+        6.983218749999939,
+        7.083218749999937,
+        7.243218749999934,
+        7.343218749999932,
+        7.483218749999929,
+        7.583218749999927,
+        7.743218749999923,
+        7.843218749999921,
+        7.983218749999918,
+        8.083218749999917,
+        8.243218749999913,
+        8.343218749999911,
+        8.483218749999908,
+        8.583218749999906,
+        8.743218749999903,
+        8.8432187499999,
+        8.983218749999898,
+        9.083218749999896,
+        9.243218749999892,
+        9.34321874999989,
+        9.483218749999887,
+        9.583218749999885,
+        9.743218749999881,
+        9.84321874999988,
+        9.983218749999876,
+        10.083218749999874,
+        10.24321874999987,
+        10.343218749999869,
+        10.483218749999866,
+        10.583218749999864,
+        10.74321874999986,
+        10.843218749999858,
+        10.983218749999855,
+        11.083218749999853,
+        11.24321874999985,
+        11.343218749999847,
+        11.483218749999844,
+        11.583218749999842,
+        11.743218749999839,
+        11.843218749999837,
+        11.983218749999834,
+        12.083218749999832,
+        12.243218749999828,
+        12.343218749999826,
+        12.483218749999823,
+        12.583218749999821,
+        12.743218749999818,
+        12.843218749999815,
+        12.983218749999812,
+        13.08321874999981,
+        13.243218749999807,
+        13.343218749999805,
+        13.483218749999802,
+        13.5832187499998,
+        13.743218749999796,
+        13.843218749999794,
+        13.983218749999791,
+        14.083218749999789,
+        14.243218749999786,
+        14.343218749999783,
+        14.48321874999978,
+        14.583218749999778,
+        14.743218749999775,
+        14.843218749999773
+      ],
+      "performance": {
+        "frames": 798,
+        "dsp_p95_ms": 1.1963449956965633,
+        "dsp_total_ms": 820.0424001261126
+      },
+      "raw_rms_mean": 0.03850353070082938
+    },
+    {
+      "fixture": {
+        "id": "development_irregular_fills",
+        "category": "irregular_fills",
+        "split": "development",
+        "rate": 48000,
+        "channels": 2,
+        "duration": 16.0,
+        "sha256_float32_le": "0b6c1813d7f839be925a87d419cfe5414ea2dd938db4f334eab8a0d37cdf16f5",
+        "mixed_onsets": [
+          0.5,
+          0.58,
+          0.64,
+          0.78,
+          1.11,
+          1.19,
+          1.25,
+          1.39,
+          1.72,
+          1.8,
+          1.86,
+          2.0,
+          2.33,
+          2.41,
+          2.47,
+          2.61,
+          2.94,
+          3.02,
+          3.08,
+          3.22,
+          3.55,
+          3.63,
+          3.69,
+          3.83,
+          4.16,
+          4.24,
+          4.3,
+          4.44,
+          4.77,
+          4.85,
+          4.91,
+          5.05,
+          5.38,
+          5.46,
+          5.52,
+          5.66,
+          5.99,
+          6.07,
+          6.13,
+          6.27,
+          6.6,
+          6.68,
+          6.74,
+          6.88,
+          7.21,
+          7.29,
+          7.35,
+          7.49,
+          7.82,
+          7.9,
+          7.96,
+          8.1,
+          8.43,
+          8.51,
+          8.57,
+          8.71,
+          9.04,
+          9.12,
+          9.18,
+          9.32,
+          9.65,
+          9.73,
+          9.79,
+          9.93,
+          10.26,
+          10.34,
+          10.4,
+          10.54,
+          10.87,
+          10.95,
+          11.01,
+          11.15,
+          11.48,
+          11.56,
+          11.62,
+          11.76,
+          12.09,
+          12.17,
+          12.23,
+          12.37,
+          12.7,
+          12.78,
+          12.84,
+          12.98,
+          13.31,
+          13.39,
+          13.45,
+          13.59,
+          13.92,
+          14.0,
+          14.06,
+          14.2,
+          14.53,
+          14.61,
+          14.67,
+          14.81
+        ],
+        "class_events": [
+          [
+            0.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            0.58,
+            "bass_transient_candidate"
+          ],
+          [
+            0.64,
+            "snare_like_candidate"
+          ],
+          [
+            0.78,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            1.11,
+            "bass_transient_candidate"
+          ],
+          [
+            1.19,
+            "snare_like_candidate"
+          ],
+          [
+            1.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            1.39,
+            "bass_transient_candidate"
+          ],
+          [
+            1.72,
+            "snare_like_candidate"
+          ],
+          [
+            1.8,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            1.86,
+            "bass_transient_candidate"
+          ],
+          [
+            2.0,
+            "snare_like_candidate"
+          ],
+          [
+            2.33,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.41,
+            "bass_transient_candidate"
+          ],
+          [
+            2.47,
+            "snare_like_candidate"
+          ],
+          [
+            2.61,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.94,
+            "bass_transient_candidate"
+          ],
+          [
+            3.02,
+            "snare_like_candidate"
+          ],
+          [
+            3.08,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            3.22,
+            "bass_transient_candidate"
+          ],
+          [
+            3.55,
+            "snare_like_candidate"
+          ],
+          [
+            3.63,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            3.69,
+            "bass_transient_candidate"
+          ],
+          [
+            3.83,
+            "snare_like_candidate"
+          ],
+          [
+            4.16,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            4.24,
+            "bass_transient_candidate"
+          ],
+          [
+            4.3,
+            "snare_like_candidate"
+          ],
+          [
+            4.44,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            4.77,
+            "bass_transient_candidate"
+          ],
+          [
+            4.85,
+            "snare_like_candidate"
+          ],
+          [
+            4.91,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            5.05,
+            "bass_transient_candidate"
+          ],
+          [
+            5.38,
+            "snare_like_candidate"
+          ],
+          [
+            5.46,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            5.52,
+            "bass_transient_candidate"
+          ],
+          [
+            5.66,
+            "snare_like_candidate"
+          ],
+          [
+            5.99,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.07,
+            "bass_transient_candidate"
+          ],
+          [
+            6.13,
+            "snare_like_candidate"
+          ],
+          [
+            6.27,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.6,
+            "bass_transient_candidate"
+          ],
+          [
+            6.68,
+            "snare_like_candidate"
+          ],
+          [
+            6.74,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.88,
+            "bass_transient_candidate"
+          ],
+          [
+            7.21,
+            "snare_like_candidate"
+          ],
+          [
+            7.29,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            7.35,
+            "bass_transient_candidate"
+          ],
+          [
+            7.49,
+            "snare_like_candidate"
+          ],
+          [
+            7.82,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            7.9,
+            "bass_transient_candidate"
+          ],
+          [
+            7.96,
+            "snare_like_candidate"
+          ],
+          [
+            8.1,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.43,
+            "bass_transient_candidate"
+          ],
+          [
+            8.51,
+            "snare_like_candidate"
+          ],
+          [
+            8.57,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.71,
+            "bass_transient_candidate"
+          ],
+          [
+            9.04,
+            "snare_like_candidate"
+          ],
+          [
+            9.12,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            9.18,
+            "bass_transient_candidate"
+          ],
+          [
+            9.32,
+            "snare_like_candidate"
+          ],
+          [
+            9.65,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            9.73,
+            "bass_transient_candidate"
+          ],
+          [
+            9.79,
+            "snare_like_candidate"
+          ],
+          [
+            9.93,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            10.26,
+            "bass_transient_candidate"
+          ],
+          [
+            10.34,
+            "snare_like_candidate"
+          ],
+          [
+            10.4,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            10.54,
+            "bass_transient_candidate"
+          ],
+          [
+            10.87,
+            "snare_like_candidate"
+          ],
+          [
+            10.95,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            11.01,
+            "bass_transient_candidate"
+          ],
+          [
+            11.15,
+            "snare_like_candidate"
+          ],
+          [
+            11.48,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            11.56,
+            "bass_transient_candidate"
+          ],
+          [
+            11.62,
+            "snare_like_candidate"
+          ],
+          [
+            11.76,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.09,
+            "bass_transient_candidate"
+          ],
+          [
+            12.17,
+            "snare_like_candidate"
+          ],
+          [
+            12.23,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.37,
+            "bass_transient_candidate"
+          ],
+          [
+            12.7,
+            "snare_like_candidate"
+          ],
+          [
+            12.78,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.84,
+            "bass_transient_candidate"
+          ],
+          [
+            12.98,
+            "snare_like_candidate"
+          ],
+          [
+            13.31,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            13.39,
+            "bass_transient_candidate"
+          ],
+          [
+            13.45,
+            "snare_like_candidate"
+          ],
+          [
+            13.59,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            13.92,
+            "bass_transient_candidate"
+          ],
+          [
+            14.0,
+            "snare_like_candidate"
+          ],
+          [
+            14.06,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.2,
+            "bass_transient_candidate"
+          ],
+          [
+            14.53,
+            "snare_like_candidate"
+          ],
+          [
+            14.61,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.67,
+            "bass_transient_candidate"
+          ],
+          [
+            14.81,
+            "snare_like_candidate"
+          ]
+        ],
+        "tempo_intervals": [],
+        "beats": [],
+        "provenance": "Original procedural waveforms; CC0-1.0; no third-party samples",
+        "annotation": "Exact synthesis start samples; mixed coincident attacks deduplicated",
+        "uncertainty_seconds": 2.0833333333333333e-05,
+        "corpus_version": "synthetic-v1"
+      },
+      "onsets": {
+        "25": {
+          "tp": 68,
+          "fp": 8,
+          "fn": 28,
+          "duplicates": 0,
+          "precision": 0.8947368421052632,
+          "recall": 0.7083333333333334,
+          "f1": 0.7906976744186046,
+          "correct_empty": false,
+          "timing_bias_ms": -3.251838235378466,
+          "median_absolute_error_ms": 13.218749999790447,
+          "p95_absolute_error_ms": 16.781250000159087,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            3.218750000000159,
+            -16.781249999999748,
+            -6.781249999999517,
+            13.218750000000723,
+            -6.781249999999073,
+            -16.78124999999886,
+            3.218750000001158,
+            -6.781249999998629,
+            13.218750000001389,
+            -6.781249999998185,
+            -16.78124999999797,
+            3.2187500000020464,
+            -16.78124999999797,
+            -6.781249999997296,
+            13.218750000002721,
+            13.218750000002721,
+            -16.781250000000192,
+            3.2187499999976055,
+            -16.78125000000641,
+            -6.7812500000128395,
+            13.218749999984958,
+            -6.781250000019057,
+            -16.78125000002595,
+            3.2187499999718483,
+            -6.781250000039485,
+            13.218749999958312,
+            -6.781250000044814,
+            -16.781250000051706,
+            3.218749999946091,
+            -16.781250000057923,
+            -6.781250000065242,
+            13.218749999932555,
+            13.218749999928114,
+            -16.78125000007835,
+            3.2187499999194458,
+            -16.781250000082792,
+            -6.781250000090111,
+            13.218749999907686,
+            -6.7812500000972165,
+            -16.781250000102332,
+            3.218749999895465,
+            -6.781250000116756,
+            13.218749999881041,
+            -6.7812500001220855,
+            -16.781250000128978,
+            3.2187499998688196,
+            -16.781250000134307,
+            -6.781250000141625,
+            13.218749999856172,
+            13.218749999850843,
+            -16.781250000155623,
+            3.2187499998421742,
+            -16.781250000160952,
+            -6.781250000168271,
+            13.218749999829527,
+            -6.7812500001736,
+            -16.781250000180492,
+            3.2187499998173053,
+            -6.781250000194916,
+            13.218749999802881,
+            -6.781250000200245,
+            -16.781250000207137,
+            3.21874999979066,
+            -16.781250000212466,
+            -6.781250000219785,
+            13.218749999778012,
+            13.218749999772683
+          ]
+        },
+        "50": {
+          "tp": 68,
+          "fp": 8,
+          "fn": 28,
+          "duplicates": 0,
+          "precision": 0.8947368421052632,
+          "recall": 0.7083333333333334,
+          "f1": 0.7906976744186046,
+          "correct_empty": false,
+          "timing_bias_ms": -3.251838235378466,
+          "median_absolute_error_ms": 13.218749999790447,
+          "p95_absolute_error_ms": 16.781250000159087,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            3.218750000000159,
+            -16.781249999999748,
+            -6.781249999999517,
+            13.218750000000723,
+            -6.781249999999073,
+            -16.78124999999886,
+            3.218750000001158,
+            -6.781249999998629,
+            13.218750000001389,
+            -6.781249999998185,
+            -16.78124999999797,
+            3.2187500000020464,
+            -16.78124999999797,
+            -6.781249999997296,
+            13.218750000002721,
+            13.218750000002721,
+            -16.781250000000192,
+            3.2187499999976055,
+            -16.78125000000641,
+            -6.7812500000128395,
+            13.218749999984958,
+            -6.781250000019057,
+            -16.78125000002595,
+            3.2187499999718483,
+            -6.781250000039485,
+            13.218749999958312,
+            -6.781250000044814,
+            -16.781250000051706,
+            3.218749999946091,
+            -16.781250000057923,
+            -6.781250000065242,
+            13.218749999932555,
+            13.218749999928114,
+            -16.78125000007835,
+            3.2187499999194458,
+            -16.781250000082792,
+            -6.781250000090111,
+            13.218749999907686,
+            -6.7812500000972165,
+            -16.781250000102332,
+            3.218749999895465,
+            -6.781250000116756,
+            13.218749999881041,
+            -6.7812500001220855,
+            -16.781250000128978,
+            3.2187499998688196,
+            -16.781250000134307,
+            -6.781250000141625,
+            13.218749999856172,
+            13.218749999850843,
+            -16.781250000155623,
+            3.2187499998421742,
+            -16.781250000160952,
+            -6.781250000168271,
+            13.218749999829527,
+            -6.7812500001736,
+            -16.781250000180492,
+            3.2187499998173053,
+            -6.781250000194916,
+            13.218749999802881,
+            -6.781250000200245,
+            -16.781250000207137,
+            3.21874999979066,
+            -16.781250000212466,
+            -6.781250000219785,
+            13.218749999778012,
+            13.218749999772683
+          ]
+        }
+      },
+      "classes": {
+        "bass_transient_candidate": {
+          "tp": 24,
+          "fp": 8,
+          "fn": 8,
+          "duplicates": 0,
+          "precision": 0.75,
+          "recall": 0.75,
+          "f1": 0.75,
+          "correct_empty": false,
+          "timing_bias_ms": -5.114583333414381,
+          "median_absolute_error_ms": 9.99999999998824,
+          "p95_absolute_error_ms": 16.781250000196213,
+          "timing_errors_ms": [
+            3.218750000000159,
+            -6.781249999999517,
+            -6.781249999999073,
+            13.218750000001389,
+            -16.78124999999797,
+            -16.78124999999797,
+            3.2187499999976055,
+            -6.7812500000128395,
+            -6.781250000019057,
+            13.218749999958312,
+            -16.781250000051706,
+            -16.781250000057923,
+            3.2187499999194458,
+            -6.781250000090111,
+            -6.7812500000972165,
+            13.218749999881041,
+            -16.781250000128978,
+            -16.781250000134307,
+            3.2187499998421742,
+            -6.781250000168271,
+            -6.7812500001736,
+            13.218749999802881,
+            -16.781250000207137,
+            -16.781250000212466
+          ]
+        },
+        "snare_like_candidate": {
+          "tp": 20,
+          "fp": 0,
+          "fn": 12,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 0.625,
+          "f1": 0.7692307692307693,
+          "correct_empty": false,
+          "timing_bias_ms": 1.2187499999076645,
+          "median_absolute_error_ms": 13.218749999840185,
+          "p95_absolute_error_ms": 16.78125000010624,
+          "timing_errors_ms": [
+            13.218750000000723,
+            -16.78124999999886,
+            3.2187500000020464,
+            -6.781249999997296,
+            13.218750000002721,
+            13.218749999984958,
+            -16.78125000002595,
+            3.218749999946091,
+            -6.781250000065242,
+            13.218749999928114,
+            13.218749999907686,
+            -16.781250000102332,
+            3.2187499998688196,
+            -6.781250000141625,
+            13.218749999850843,
+            13.218749999829527,
+            -16.781250000180492,
+            3.21874999979066,
+            -6.781250000219785,
+            13.218749999772683
+          ]
+        },
+        "high_frequency_percussion_candidate": {
+          "tp": 28,
+          "fp": 15,
+          "fn": 4,
+          "duplicates": 0,
+          "precision": 0.6511627906976745,
+          "recall": 0.875,
+          "f1": 0.7466666666666667,
+          "correct_empty": false,
+          "timing_bias_ms": -11.06696428579366,
+          "median_absolute_error_ms": 13.218749999894364,
+          "p95_absolute_error_ms": 46.78125000006577,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999748,
+            -46.78124999999933,
+            3.218750000001158,
+            -6.781249999998629,
+            -6.781249999998185,
+            13.218750000002721,
+            -16.781250000000192,
+            -16.78125000000641,
+            -46.78125000001554,
+            3.2187499999718483,
+            -6.781250000039485,
+            -6.781250000044814,
+            13.218749999932555,
+            -16.78125000007835,
+            -16.781250000082792,
+            -46.78125000009281,
+            3.218749999895465,
+            -6.781250000116756,
+            -6.7812500001220855,
+            13.218749999856172,
+            -16.781250000155623,
+            -16.781250000160952,
+            -46.78125000017097,
+            3.2187499998173053,
+            -6.781250000194916,
+            -6.781250000200245,
+            13.218749999778012
+          ]
+        }
+      },
+      "rhythm": {
+        "tempo_intervals": [],
+        "false_tempo_frames_on_nonrhythmic": null,
+        "observed_beat_50ms": {
+          "tp": 0,
+          "fp": 57,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.0,
+          "recall": 0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "predicted_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "continuity": null
+      },
+      "predicted_onsets": [
+        0.48321875000000014,
+        0.5832187500000001,
+        0.7632187500000003,
+        1.1032187500000006,
+        1.2032187500000007,
+        1.3832187500000008,
+        1.7032187500000011,
+        1.8032187500000012,
+        1.9232187500000013,
+        2.3232187500000014,
+        2.4232187500000015,
+        2.6032187500000017,
+        2.923218750000002,
+        3.023218750000002,
+        3.2032187500000022,
+        3.5432187500000025,
+        3.6432187500000026,
+        3.7432187500000027,
+        3.843218750000003,
+        4.14321875,
+        4.243218749999998,
+        4.423218749999994,
+        4.763218749999987,
+        4.863218749999985,
+        5.043218749999981,
+        5.363218749999974,
+        5.463218749999972,
+        5.583218749999969,
+        5.983218749999961,
+        6.083218749999959,
+        6.263218749999955,
+        6.583218749999948,
+        6.683218749999946,
+        6.863218749999942,
+        7.203218749999935,
+        7.303218749999933,
+        7.4032187499999305,
+        7.503218749999928,
+        7.803218749999922,
+        7.90321874999992,
+        8.083218749999917,
+        8.42321874999991,
+        8.523218749999907,
+        8.703218749999904,
+        9.023218749999897,
+        9.123218749999895,
+        9.243218749999892,
+        9.643218749999884,
+        9.743218749999881,
+        9.923218749999878,
+        10.24321874999987,
+        10.343218749999869,
+        10.523218749999865,
+        10.863218749999858,
+        10.963218749999855,
+        11.063218749999853,
+        11.163218749999851,
+        11.463218749999845,
+        11.563218749999843,
+        11.743218749999839,
+        12.083218749999832,
+        12.18321874999983,
+        12.363218749999826,
+        12.683218749999819,
+        12.783218749999817,
+        12.903218749999814,
+        13.303218749999806,
+        13.403218749999803,
+        13.5832187499998,
+        13.903218749999793,
+        14.00321874999979,
+        14.183218749999787,
+        14.52321874999978,
+        14.623218749999777,
+        14.723218749999775,
+        14.823218749999773
+      ],
+      "performance": {
+        "frames": 798,
+        "dsp_p95_ms": 1.1766949959564954,
+        "dsp_total_ms": 802.2904999234015
+      },
+      "raw_rms_mean": 0.021524736368378344
+    },
+    {
+      "fixture": {
+        "id": "development_syncopation",
+        "category": "syncopation",
+        "split": "development",
+        "rate": 48000,
+        "channels": 2,
+        "duration": 16.0,
+        "sha256_float32_le": "5736f9d467a5452644c37dfe2c97184eef598c8a41743ad9a321c5224cdff8b7",
+        "mixed_onsets": [
+          0.5,
+          1.0,
+          1.25,
+          2.0,
+          2.25,
+          2.5,
+          3.0,
+          3.25,
+          4.0,
+          4.25,
+          4.5,
+          5.0,
+          5.25,
+          6.0,
+          6.25,
+          6.5,
+          7.0,
+          7.25,
+          8.0,
+          8.25,
+          8.5,
+          9.0,
+          9.25,
+          10.0,
+          10.25,
+          10.5,
+          11.0,
+          11.25,
+          12.0,
+          12.25,
+          12.5,
+          13.0,
+          13.25,
+          14.0,
+          14.25,
+          14.5
+        ],
+        "class_events": [
+          [
+            0.5,
+            "bass_transient_candidate"
+          ],
+          [
+            1.0,
+            "bass_transient_candidate"
+          ],
+          [
+            1.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.0,
+            "bass_transient_candidate"
+          ],
+          [
+            2.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.5,
+            "bass_transient_candidate"
+          ],
+          [
+            3.0,
+            "bass_transient_candidate"
+          ],
+          [
+            3.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            4.0,
+            "bass_transient_candidate"
+          ],
+          [
+            4.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            4.5,
+            "bass_transient_candidate"
+          ],
+          [
+            5.0,
+            "bass_transient_candidate"
+          ],
+          [
+            5.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.0,
+            "bass_transient_candidate"
+          ],
+          [
+            6.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.5,
+            "bass_transient_candidate"
+          ],
+          [
+            7.0,
+            "bass_transient_candidate"
+          ],
+          [
+            7.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.0,
+            "bass_transient_candidate"
+          ],
+          [
+            8.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.5,
+            "bass_transient_candidate"
+          ],
+          [
+            9.0,
+            "bass_transient_candidate"
+          ],
+          [
+            9.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            10.0,
+            "bass_transient_candidate"
+          ],
+          [
+            10.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            10.5,
+            "bass_transient_candidate"
+          ],
+          [
+            11.0,
+            "bass_transient_candidate"
+          ],
+          [
+            11.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.0,
+            "bass_transient_candidate"
+          ],
+          [
+            12.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.5,
+            "bass_transient_candidate"
+          ],
+          [
+            13.0,
+            "bass_transient_candidate"
+          ],
+          [
+            13.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.0,
+            "bass_transient_candidate"
+          ],
+          [
+            14.25,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.5,
+            "bass_transient_candidate"
+          ]
+        ],
+        "tempo_intervals": [
+          [
+            0.5,
+            15,
+            120.0
+          ]
+        ],
+        "beats": [
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          3.5,
+          4.0,
+          4.5,
+          5.0,
+          5.5,
+          6.0,
+          6.5,
+          7.0,
+          7.5,
+          8.0,
+          8.5,
+          9.0,
+          9.5,
+          10.0,
+          10.5,
+          11.0,
+          11.5,
+          12.0,
+          12.5,
+          13.0,
+          13.5,
+          14.0,
+          14.5
+        ],
+        "provenance": "Original procedural waveforms; CC0-1.0; no third-party samples",
+        "annotation": "Exact synthesis start samples; mixed coincident attacks deduplicated",
+        "uncertainty_seconds": 2.0833333333333333e-05,
+        "corpus_version": "synthetic-v1"
+      },
+      "onsets": {
+        "25": {
+          "tp": 36,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -12.892361111194184,
+          "median_absolute_error_ms": 16.78124999999908,
+          "p95_absolute_error_ms": 16.781250000192927,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -6.781249999999295,
+            -16.781249999998636,
+            -6.781249999998629,
+            -16.781249999998415,
+            -16.78124999999797,
+            -6.7812499999977405,
+            -16.781249999997083,
+            -6.781250000002181,
+            -16.781250000007297,
+            -16.781250000017955,
+            -6.781250000023498,
+            -16.78125000003927,
+            -6.781250000044814,
+            -16.78125000004993,
+            -16.781250000060588,
+            -6.78125000006613,
+            -16.781250000081904,
+            -6.781250000086558,
+            -16.781250000091674,
+            -16.781250000102332,
+            -6.781250000107875,
+            -16.78125000012365,
+            -6.781250000129191,
+            -16.781250000134307,
+            -16.781250000144965,
+            -6.781250000150507,
+            -16.78125000016628,
+            -6.7812500001718234,
+            -16.78125000017694,
+            -16.781250000187597,
+            -6.78125000019314,
+            -16.781250000208914,
+            -6.781250000214456,
+            -16.781250000219572
+          ]
+        },
+        "50": {
+          "tp": 36,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -12.892361111194184,
+          "median_absolute_error_ms": 16.78124999999908,
+          "p95_absolute_error_ms": 16.781250000192927,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -6.781249999999295,
+            -16.781249999998636,
+            -6.781249999998629,
+            -16.781249999998415,
+            -16.78124999999797,
+            -6.7812499999977405,
+            -16.781249999997083,
+            -6.781250000002181,
+            -16.781250000007297,
+            -16.781250000017955,
+            -6.781250000023498,
+            -16.78125000003927,
+            -6.781250000044814,
+            -16.78125000004993,
+            -16.781250000060588,
+            -6.78125000006613,
+            -16.781250000081904,
+            -6.781250000086558,
+            -16.781250000091674,
+            -16.781250000102332,
+            -6.781250000107875,
+            -16.78125000012365,
+            -6.781250000129191,
+            -16.781250000134307,
+            -16.781250000144965,
+            -6.781250000150507,
+            -16.78125000016628,
+            -6.7812500001718234,
+            -16.78125000017694,
+            -16.781250000187597,
+            -6.78125000019314,
+            -16.781250000208914,
+            -6.781250000214456,
+            -16.781250000219572
+          ]
+        }
+      },
+      "classes": {
+        "bass_transient_candidate": {
+          "tp": 22,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.78125000008203,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.781250000207848,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        },
+        "snare_like_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "high_frequency_percussion_candidate": {
+          "tp": 14,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -6.781250000084703,
+          "median_absolute_error_ms": 6.781250000076344,
+          "p95_absolute_error_ms": 6.7812500002006,
+          "timing_errors_ms": [
+            -6.781249999999295,
+            -6.781249999998629,
+            -6.7812499999977405,
+            -6.781250000002181,
+            -6.781250000023498,
+            -6.781250000044814,
+            -6.78125000006613,
+            -6.781250000086558,
+            -6.781250000107875,
+            -6.781250000129191,
+            -6.781250000150507,
+            -6.7812500001718234,
+            -6.78125000019314,
+            -6.781250000214456
+          ]
+        }
+      },
+      "rhythm": {
+        "tempo_intervals": [
+          {
+            "bpm": 120.0,
+            "start": 0.5,
+            "end": 15,
+            "strict_accuracy_after_4s": 0.0,
+            "octave_tolerant_accuracy_after_4s": 1.0,
+            "stable_estimate_seconds": null
+          }
+        ],
+        "false_tempo_frames_on_nonrhythmic": null,
+        "observed_beat_50ms": {
+          "tp": 16,
+          "fp": 11,
+          "fn": 13,
+          "duplicates": 0,
+          "precision": 0.5925925925925926,
+          "recall": 0.5517241379310345,
+          "f1": 0.5714285714285714,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000113324,
+          "median_absolute_error_ms": 16.78125000011299,
+          "p95_absolute_error_ms": 16.78125000021158,
+          "timing_errors_ms": [
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        },
+        "predicted_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 29,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "continuity": {
+          "cmlc": 0.034482758620689655,
+          "cmlt": 0.1724137931034483,
+          "amlc": 0.03508771929824561,
+          "amlt": 0.2982456140350877
+        }
+      },
+      "predicted_onsets": [
+        0.48321875000000014,
+        0.9832187500000005,
+        1.2432187500000007,
+        1.9832187500000014,
+        2.2432187500000014,
+        2.4832187500000016,
+        2.983218750000002,
+        3.2432187500000023,
+        3.983218750000003,
+        4.243218749999998,
+        4.483218749999993,
+        4.983218749999982,
+        5.2432187499999765,
+        5.983218749999961,
+        6.243218749999955,
+        6.48321874999995,
+        6.983218749999939,
+        7.243218749999934,
+        7.983218749999918,
+        8.243218749999913,
+        8.483218749999908,
+        8.983218749999898,
+        9.243218749999892,
+        9.983218749999876,
+        10.24321874999987,
+        10.483218749999866,
+        10.983218749999855,
+        11.24321874999985,
+        11.983218749999834,
+        12.243218749999828,
+        12.483218749999823,
+        12.983218749999812,
+        13.243218749999807,
+        13.983218749999791,
+        14.243218749999786,
+        14.48321874999978
+      ],
+      "performance": {
+        "frames": 798,
+        "dsp_p95_ms": 1.062504997389624,
+        "dsp_total_ms": 772.7508999523707
+      },
+      "raw_rms_mean": 0.010704509720206357
+    },
+    {
+      "fixture": {
+        "id": "development_tempo_change",
+        "category": "tempo_change",
+        "split": "development",
+        "rate": 48000,
+        "channels": 2,
+        "duration": 24.0,
+        "sha256_float32_le": "444a2baac4c3c3c7cbfa2146caf00f45a75d5c649c40f794200126c97cc0231f",
+        "mixed_onsets": [
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          3.5,
+          4.0,
+          4.5,
+          5.0,
+          5.5,
+          6.0,
+          6.5,
+          7.0,
+          7.5,
+          8.0,
+          8.5,
+          9.0,
+          9.5,
+          10.0,
+          10.5,
+          11.0,
+          11.5,
+          12.5,
+          12.833333,
+          13.166667,
+          13.5,
+          13.833333,
+          14.166667,
+          14.5,
+          14.833333,
+          15.166667,
+          15.5,
+          15.833333,
+          16.166667,
+          16.5,
+          16.833333,
+          17.166667,
+          17.5,
+          17.833333,
+          18.166667,
+          18.5,
+          18.833333,
+          19.166667,
+          19.5,
+          19.833333,
+          20.166667,
+          20.5,
+          20.833333,
+          21.166667,
+          21.5,
+          21.833333,
+          22.166667,
+          22.5,
+          22.833333
+        ],
+        "class_events": [
+          [
+            0.5,
+            "bass_transient_candidate"
+          ],
+          [
+            1.0,
+            "bass_transient_candidate"
+          ],
+          [
+            1.5,
+            "bass_transient_candidate"
+          ],
+          [
+            2.0,
+            "bass_transient_candidate"
+          ],
+          [
+            2.5,
+            "bass_transient_candidate"
+          ],
+          [
+            3.0,
+            "bass_transient_candidate"
+          ],
+          [
+            3.5,
+            "bass_transient_candidate"
+          ],
+          [
+            4.0,
+            "bass_transient_candidate"
+          ],
+          [
+            4.5,
+            "bass_transient_candidate"
+          ],
+          [
+            5.0,
+            "bass_transient_candidate"
+          ],
+          [
+            5.5,
+            "bass_transient_candidate"
+          ],
+          [
+            6.0,
+            "bass_transient_candidate"
+          ],
+          [
+            6.5,
+            "bass_transient_candidate"
+          ],
+          [
+            7.0,
+            "bass_transient_candidate"
+          ],
+          [
+            7.5,
+            "bass_transient_candidate"
+          ],
+          [
+            8.0,
+            "bass_transient_candidate"
+          ],
+          [
+            8.5,
+            "bass_transient_candidate"
+          ],
+          [
+            9.0,
+            "bass_transient_candidate"
+          ],
+          [
+            9.5,
+            "bass_transient_candidate"
+          ],
+          [
+            10.0,
+            "bass_transient_candidate"
+          ],
+          [
+            10.5,
+            "bass_transient_candidate"
+          ],
+          [
+            11.0,
+            "bass_transient_candidate"
+          ],
+          [
+            11.5,
+            "bass_transient_candidate"
+          ],
+          [
+            12.5,
+            "bass_transient_candidate"
+          ],
+          [
+            12.833333333333334,
+            "bass_transient_candidate"
+          ],
+          [
+            13.166666666666666,
+            "bass_transient_candidate"
+          ],
+          [
+            13.5,
+            "bass_transient_candidate"
+          ],
+          [
+            13.833333333333334,
+            "bass_transient_candidate"
+          ],
+          [
+            14.166666666666666,
+            "bass_transient_candidate"
+          ],
+          [
+            14.5,
+            "bass_transient_candidate"
+          ],
+          [
+            14.833333333333334,
+            "bass_transient_candidate"
+          ],
+          [
+            15.166666666666666,
+            "bass_transient_candidate"
+          ],
+          [
+            15.5,
+            "bass_transient_candidate"
+          ],
+          [
+            15.833333333333334,
+            "bass_transient_candidate"
+          ],
+          [
+            16.166666666666668,
+            "bass_transient_candidate"
+          ],
+          [
+            16.5,
+            "bass_transient_candidate"
+          ],
+          [
+            16.833333333333332,
+            "bass_transient_candidate"
+          ],
+          [
+            17.166666666666668,
+            "bass_transient_candidate"
+          ],
+          [
+            17.5,
+            "bass_transient_candidate"
+          ],
+          [
+            17.833333333333332,
+            "bass_transient_candidate"
+          ],
+          [
+            18.166666666666668,
+            "bass_transient_candidate"
+          ],
+          [
+            18.5,
+            "bass_transient_candidate"
+          ],
+          [
+            18.833333333333332,
+            "bass_transient_candidate"
+          ],
+          [
+            19.166666666666668,
+            "bass_transient_candidate"
+          ],
+          [
+            19.5,
+            "bass_transient_candidate"
+          ],
+          [
+            19.833333333333332,
+            "bass_transient_candidate"
+          ],
+          [
+            20.166666666666668,
+            "bass_transient_candidate"
+          ],
+          [
+            20.5,
+            "bass_transient_candidate"
+          ],
+          [
+            20.833333333333332,
+            "bass_transient_candidate"
+          ],
+          [
+            21.166666666666668,
+            "bass_transient_candidate"
+          ],
+          [
+            21.5,
+            "bass_transient_candidate"
+          ],
+          [
+            21.833333333333332,
+            "bass_transient_candidate"
+          ],
+          [
+            22.166666666666668,
+            "bass_transient_candidate"
+          ],
+          [
+            22.5,
+            "bass_transient_candidate"
+          ],
+          [
+            22.833333333333332,
+            "bass_transient_candidate"
+          ]
+        ],
+        "tempo_intervals": [
+          [
+            0.5,
+            12,
+            120
+          ],
+          [
+            12.5,
+            23,
+            180
+          ]
+        ],
+        "beats": [
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          3.5,
+          4.0,
+          4.5,
+          5.0,
+          5.5,
+          6.0,
+          6.5,
+          7.0,
+          7.5,
+          8.0,
+          8.5,
+          9.0,
+          9.5,
+          10.0,
+          10.5,
+          11.0,
+          11.5,
+          12.5,
+          12.833333333333334,
+          13.166666666666668,
+          13.500000000000002,
+          13.833333333333336,
+          14.16666666666667,
+          14.500000000000004,
+          14.833333333333337,
+          15.166666666666671,
+          15.500000000000005,
+          15.83333333333334,
+          16.16666666666667,
+          16.500000000000007,
+          16.833333333333343,
+          17.166666666666675,
+          17.500000000000007,
+          17.833333333333343,
+          18.16666666666668,
+          18.50000000000001,
+          18.833333333333343,
+          19.16666666666668,
+          19.500000000000014,
+          19.833333333333346,
+          20.16666666666668,
+          20.500000000000014,
+          20.83333333333335,
+          21.166666666666682,
+          21.500000000000014,
+          21.83333333333335,
+          22.166666666666686,
+          22.500000000000018,
+          22.83333333333335
+        ],
+        "provenance": "Original procedural waveforms; CC0-1.0; no third-party samples",
+        "annotation": "Exact synthesis start samples; mixed coincident attacks deduplicated",
+        "uncertainty_seconds": 2.0833333333333333e-05,
+        "corpus_version": "synthetic-v1"
+      },
+      "onsets": {
+        "25": {
+          "tp": 55,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -13.02366818200661,
+          "median_absolute_error_ms": 16.781249999999524,
+          "p95_absolute_error_ms": 16.781250000330772,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000017694,
+            -10.114250000183844,
+            -3.448250000191777,
+            -16.781250000198256,
+            -10.11425000020516,
+            -3.4482500002130934,
+            -16.781250000219572,
+            -10.114250000226477,
+            -3.4482500002344096,
+            -16.781250000240888,
+            -10.114250000247793,
+            -3.4482500002539496,
+            -16.781250000260428,
+            -10.114250000267333,
+            -3.448250000275266,
+            -16.781250000281744,
+            -10.11425000028865,
+            -3.448250000296582,
+            -16.78125000030306,
+            -10.114250000309966,
+            -3.4482500003178984,
+            -16.781250000324377,
+            -10.114250000331282,
+            -3.4482500003392147,
+            -16.781250000345693,
+            -10.114250000352598,
+            -3.448250000360531,
+            -16.78125000036701,
+            -10.114250000373914,
+            -3.4482500003818473,
+            -16.781250000388326,
+            -10.11425000039523
+          ]
+        },
+        "50": {
+          "tp": 55,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -13.02366818200661,
+          "median_absolute_error_ms": 16.781249999999524,
+          "p95_absolute_error_ms": 16.781250000330772,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000017694,
+            -10.114250000183844,
+            -3.448250000191777,
+            -16.781250000198256,
+            -10.11425000020516,
+            -3.4482500002130934,
+            -16.781250000219572,
+            -10.114250000226477,
+            -3.4482500002344096,
+            -16.781250000240888,
+            -10.114250000247793,
+            -3.4482500002539496,
+            -16.781250000260428,
+            -10.114250000267333,
+            -3.448250000275266,
+            -16.781250000281744,
+            -10.11425000028865,
+            -3.448250000296582,
+            -16.78125000030306,
+            -10.114250000309966,
+            -3.4482500003178984,
+            -16.781250000324377,
+            -10.114250000331282,
+            -3.4482500003392147,
+            -16.781250000345693,
+            -10.114250000352598,
+            -3.448250000360531,
+            -16.78125000036701,
+            -10.114250000373914,
+            -3.4482500003818473,
+            -16.781250000388326,
+            -10.11425000039523
+          ]
+        }
+      },
+      "classes": {
+        "bass_transient_candidate": {
+          "tp": 55,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -13.023674242612689,
+          "median_absolute_error_ms": 16.781249999999524,
+          "p95_absolute_error_ms": 16.781250000330772,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000017694,
+            -10.114583333518112,
+            -3.447916666857509,
+            -16.781250000198256,
+            -10.114583333539429,
+            -3.4479166668788253,
+            -16.781250000219572,
+            -10.114583333560745,
+            -3.4479166669001415,
+            -16.781250000240888,
+            -10.114583333582061,
+            -3.447916666921458,
+            -16.781250000260428,
+            -10.114583333599825,
+            -3.447916666942774,
+            -16.781250000281744,
+            -10.114583333621141,
+            -3.4479166669640904,
+            -16.78125000030306,
+            -10.114583333642457,
+            -3.4479166669854067,
+            -16.781250000324377,
+            -10.114583333663774,
+            -3.447916667006723,
+            -16.781250000345693,
+            -10.11458333368509,
+            -3.4479166670280392,
+            -16.78125000036701,
+            -10.114583333706406,
+            -3.4479166670493555,
+            -16.781250000388326,
+            -10.114583333727722
+          ]
+        },
+        "snare_like_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "high_frequency_percussion_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        }
+      },
+      "rhythm": {
+        "tempo_intervals": [
+          {
+            "bpm": 120,
+            "start": 0.5,
+            "end": 12,
+            "strict_accuracy_after_4s": 1.0,
+            "octave_tolerant_accuracy_after_4s": 1.0,
+            "stable_estimate_seconds": 4.003218749999972
+          },
+          {
+            "bpm": 180,
+            "start": 12.5,
+            "end": 23,
+            "strict_accuracy_after_4s": 0.0,
+            "octave_tolerant_accuracy_after_4s": 0.0,
+            "stable_estimate_seconds": null
+          }
+        ],
+        "false_tempo_frames_on_nonrhythmic": null,
+        "observed_beat_50ms": {
+          "tp": 47,
+          "fp": 0,
+          "fn": 8,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 0.8545454545454545,
+          "f1": 0.9215686274509803,
+          "correct_empty": false,
+          "timing_bias_ms": -12.384086879659595,
+          "median_absolute_error_ms": 16.781250000028614,
+          "p95_absolute_error_ms": 16.78125000035351,
+          "timing_errors_ms": [
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000017694,
+            -10.114583333518112,
+            -3.4479166668592853,
+            -16.781250000200032,
+            -10.114583333541205,
+            -3.447916666882378,
+            -16.781250000223125,
+            -10.114583333564298,
+            -3.4479166669054706,
+            -16.781250000246217,
+            -10.11458333358739,
+            -3.4479166669250105,
+            -16.781250000267534,
+            -10.114583333610483,
+            -3.4479166669498795,
+            -16.78125000028885,
+            -10.1145833336318,
+            -3.4479166669747485,
+            -16.78125000031372,
+            -10.114583333653115,
+            -3.447916666996065,
+            -16.781250000338588,
+            -10.114583333677984,
+            -3.447916667017381,
+            -16.781250000359904,
+            -10.114583333702853,
+            -3.44791666704225,
+            -16.78125000038122,
+            -10.11458333372417,
+            -3.447916667067119,
+            -16.78125000040609,
+            -10.114583333745486
+          ]
+        },
+        "predicted_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 55,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "continuity": {
+          "cmlc": 0.8545454545454545,
+          "cmlt": 0.8545454545454545,
+          "amlc": 0.8545454545454545,
+          "amlt": 0.8545454545454545
+        }
+      },
+      "predicted_onsets": [
+        0.48321875000000014,
+        0.9832187500000005,
+        1.483218750000001,
+        1.9832187500000014,
+        2.4832187500000016,
+        2.983218750000002,
+        3.4832187500000025,
+        3.983218750000003,
+        4.483218749999993,
+        4.983218749999982,
+        5.483218749999971,
+        5.983218749999961,
+        6.48321874999995,
+        6.983218749999939,
+        7.483218749999929,
+        7.983218749999918,
+        8.483218749999908,
+        8.983218749999898,
+        9.483218749999887,
+        9.983218749999876,
+        10.483218749999866,
+        10.983218749999855,
+        11.483218749999844,
+        12.483218749999823,
+        12.823218749999816,
+        13.163218749999809,
+        13.483218749999802,
+        13.823218749999794,
+        14.163218749999787,
+        14.48321874999978,
+        14.823218749999773,
+        15.163218749999766,
+        15.483218749999759,
+        15.823218749999752,
+        16.163218749999746,
+        16.48321874999974,
+        16.823218749999732,
+        17.163218749999725,
+        17.48321874999972,
+        17.82321874999971,
+        18.163218749999704,
+        18.483218749999697,
+        18.82321874999969,
+        19.163218749999682,
+        19.483218749999676,
+        19.82321874999967,
+        20.16321874999966,
+        20.483218749999654,
+        20.823218749999647,
+        21.16321874999964,
+        21.483218749999633,
+        21.823218749999626,
+        22.16321874999962,
+        22.48321874999961,
+        22.823218749999604
+      ],
+      "performance": {
+        "frames": 1198,
+        "dsp_p95_ms": 1.059879994136281,
+        "dsp_total_ms": 1165.521199844079
+      },
+      "raw_rms_mean": 0.014558547729418416
+    },
+    {
+      "fixture": {
+        "id": "development_quiet_loud",
+        "category": "quiet_loud",
+        "split": "development",
+        "rate": 48000,
+        "channels": 2,
+        "duration": 16.0,
+        "sha256_float32_le": "6d92787c1e07bd56054e63dd09fc2797ef91e0b51b0d67880b83c314f7081cf1",
+        "mixed_onsets": [
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          3.5,
+          4.0,
+          4.5,
+          5.0,
+          5.5,
+          6.0,
+          6.5,
+          7.0,
+          7.5,
+          8.0,
+          8.5,
+          9.0,
+          9.5,
+          10.0,
+          10.5,
+          11.0,
+          11.5,
+          12.0,
+          12.5,
+          13.0,
+          13.5,
+          14.0,
+          14.5
+        ],
+        "class_events": [
+          [
+            0.5,
+            "bass_transient_candidate"
+          ],
+          [
+            1.0,
+            "snare_like_candidate"
+          ],
+          [
+            1.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.0,
+            "bass_transient_candidate"
+          ],
+          [
+            2.5,
+            "snare_like_candidate"
+          ],
+          [
+            3.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            3.5,
+            "bass_transient_candidate"
+          ],
+          [
+            4.0,
+            "snare_like_candidate"
+          ],
+          [
+            4.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            5.0,
+            "bass_transient_candidate"
+          ],
+          [
+            5.5,
+            "snare_like_candidate"
+          ],
+          [
+            6.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.5,
+            "bass_transient_candidate"
+          ],
+          [
+            7.0,
+            "snare_like_candidate"
+          ],
+          [
+            7.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.0,
+            "bass_transient_candidate"
+          ],
+          [
+            8.5,
+            "snare_like_candidate"
+          ],
+          [
+            9.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            9.5,
+            "bass_transient_candidate"
+          ],
+          [
+            10.0,
+            "snare_like_candidate"
+          ],
+          [
+            10.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            11.0,
+            "bass_transient_candidate"
+          ],
+          [
+            11.5,
+            "snare_like_candidate"
+          ],
+          [
+            12.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.5,
+            "bass_transient_candidate"
+          ],
+          [
+            13.0,
+            "snare_like_candidate"
+          ],
+          [
+            13.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.0,
+            "bass_transient_candidate"
+          ],
+          [
+            14.5,
+            "snare_like_candidate"
+          ]
+        ],
+        "tempo_intervals": [],
+        "beats": [],
+        "provenance": "Original procedural waveforms; CC0-1.0; no third-party samples",
+        "annotation": "Exact synthesis start samples; mixed coincident attacks deduplicated",
+        "uncertainty_seconds": 2.0833333333333333e-05,
+        "corpus_version": "synthetic-v1"
+      },
+      "onsets": {
+        "25": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        },
+        "50": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        }
+      },
+      "classes": {
+        "bass_transient_candidate": {
+          "tp": 10,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000078963,
+          "median_absolute_error_ms": 16.781250000065917,
+          "p95_absolute_error_ms": 16.781250000194525,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999998636,
+            -16.781249999997527,
+            -16.781250000017955,
+            -16.78125000004993,
+            -16.781250000081904,
+            -16.78125000011299,
+            -16.781250000144965,
+            -16.78125000017694,
+            -16.781250000208914
+          ]
+        },
+        "snare_like_candidate": {
+          "tp": 10,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.78125000008623,
+          "median_absolute_error_ms": 16.78125000007613,
+          "p95_absolute_error_ms": 16.781250000205183,
+          "timing_errors_ms": [
+            -16.781249999999524,
+            -16.781249999998415,
+            -16.781249999997083,
+            -16.781250000028614,
+            -16.781250000060588,
+            -16.781250000091674,
+            -16.78125000012365,
+            -16.781250000155623,
+            -16.781250000187597,
+            -16.781250000219572
+          ]
+        },
+        "high_frequency_percussion_candidate": {
+          "tp": 9,
+          "fp": 10,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.47368421052631576,
+          "recall": 1.0,
+          "f1": 0.6428571428571429,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000079563,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.781250000185466,
+          "timing_errors_ms": [
+            -16.781249999999083,
+            -16.78124999999797,
+            -16.781250000007297,
+            -16.78125000003927,
+            -16.781250000071246,
+            -16.781250000102332,
+            -16.781250000134307,
+            -16.78125000016628,
+            -16.781250000198256
+          ]
+        }
+      },
+      "rhythm": {
+        "tempo_intervals": [],
+        "false_tempo_frames_on_nonrhythmic": null,
+        "observed_beat_50ms": {
+          "tp": 0,
+          "fp": 21,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.0,
+          "recall": 0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "predicted_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "continuity": null
+      },
+      "predicted_onsets": [
+        0.48321875000000014,
+        0.9832187500000005,
+        1.483218750000001,
+        1.9832187500000014,
+        2.4832187500000016,
+        2.983218750000002,
+        3.4832187500000025,
+        3.983218750000003,
+        4.483218749999993,
+        4.983218749999982,
+        5.483218749999971,
+        5.983218749999961,
+        6.48321874999995,
+        6.983218749999939,
+        7.483218749999929,
+        7.983218749999918,
+        8.483218749999908,
+        8.983218749999898,
+        9.483218749999887,
+        9.983218749999876,
+        10.483218749999866,
+        10.983218749999855,
+        11.483218749999844,
+        11.983218749999834,
+        12.483218749999823,
+        12.983218749999812,
+        13.483218749999802,
+        13.983218749999791,
+        14.48321874999978
+      ],
+      "performance": {
+        "frames": 798,
+        "dsp_p95_ms": 1.043359999312088,
+        "dsp_total_ms": 768.7956997688161
+      },
+      "raw_rms_mean": 0.00599458459916169
+    },
+    {
+      "fixture": {
+        "id": "development_sustain_negative",
+        "category": "sustain_negative",
+        "split": "development",
+        "rate": 48000,
+        "channels": 2,
+        "duration": 16.0,
+        "sha256_float32_le": "814aaafee353d2714548b46950a44e56b85a6508faf1df9abafabef066583b93",
+        "mixed_onsets": [
+          1
+        ],
+        "class_events": [
+          [
+            1,
+            "unknown"
+          ]
+        ],
+        "tempo_intervals": [],
+        "beats": [],
+        "provenance": "Original procedural waveforms; CC0-1.0; no third-party samples",
+        "annotation": "Exact synthesis start samples; mixed coincident attacks deduplicated",
+        "uncertainty_seconds": 2.0833333333333333e-05,
+        "corpus_version": "synthetic-v1"
+      },
+      "onsets": {
+        "25": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781249999999524,
+          "median_absolute_error_ms": 16.781249999999524,
+          "p95_absolute_error_ms": 16.781249999999524,
+          "timing_errors_ms": [
+            -16.781249999999524
+          ]
+        },
+        "50": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781249999999524,
+          "median_absolute_error_ms": 16.781249999999524,
+          "p95_absolute_error_ms": 16.781249999999524,
+          "timing_errors_ms": [
+            -16.781249999999524
+          ]
+        }
+      },
+      "classes": {
+        "bass_transient_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "snare_like_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "high_frequency_percussion_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        }
+      },
+      "rhythm": {
+        "tempo_intervals": [],
+        "false_tempo_frames_on_nonrhythmic": 140,
+        "observed_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "predicted_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "continuity": null
+      },
+      "predicted_onsets": [
+        0.9832187500000005
+      ],
+      "performance": {
+        "frames": 798,
+        "dsp_p95_ms": 1.0239449969958514,
+        "dsp_total_ms": 779.4758996024029
+      },
+      "raw_rms_mean": 0.0858113944566415
+    },
+    {
+      "fixture": {
+        "id": "development_silence_negative",
+        "category": "silence_negative",
+        "split": "development",
+        "rate": 48000,
+        "channels": 2,
+        "duration": 16.0,
+        "sha256_float32_le": "b15b79e1f79b625b7be660d31da74943bff98b94eee89544d233aabfbb91d51a",
+        "mixed_onsets": [],
+        "class_events": [],
+        "tempo_intervals": [],
+        "beats": [],
+        "provenance": "Original procedural waveforms; CC0-1.0; no third-party samples",
+        "annotation": "Exact synthesis start samples; mixed coincident attacks deduplicated",
+        "uncertainty_seconds": 2.0833333333333333e-05,
+        "corpus_version": "synthetic-v1"
+      },
+      "onsets": {
+        "25": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "50": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        }
+      },
+      "classes": {
+        "bass_transient_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "snare_like_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "high_frequency_percussion_candidate": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        }
+      },
+      "rhythm": {
+        "tempo_intervals": [],
+        "false_tempo_frames_on_nonrhythmic": 0,
+        "observed_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "predicted_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "continuity": null
+      },
+      "predicted_onsets": [],
+      "performance": {
+        "frames": 798,
+        "dsp_p95_ms": 0.988959992537275,
+        "dsp_total_ms": 754.6173001173884
+      },
+      "raw_rms_mean": 0.0
+    },
+    {
+      "fixture": {
+        "id": "development_opposite_phase",
+        "category": "opposite_phase",
+        "split": "development",
+        "rate": 48000,
+        "channels": 2,
+        "duration": 16.0,
+        "sha256_float32_le": "e7aab9ab4782f2e96b59a583892afb14e1865620d6f7415eefd15d4409ef9183",
+        "mixed_onsets": [
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          3.5,
+          4.0,
+          4.5,
+          5.0,
+          5.5,
+          6.0,
+          6.5,
+          7.0,
+          7.5,
+          8.0,
+          8.5,
+          9.0,
+          9.5,
+          10.0,
+          10.5,
+          11.0,
+          11.5,
+          12.0,
+          12.5,
+          13.0,
+          13.5,
+          14.0,
+          14.5
+        ],
+        "class_events": [
+          [
+            0.5,
+            "bass_transient_candidate"
+          ],
+          [
+            1.0,
+            "snare_like_candidate"
+          ],
+          [
+            1.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.0,
+            "bass_transient_candidate"
+          ],
+          [
+            2.5,
+            "snare_like_candidate"
+          ],
+          [
+            3.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            3.5,
+            "bass_transient_candidate"
+          ],
+          [
+            4.0,
+            "snare_like_candidate"
+          ],
+          [
+            4.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            5.0,
+            "bass_transient_candidate"
+          ],
+          [
+            5.5,
+            "snare_like_candidate"
+          ],
+          [
+            6.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.5,
+            "bass_transient_candidate"
+          ],
+          [
+            7.0,
+            "snare_like_candidate"
+          ],
+          [
+            7.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.0,
+            "bass_transient_candidate"
+          ],
+          [
+            8.5,
+            "snare_like_candidate"
+          ],
+          [
+            9.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            9.5,
+            "bass_transient_candidate"
+          ],
+          [
+            10.0,
+            "snare_like_candidate"
+          ],
+          [
+            10.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            11.0,
+            "bass_transient_candidate"
+          ],
+          [
+            11.5,
+            "snare_like_candidate"
+          ],
+          [
+            12.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.5,
+            "bass_transient_candidate"
+          ],
+          [
+            13.0,
+            "snare_like_candidate"
+          ],
+          [
+            13.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.0,
+            "bass_transient_candidate"
+          ],
+          [
+            14.5,
+            "snare_like_candidate"
+          ]
+        ],
+        "tempo_intervals": [],
+        "beats": [],
+        "provenance": "Original procedural waveforms; CC0-1.0; no third-party samples",
+        "annotation": "Exact synthesis start samples; mixed coincident attacks deduplicated",
+        "uncertainty_seconds": 2.0833333333333333e-05,
+        "corpus_version": "synthetic-v1"
+      },
+      "onsets": {
+        "25": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        },
+        "50": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        }
+      },
+      "classes": {
+        "bass_transient_candidate": {
+          "tp": 10,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000078963,
+          "median_absolute_error_ms": 16.781250000065917,
+          "p95_absolute_error_ms": 16.781250000194525,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999998636,
+            -16.781249999997527,
+            -16.781250000017955,
+            -16.78125000004993,
+            -16.781250000081904,
+            -16.78125000011299,
+            -16.781250000144965,
+            -16.78125000017694,
+            -16.781250000208914
+          ]
+        },
+        "snare_like_candidate": {
+          "tp": 10,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.78125000008623,
+          "median_absolute_error_ms": 16.78125000007613,
+          "p95_absolute_error_ms": 16.781250000205183,
+          "timing_errors_ms": [
+            -16.781249999999524,
+            -16.781249999998415,
+            -16.781249999997083,
+            -16.781250000028614,
+            -16.781250000060588,
+            -16.781250000091674,
+            -16.78125000012365,
+            -16.781250000155623,
+            -16.781250000187597,
+            -16.781250000219572
+          ]
+        },
+        "high_frequency_percussion_candidate": {
+          "tp": 9,
+          "fp": 10,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.47368421052631576,
+          "recall": 1.0,
+          "f1": 0.6428571428571429,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000079563,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.781250000185466,
+          "timing_errors_ms": [
+            -16.781249999999083,
+            -16.78124999999797,
+            -16.781250000007297,
+            -16.78125000003927,
+            -16.781250000071246,
+            -16.781250000102332,
+            -16.781250000134307,
+            -16.78125000016628,
+            -16.781250000198256
+          ]
+        }
+      },
+      "rhythm": {
+        "tempo_intervals": [],
+        "false_tempo_frames_on_nonrhythmic": null,
+        "observed_beat_50ms": {
+          "tp": 0,
+          "fp": 21,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.0,
+          "recall": 0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "predicted_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "continuity": null
+      },
+      "predicted_onsets": [
+        0.48321875000000014,
+        0.9832187500000005,
+        1.483218750000001,
+        1.9832187500000014,
+        2.4832187500000016,
+        2.983218750000002,
+        3.4832187500000025,
+        3.983218750000003,
+        4.483218749999993,
+        4.983218749999982,
+        5.483218749999971,
+        5.983218749999961,
+        6.48321874999995,
+        6.983218749999939,
+        7.483218749999929,
+        7.983218749999918,
+        8.483218749999908,
+        8.983218749999898,
+        9.483218749999887,
+        9.983218749999876,
+        10.483218749999866,
+        10.983218749999855,
+        11.483218749999844,
+        11.983218749999834,
+        12.483218749999823,
+        12.983218749999812,
+        13.483218749999802,
+        13.983218749999791,
+        14.48321874999978
+      ],
+      "performance": {
+        "frames": 798,
+        "dsp_p95_ms": 1.066675002221018,
+        "dsp_total_ms": 766.4448997238651
+      },
+      "raw_rms_mean": 0.006167445753410724
+    },
+    {
+      "fixture": {
+        "id": "development_embedded_eight",
+        "category": "embedded_eight",
+        "split": "development",
+        "rate": 48000,
+        "channels": 8,
+        "duration": 16.0,
+        "sha256_float32_le": "d4a8d1309599ed77df215cef663dad34181bcdd2dba93b30eb0b232bd309350b",
+        "mixed_onsets": [
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          3.5,
+          4.0,
+          4.5,
+          5.0,
+          5.5,
+          6.0,
+          6.5,
+          7.0,
+          7.5,
+          8.0,
+          8.5,
+          9.0,
+          9.5,
+          10.0,
+          10.5,
+          11.0,
+          11.5,
+          12.0,
+          12.5,
+          13.0,
+          13.5,
+          14.0,
+          14.5
+        ],
+        "class_events": [
+          [
+            0.5,
+            "bass_transient_candidate"
+          ],
+          [
+            1.0,
+            "snare_like_candidate"
+          ],
+          [
+            1.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            2.0,
+            "bass_transient_candidate"
+          ],
+          [
+            2.5,
+            "snare_like_candidate"
+          ],
+          [
+            3.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            3.5,
+            "bass_transient_candidate"
+          ],
+          [
+            4.0,
+            "snare_like_candidate"
+          ],
+          [
+            4.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            5.0,
+            "bass_transient_candidate"
+          ],
+          [
+            5.5,
+            "snare_like_candidate"
+          ],
+          [
+            6.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            6.5,
+            "bass_transient_candidate"
+          ],
+          [
+            7.0,
+            "snare_like_candidate"
+          ],
+          [
+            7.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            8.0,
+            "bass_transient_candidate"
+          ],
+          [
+            8.5,
+            "snare_like_candidate"
+          ],
+          [
+            9.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            9.5,
+            "bass_transient_candidate"
+          ],
+          [
+            10.0,
+            "snare_like_candidate"
+          ],
+          [
+            10.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            11.0,
+            "bass_transient_candidate"
+          ],
+          [
+            11.5,
+            "snare_like_candidate"
+          ],
+          [
+            12.0,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            12.5,
+            "bass_transient_candidate"
+          ],
+          [
+            13.0,
+            "snare_like_candidate"
+          ],
+          [
+            13.5,
+            "high_frequency_percussion_candidate"
+          ],
+          [
+            14.0,
+            "bass_transient_candidate"
+          ],
+          [
+            14.5,
+            "snare_like_candidate"
+          ]
+        ],
+        "tempo_intervals": [],
+        "beats": [],
+        "provenance": "Original procedural waveforms; CC0-1.0; no third-party samples",
+        "annotation": "Exact synthesis start samples; mixed coincident attacks deduplicated",
+        "uncertainty_seconds": 2.0833333333333333e-05,
+        "corpus_version": "synthetic-v1"
+      },
+      "onsets": {
+        "25": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        },
+        "50": {
+          "tp": 29,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000081656,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.78125000020465,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999999524,
+            -16.781249999999083,
+            -16.781249999998636,
+            -16.781249999998415,
+            -16.78124999999797,
+            -16.781249999997527,
+            -16.781249999997083,
+            -16.781250000007297,
+            -16.781250000017955,
+            -16.781250000028614,
+            -16.78125000003927,
+            -16.78125000004993,
+            -16.781250000060588,
+            -16.781250000071246,
+            -16.781250000081904,
+            -16.781250000091674,
+            -16.781250000102332,
+            -16.78125000011299,
+            -16.78125000012365,
+            -16.781250000134307,
+            -16.781250000144965,
+            -16.781250000155623,
+            -16.78125000016628,
+            -16.78125000017694,
+            -16.781250000187597,
+            -16.781250000198256,
+            -16.781250000208914,
+            -16.781250000219572
+          ]
+        }
+      },
+      "classes": {
+        "bass_transient_candidate": {
+          "tp": 10,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000078963,
+          "median_absolute_error_ms": 16.781250000065917,
+          "p95_absolute_error_ms": 16.781250000194525,
+          "timing_errors_ms": [
+            -16.781249999999858,
+            -16.781249999998636,
+            -16.781249999997527,
+            -16.781250000017955,
+            -16.78125000004993,
+            -16.781250000081904,
+            -16.78125000011299,
+            -16.781250000144965,
+            -16.78125000017694,
+            -16.781250000208914
+          ]
+        },
+        "snare_like_candidate": {
+          "tp": 10,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "correct_empty": false,
+          "timing_bias_ms": -16.78125000008623,
+          "median_absolute_error_ms": 16.78125000007613,
+          "p95_absolute_error_ms": 16.781250000205183,
+          "timing_errors_ms": [
+            -16.781249999999524,
+            -16.781249999998415,
+            -16.781249999997083,
+            -16.781250000028614,
+            -16.781250000060588,
+            -16.781250000091674,
+            -16.78125000012365,
+            -16.781250000155623,
+            -16.781250000187597,
+            -16.781250000219572
+          ]
+        },
+        "high_frequency_percussion_candidate": {
+          "tp": 9,
+          "fp": 8,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.5294117647058824,
+          "recall": 1.0,
+          "f1": 0.6923076923076923,
+          "correct_empty": false,
+          "timing_bias_ms": -16.781250000079563,
+          "median_absolute_error_ms": 16.781250000071246,
+          "p95_absolute_error_ms": 16.781250000185466,
+          "timing_errors_ms": [
+            -16.781249999999083,
+            -16.78124999999797,
+            -16.781250000007297,
+            -16.78125000003927,
+            -16.781250000071246,
+            -16.781250000102332,
+            -16.781250000134307,
+            -16.78125000016628,
+            -16.781250000198256
+          ]
+        }
+      },
+      "rhythm": {
+        "tempo_intervals": [],
+        "false_tempo_frames_on_nonrhythmic": null,
+        "observed_beat_50ms": {
+          "tp": 0,
+          "fp": 21,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0.0,
+          "recall": 0,
+          "f1": 0.0,
+          "correct_empty": false,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "predicted_beat_50ms": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "duplicates": 0,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "correct_empty": true,
+          "timing_bias_ms": null,
+          "median_absolute_error_ms": null,
+          "p95_absolute_error_ms": null,
+          "timing_errors_ms": []
+        },
+        "continuity": null
+      },
+      "predicted_onsets": [
+        0.48321875000000014,
+        0.9832187500000005,
+        1.483218750000001,
+        1.9832187500000014,
+        2.4832187500000016,
+        2.983218750000002,
+        3.4832187500000025,
+        3.983218750000003,
+        4.483218749999993,
+        4.983218749999982,
+        5.483218749999971,
+        5.983218749999961,
+        6.48321874999995,
+        6.983218749999939,
+        7.483218749999929,
+        7.983218749999918,
+        8.483218749999908,
+        8.983218749999898,
+        9.483218749999887,
+        9.983218749999876,
+        10.483218749999866,
+        10.983218749999855,
+        11.483218749999844,
+        11.983218749999834,
+        12.483218749999823,
+        12.983218749999812,
+        13.483218749999802,
+        13.983218749999791,
+        14.48321874999978
+      ],
+      "performance": {
+        "frames": 798,
+        "dsp_p95_ms": 1.574749997962499,
+        "dsp_total_ms": 1138.1228998798179
+      },
+      "raw_rms_mean": 0.003021844780365163
+    }
+  ]
+}

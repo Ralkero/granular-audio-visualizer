@@ -15,7 +15,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10", "ruff>=0.11,<1"]
+dev = ["pytest>=8,<10", "ruff>=0.11,<1", "mir_eval==0.8.2"]
+evaluation = ["mir_eval==0.8.2"]
 
 [project.scripts]
 gmv = "gmv.cli:main"
