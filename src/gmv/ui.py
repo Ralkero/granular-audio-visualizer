@@ -58,7 +58,7 @@ class ControlCenter(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Granular Music Visualizer — Phase One Control Center")
-        self.resize(960, 780)
+        self.resize(1000, 900)
         self.engine, self.subscription = None, None
         self.session_path = None
         self.closing = False
@@ -110,6 +110,9 @@ class ControlCenter(QMainWindow):
             "Explicit opt-in. Saves at most this many seconds of audio in the session's debug folder."
         )
         self.advanced = QCheckBox("Delayed harmonic/percussive analysis — experimental, CPU only")
+        self.beat_phase = QCheckBox(
+            "Experimental beat phase — conservative, low recall; off by default"
+        )
         self.advanced.setToolTip(
             "Two-second delayed spectral HPSS; does not identify individual instruments"
         )
@@ -122,10 +125,16 @@ class ControlCenter(QMainWindow):
         form.addRow(self.logging)
         form.addRow("Optional debug recording", self.debug_audio)
         form.addRow(self.advanced)
+        form.addRow(self.beat_phase)
         layout.addWidget(setup)
         self.source_note = QLabel()
         self.source_note.setWordWrap(True)
         layout.addWidget(self.source_note)
+        self.validation_note = QLabel(
+            "Hardware checks pending: physical USB reconnect and default-output switching. System fallback clock drift is unresolved."
+        )
+        self.validation_note.setWordWrap(True)
+        layout.addWidget(self.validation_note)
         controls = QHBoxLayout()
         self.start_button, self.stop_button = (
             QPushButton("Start analysis"),
@@ -154,11 +163,15 @@ class ControlCenter(QMainWindow):
         self.level.setRange(0, 100)
         self.transient.setRange(0, 100)
         self.activity = QLabel("Waiting for capture")
+        self.bands = QLabel("Frequency bands: waiting")
+        self.bands.setWordWrap(True)
         self.tempo = QLabel("Collecting rhythmic context")
         self.performance = QLabel("No measurements yet")
         self.performance.setWordWrap(True)
         self.advanced_status = QLabel("Disabled; stem separation is not running")
+        self.advanced_status.setWordWrap(True)
         monitor_form.addRow("Audio activity", self.activity)
+        monitor_form.addRow("Band activity", self.bands)
         monitor_form.addRow("Input level", self.level)
         monitor_form.addRow("Transient strength", self.transient)
         monitor_form.addRow("Tempo estimate", self.tempo)
@@ -238,6 +251,7 @@ class ControlCenter(QMainWindow):
                 hop_ms=self.hop_ms.value(),
                 band_edges=tuple(float(v.strip()) for v in self.band_edges.text().split(",")),
                 advanced=self.advanced.isChecked(),
+                experimental_beat_phase=self.beat_phase.isChecked(),
                 debug_audio_seconds=self.debug_audio.value(),
             )
             index = self.source_type.currentIndex()
@@ -263,6 +277,11 @@ class ControlCenter(QMainWindow):
             )
             self.subscription = self.engine.bus.subscribe(256)
             self.engine.start()
+            self.source_note.setText(
+                f"Selected: {self.apps.currentText()} | process-tree isolation; never falls back automatically"
+                if index == 2
+                else f"Selected: {self.devices.currentText() if index == 1 else self.source_type.currentText()} | {'file input' if index == 3 else 'all applications on this output'}"
+            )
             self.session_path = self.engine.writer.path if self.engine.writer else None
             self.session_label.setText(
                 "Session: " + self.session_path.name
@@ -284,6 +303,7 @@ class ControlCenter(QMainWindow):
             self.band_edges,
             self.logging,
             self.advanced,
+            self.beat_phase,
             self.debug_audio,
             self.refresh,
         ):
@@ -314,7 +334,9 @@ class ControlCenter(QMainWindow):
             elif isinstance(message, MusicalEvent):
                 self.events.appendPlainText(
                     f"{message.timestamp:9.3f}s  {message.event_type}  "
-                    f"confidence {message.confidence:.2f}  [{message.analysis_tier}]"
+                    f"score {message.confidence:.2f} (uncalibrated)  "
+                    f"[{'delayed context' if message.analysis_tier == 'advanced' else message.evidence_kind}] "
+                    f"segment {message.segment} | age {f'{message.age_at_publication_ms:.0f} ms' if message.age_at_publication_ms is not None else 'unknown'}"
                 )
             else:
                 self.status_label.setText(message.state.capitalize() + ": " + message.detail)
@@ -322,12 +344,22 @@ class ControlCenter(QMainWindow):
             self.activity.setText(
                 f"{'Silence / low activity' if latest.silence else 'Audio detected'}  |  "
                 f"{latest.sample_rate} Hz, {latest.channels} channels  |  {latest.timestamp:.2f}s"
+                f" | {'CLOCK DRIFT WARNING' if 'drift_warning' in latest.timestamp_quality else latest.timestamp_quality}"
+            )
+            peak_band = max(latest.band_energy) or 1.0
+            edges = tuple(float(v.strip()) for v in self.band_edges.text().split(","))
+            self.bands.setText(
+                "  ".join(
+                    f"{int(a)}–{int(b)} Hz {energy / peak_band:.0%}"
+                    for a, b, energy in zip(edges, edges[1:], latest.band_energy, strict=False)
+                )
+                + "  |  relative band energy, not instrument identity"
             )
             self.level.setValue(round(max(0, min(100, (latest.loudness_dbfs + 80) / 80 * 100))))
             self.level.setFormat(f"{latest.loudness_dbfs:.1f} dBFS")
             self.transient.setValue(round(latest.transient_strength * 100))
             self.tempo.setText(
-                f"{latest.tempo_bpm:.1f} BPM • confidence {latest.tempo_confidence:.2f} (preliminary)"
+                f"{latest.tempo_bpm:.1f} BPM • score {latest.tempo_confidence:.2f} (uncalibrated) | phase {'locked (experimental)' if latest.beat_locked else 'unlocked / disabled'}"
                 if latest.tempo_bpm
                 else "Uncertain — collecting rhythmic context"
             )
@@ -337,15 +369,23 @@ class ControlCenter(QMainWindow):
         metrics = self.engine.metrics()
         latency = metrics["estimated_capture_center_to_publish_ms"]
         dsp = metrics["dsp_ms"]
+        resources = metrics["owned_process_resources"]
         self.performance.setText(
             f"DSP p95: {dsp['p95']:.2f} ms  |  Capture-center age p95: {latency['p95']:.1f} ms (estimated)\n"
-            f"CPU: {self.engine.cpu:.1f}% of one core  |  Memory: {self.engine.memory_mb:.1f} MB  |  "
-            f"Dropped buffers: {metrics['dropped_blocks']}  |  UI drops: {self.subscription.dropped}"
+            f"Python + owned helpers CPU: {resources.get('cpu_one_core_percent', 0):.1f}% of one core  |  RSS: {resources.get('rss_mb', 0):.1f} MiB\n"
+            f"Drops — capture: {metrics['dropped_blocks']} | native: {metrics['native_dropped_packets']} | logger: {metrics['logger_dropped_messages']} | UI: {self.subscription.dropped} | advanced: {metrics['advanced_drops']}"
             if dsp and latency
             else "Waiting for performance measurements"
         )
         self.advanced_status.setText(
-            metrics["advanced_status"] + "; stem separation is not running"
+            metrics["advanced_status"]
+            + "; stem separation is not running"
+            + f" | discarded stale jobs: {metrics['advanced_discarded_results']}"
+            + (
+                f" | latest evidence age: {metrics['advanced_latest_age_ms']:.0f} ms"
+                if metrics["advanced_latest_age_ms"] is not None
+                else ""
+            )
         )
         self.open_button.setEnabled(self.session_path is not None)
         self.export_button.setEnabled(self.session_path is not None and self.engine.done.is_set())

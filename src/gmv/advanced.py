@@ -2,7 +2,7 @@
 
 from collections import deque
 from math import gcd
-from threading import Thread
+from threading import Thread, Lock, Event
 from time import perf_counter
 from typing import Protocol
 from uuid import uuid4
@@ -43,32 +43,61 @@ def harmonic_percussive_balance(audio, sample_rate):
 
 class AdvancedWorker:
     def __init__(
-        self, bus, session_id, source, analyzer: BackgroundAnalyzer = harmonic_percussive_balance
+        self,
+        bus,
+        session_id,
+        source,
+        analyzer: BackgroundAnalyzer = harmonic_percussive_balance,
+        *,
+        live=True,
     ):
         self.bus, self.session_id, self.source = bus, session_id, source
         self.analyzer = analyzer
+        self.live = live
         self.queue = BoundedQueue(64)
         self.state = "waiting for two seconds of contiguous audio"
         self.times = deque(maxlen=256)
         self.jobs = 0
         self.error = None
+        self._lock, self._stop = Lock(), Event()
+        self._generation = 0
+        self._offered_format, self._expected = None, None
+        self.discarded_results = 0
+        self.latest_age_ms = None
         self.thread = Thread(target=self._run, name="advanced-analysis", daemon=True)
 
     def start(self):
         self.thread.start()
 
     def offer(self, block):
-        self.queue.put(block)
+        with self._lock:
+            current = (block.sample_rate, block.channels, block.segment)
+            if (
+                current != self._offered_format
+                or block.discontinuity
+                or self._expected is None
+                or abs(block.timestamp - self._expected) > 2 / block.sample_rate
+                or len(self.queue) >= self.queue.capacity
+            ):
+                self._generation += 1
+            self._offered_format = current
+            self._expected = block.timestamp + block.frames / block.sample_rate
+            self.queue.put((self._generation, block))
 
     def _run(self):
         parts, frames, start, expected, fmt = [], 0, 0, None, None
+        generation, evidence_mono = None, None
         try:
-            while True:
-                block = self.queue.get()
-                if block is None:
+            while not self._stop.is_set():
+                item = self.queue.get()
+                if item is None:
                     if self.queue.closed:
                         break
                     continue
+                job_generation, block = item
+                if job_generation != generation:
+                    parts, frames = [], 0
+                    generation = job_generation
                 current = (block.sample_rate, block.channels, block.segment)
                 if (
                     current != fmt
@@ -79,6 +108,7 @@ class AdvancedWorker:
                     parts, frames = [], 0
                 if not parts:
                     start = block.timestamp
+                    evidence_mono = block.capture_monotonic if self.live else None
                 fmt = current
                 parts.append(
                     np.frombuffer(block.data, dtype="<f4").reshape(block.frames, block.channels)
@@ -92,22 +122,31 @@ class AdvancedWorker:
                     elapsed = (perf_counter() - began) * 1000
                     self.times.append(elapsed)
                     self.jobs += 1
-                    self.bus.publish(
-                        MusicalEvent(
-                            session_id=self.session_id,
-                            source=self.source,
-                            timestamp=start,
-                            detected_monotonic=perf_counter(),
-                            event_id=uuid4().hex,
-                            event_type="harmonic_percussive_balance",
-                            analysis_tier="advanced",
-                            intensity=values["percussive_power_fraction"],
-                            confidence=0.35,
-                            interval_end=expected,
-                            method="median_hpss_spectral_proxy_v1",
-                            measurements=tuple(values.items()) + (("processing_ms", elapsed),),
-                        )
+                    result = MusicalEvent(
+                        session_id=self.session_id,
+                        source=self.source,
+                        segment=block.segment,
+                        evidence_monotonic=evidence_mono,
+                        provenance="harmonic_percussive_proxy",
+                        intended_use="context",
+                        evidence_kind="context",
+                        timestamp=start,
+                        detected_monotonic=perf_counter(),
+                        event_id=uuid4().hex,
+                        event_type="harmonic_percussive_balance",
+                        analysis_tier="advanced",
+                        intensity=values["percussive_power_fraction"],
+                        confidence=0.35,
+                        interval_end=expected,
+                        method="median_hpss_spectral_proxy_v1",
+                        measurements=tuple(values.items()) + (("processing_ms", elapsed),),
                     )
+                    with self._lock:
+                        if generation == self._generation and not self._stop.is_set():
+                            published = self.bus.publish(result)
+                            self.latest_age_ms = published.age_at_publication_ms
+                        else:
+                            self.discarded_results += 1
                     parts, frames = [], 0
                     self.state = (
                         f"delayed HPSS: {elapsed:.1f} ms per two-second chunk; no instrument stems"
@@ -119,7 +158,12 @@ class AdvancedWorker:
             self.queue.close()
 
     def close(self):
+        with self._lock:
+            self._stop.set()
+            self._generation += 1
         self.queue.close()
         self.thread.join(timeout=5)
         if self.thread.is_alive():
             self.state = "advanced worker exceeded shutdown deadline"
+        else:
+            self.state = "stopped; delayed HPSS proxy"

@@ -35,6 +35,33 @@ def test_slow_background_has_bounded_queue_and_original_time():
     assert worker.queue.dropped > 0 and len(worker.queue) <= 64
     release.set()
     worker.close()
-    event = subscription.get()
-    assert event.timestamp == 7 and abs(event.interval_end - 9) < 1e-6
-    assert event.analysis_tier == "advanced"
+    assert subscription.get(timeout=0) is None
+    assert worker.discarded_results >= 1
+
+
+def test_segment_change_discards_inflight_result_and_new_interval_keeps_time():
+    bus = EventBus()
+    queue = bus.subscribe()
+    entered, release = Event(), Event()
+    calls = []
+
+    def delayed(audio, rate):
+        calls.append(rate)
+        if len(calls) == 1:
+            entered.set()
+            release.wait(3)
+        return {"percussive_power_fraction": 0.2}
+
+    worker = AdvancedWorker(bus, "s", "test", delayed)
+    worker.start()
+    data = np.zeros((96000, 1), dtype=np.float32).tobytes()
+    worker.offer(AudioBlock(data, 96000, 48000, 1, 7, 10, 10, 1))
+    assert entered.wait(2)
+    worker.offer(AudioBlock(data, 96000, 48000, 1, 20, 23, 23, 2, True))
+    release.set()
+    event = queue.get(timeout=3)
+    worker.close()
+    assert event.timestamp == 20 and event.interval_end == 22 and event.segment == 2
+    assert event.evidence_monotonic == 23 and event.intended_use == "context"
+    assert event.provenance == "harmonic_percussive_proxy"
+    assert worker.discarded_results == 1 and not worker.thread.is_alive()

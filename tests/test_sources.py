@@ -33,3 +33,30 @@ def test_capture_clock_uses_adc_and_flags():
     a = clock.stamp(480, 48000, {"input_buffer_adc_time": 1, "current_time": 1.02}, 101)
     b = clock.stamp(480, 48000, {"input_buffer_adc_time": 1.1, "current_time": 1.12}, 101.1)
     assert abs(a[0] - 0.98) < 1e-9 and b[3]
+
+
+def test_clock_drift_is_exposed_without_rebasing_or_clamping():
+    clock = CaptureClock(100)
+    clock.stamp(480, 48000, {}, 100.01)
+    sample = clock.stamp(480, 48000, {}, 100.22)
+    assert abs(sample[0] - 0.01) < 1e-9
+    assert sample[4].endswith("drift_warning")
+    assert abs(clock.callback_clock_error_ms - 200) < 1e-6
+
+
+def test_endpoint_identity_requires_unique_exact_name(monkeypatch):
+    from types import SimpleNamespace
+    import sys
+    import pytest
+    from gmv.sources.windows import selected_endpoint_id
+
+    devices = [SimpleNamespace(id="one", FriendlyName="Output")]
+    monkeypatch.setitem(
+        sys.modules,
+        "pycaw.pycaw",
+        SimpleNamespace(AudioUtilities=SimpleNamespace(GetAllDevices=lambda **_: devices)),
+    )
+    assert selected_endpoint_id("Output [Loopback]") == "one"
+    devices.append(SimpleNamespace(id="two", FriendlyName="Output"))
+    with pytest.raises(RuntimeError, match="ambiguous"):
+        selected_endpoint_id("Output [Loopback]")

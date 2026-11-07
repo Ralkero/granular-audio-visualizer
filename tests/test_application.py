@@ -22,3 +22,15 @@ def test_native_packet_protocol_preserves_qpc():
 def test_native_packet_rejects_bad_or_unbounded_data(packet):
     with pytest.raises(ValueError):
         read_packet(io.BytesIO(packet))
+
+
+def test_pid_reuse_is_not_the_selected_process(monkeypatch):
+    from types import SimpleNamespace
+    from gmv.sources import application
+
+    source = object.__new__(application.ApplicationAudioSource)
+    source.pid, source.created = 123, 10
+    monkeypatch.setattr(
+        application.psutil, "Process", lambda pid: SimpleNamespace(create_time=lambda: 20)
+    )
+    assert not source._alive()

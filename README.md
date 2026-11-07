@@ -52,6 +52,21 @@ Subscribers have independent bounded queues; slow consumers lose their oldest me
 
 ## Current limitations
 
-This is an initial Phase One implementation, not a claim that every acceptance criterion has been validated. Live system and application capture were tested with current browser playback and the Sound BlasterX G6. Spotify playback/restart, physical device unplug/replug, alternate devices and Linux capture remain unverified. Musical accuracy is validated with synthetic fixtures, not an annotated music corpus. Percussion labels and tempo are preliminary heuristics with uncalibrated confidence scores.
+This is an initial Phase One implementation, not a claim that every acceptance criterion has been validated. User-assisted Spotify playback, pause/resume with audible browser audio, start while paused, seek/skip and quit/restart were observed using the Sound BlasterX G6. Physical device unplug/replug, default-device switching, alternate devices and Linux capture remain unverified. The system backend showed substantial fallback-clock drift in a ten-minute run; precise synchronization remains unresolved. Process capture QPC timing was substantially steadier. Musical accuracy is validated with synthetic fixtures, not an annotated music corpus. Percussion labels and tempo are preliminary heuristics with uncalibrated confidence scores.
 
 No Spotify login, playback routing, system volume changes, protected-content bypass, GPU or NVIDIA dependency is used. The application does not control the player. Unsupported/protected audio may yield silence. Short-term loudness is RMS dBFS, not LUFS. See [measured performance and validation](docs/VALIDATION.md) for precise scope.
+
+
+## Phase 1.1 results and evaluation
+
+[Phase 1.1 report](docs/PHASE1_1_REPORT.md) records the validation milestones and their limits. On the frozen synthetic holdout, onset F1 is 0.996 at 50 ms for per-band attack detection, compared with 0.880 for the original detector and 0.983 for the previous global gate. That is not real-music instrument recognition. Experimental beat-phase tracking stays off by default. Confidence values are uncalibrated scores. The control center shows relative band energy, separate drop counters, delayed-analysis age, and the pending physical device checks.
+
+```powershell
+uv sync --locked --extra dev --extra evaluation
+.venv\Scripts\python.exe -m gmv.evaluation.run --detector baseline --split development --output local-evidence/baseline.json
+.venv\Scripts\python.exe -m gmv.evaluation.run --detector candidate --split development --beat-phase --output local-evidence/candidate.json
+.venv\Scripts\python.exe scripts/compare_performance.py --output local-evidence/performance.json
+.venv\Scripts\python.exe scripts/validate_capture.py --pid PID --pair-system --seconds 600 --output local-evidence/soak.json
+```
+
+See [capture test matrix and authorized local-import format](docs/CAPTURE_VALIDATION.md), [schema 1.1 / replay / stale-event policy](docs/SCHEMA.md), and [isolated Demucs benchmark](experiments/separation/README.md). Demucs is an offline research experiment: overlap throughput, latency, synthetic quality and unresolved weight licensing did not justify live integration. The control center distinguishes observed/candidate/predicted/delayed events, reports separate losses and helper resources, and shows pending hardware checks. Raw recording stays off.

@@ -75,7 +75,15 @@ class Analyzer:
         self.last_change = -1e6
         self.previous_centroid = None
         self.previous_rms = 0.0
-        self.previous_bands = np.zeros(7)
+        self.previous_bands = np.zeros(len(self.masks))
+        self.previous_band_energy = np.zeros(len(self.masks))
+        # Slow release relative to one attack so a short-window bass ripple is not a new note.
+        self.band_envelope = np.zeros(len(self.masks))
+        self.attack_peak = np.zeros(len(self.masks))
+        self.attack_open_until = np.full(len(self.masks), -1.0)
+        self.last_band_onset = np.full(len(self.masks), -1e6)
+        self.last_trigger_bands = set()
+        self.level_peak = 0.0
         weights = config.analysis_channel_weights
         if weights is not None and len(weights) != channels:
             raise ValueError("Analysis coefficient count must match source channels")
@@ -183,7 +191,7 @@ class Analyzer:
         events = []
         group = None
 
-        def emit(kind, confidence, value=None, event_time=None):
+        def emit(kind, confidence, value=None, event_time=None, measurements=()):
             event = MusicalEvent(
                 session_id=self.session_id,
                 source=self.source,
@@ -195,7 +203,7 @@ class Analyzer:
                 confidence=confidence,
                 group_id=group,
                 related_event_ids=tuple(e.event_id for e in events[:1]),
-                method="mixed_audio_attack_v2",
+                method="mixed_audio_attack_v3",
                 segment=block.segment,
                 evidence_monotonic=capture_mono
                 + (timestamp if event_time is None else event_time)
@@ -206,6 +214,7 @@ class Analyzer:
                 if kind == "beat_prediction"
                 else ("observed" if kind == "onset" else "candidate"),
                 intended_use="context" if kind == "beat_prediction" else "immediate",
+                measurements=measurements,
             )
             events.append(event)
 
@@ -216,16 +225,58 @@ class Analyzer:
         elif not is_quiet and self.silent:
             self.silent = False
             emit("audio_resumed", 0.95)
+        # Each band keeps its own attack memory. A repeat in a band that just
+        # fired must reach 40% of that attack's peak, so short-window bass
+        # ripple is not a second note. A different band can still fire.
+        floors = self.band_envelope * np.exp(-self.hop / 0.05)
+        triggered = []
+        for index, flux_i in enumerate(band_flux):
+            gap = timestamp - self.last_band_onset[index]
+            strong_repeat = self.attack_peak[index] > 0 and bands[index] >= 0.4 * self.attack_peak[index]
+            if (
+                is_quiet
+                or flux_i < 0.3
+                or bands[index] <= floors[index] * 1.8 + 1e-9
+                or bands[index] <= self.previous_band_energy[index]
+                or gap < 0.03
+                or (gap < 0.18 and self.attack_peak[index] > 0 and not strong_repeat)
+            ):
+                continue
+            triggered.append(index)
+        band_values = np.asarray(bands, dtype=np.float64)
+        self.band_envelope = np.maximum(floors, band_values)
+        self.previous_band_energy = band_values
+        # Adjacent bands belong to one attack. A band at least two slots away can
+        # be a separate event inside the 45 ms grouping window.
+        separated = bool(triggered and self.last_trigger_bands) and min(
+            abs(index - previous) for index in triggered for previous in self.last_trigger_bands
+        ) >= 2
+        self.level_peak *= float(np.exp(-self.hop / 0.3))
+        loud_enough = max((bands[index] for index in triggered), default=0.0) >= 0.05 * self.level_peak
+        self.level_peak = max(self.level_peak, max(bands))
+        # Tiny high-band leakage after a real attack must not become its own onset.
         if (
-            not is_quiet
+            triggered
             and flux > threshold
-            and attack_ratio > 0.08
-            and timestamp - self.last_onset >= 0.045
+            and loud_enough
+            and not (timestamp - self.last_onset < 0.045 and not separated)
         ):
             self.last_onset = timestamp
+            self.last_trigger_bands = set(triggered)
+            for index in triggered:
+                self.last_band_onset[index] = timestamp
+                self.attack_peak[index] = bands[index]
+                self.attack_open_until[index] = timestamp + 0.045
             self.onsets.append(timestamp)
             group = uuid4().hex
-            emit("onset", min(0.9, 0.4 + 0.3 * flux / threshold), strength)
+            low = min(self.config.band_edges[i] for i in triggered)
+            high = max(self.config.band_edges[i + 1] for i in triggered)
+            emit(
+                "onset",
+                min(0.9, 0.4 + 0.3 * flux / threshold),
+                strength,
+                measurements=(("band_low_hz", float(low)), ("band_high_hz", float(high))),
+            )
             band_sum = max(sum(bands), 1e-12)
             if sum(bands[:2]) / band_sum > 0.45:
                 emit("bass_transient_candidate", 0.55, strength)
@@ -240,6 +291,10 @@ class Analyzer:
                 )
                 if distance < 0.05:
                     emit("beat_observed", min(0.7, self.tempo_confidence), strength)
+        open_mask = timestamp <= self.attack_open_until
+        self.attack_peak = np.where(
+            open_mask, np.maximum(self.attack_peak, band_values), self.attack_peak
+        )
         # Circular concentration of recent attacks estimates beat phase separately from tempo.
         self.beat_locked = False
         if (

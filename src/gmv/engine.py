@@ -93,7 +93,9 @@ class Engine:
         if self.config.advanced:
             from .advanced import AdvancedWorker
 
-            self.advanced = AdvancedWorker(self.bus, self.session_id, self.source.kind)
+            self.advanced = AdvancedWorker(
+                self.bus, self.session_id, self.source.kind, live=self.source.live
+            )
             self.advanced.start()
         self.status("starting", "Opening audio source")
         self.threads = [
@@ -246,6 +248,8 @@ class Engine:
             "advanced_status": self.advanced.state if self.advanced else "disabled",
             "advanced_drops": self.advanced.queue.dropped if self.advanced else 0,
             "advanced_jobs": self.advanced.jobs if self.advanced else 0,
+            "advanced_discarded_results": self.advanced.discarded_results if self.advanced else 0,
+            "advanced_latest_age_ms": self.advanced.latest_age_ms if self.advanced else None,
             "advanced_processing_ms": stats(self.advanced.times) if self.advanced else None,
             "debug_audio_saved_seconds": self.recorder.saved_seconds if self.recorder else 0,
             "debug_audio_dropped_blocks": self.recorder.queue.dropped if self.recorder else 0,

@@ -1,0 +1,501 @@
+{
+  "baseline_advanced_off": {
+    "starting_commit": "6d30da28242b4a34b56a221cfc6513fa9cd62bc7",
+    "ui": false,
+    "logging": true,
+    "advanced": false,
+    "raw_audio_saved": false,
+    "elapsed_seconds": 600.0257484999893,
+    "resources": {
+      "rss_mb": {
+        "count": 596,
+        "scope": "whole-session uniform reservoir; approximate percentiles",
+        "reservoir_size": 596,
+        "mean": 117.3919948091443,
+        "min": 62.671875,
+        "max": 120.27734375,
+        "p50": 118.203125,
+        "p95": 120.171875
+      },
+      "cpu_one_core_percent": {
+        "count": 596,
+        "scope": "whole-session uniform reservoir; approximate percentiles",
+        "reservoir_size": 596,
+        "mean": 30.89697986577179,
+        "min": 18.6,
+        "max": 92.0,
+        "p50": 30.7,
+        "p95": 40.3
+      }
+    },
+    "remaining_owned_child_processes": 0,
+    "remaining_new_thread_count": 0,
+    "sources": [
+      {
+        "kind": "application_audio",
+        "configuration": {
+          "window_ms": 46.44,
+          "hop_ms": 20,
+          "capture_ms": 10,
+          "queue_blocks": 16,
+          "silence_dbfs": -65,
+          "band_edges": [
+            20,
+            60,
+            250,
+            500,
+            2000,
+            4000,
+            6000,
+            24000
+          ],
+          "advanced": false,
+          "debug_audio_seconds": 0
+        },
+        "whole_session": {
+          "signed_center_age_ms": {
+            "count": 29812,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 29.348257645433552,
+            "min": 27.297250001140583,
+            "max": 98.49335000268411,
+            "p50": 29.05715023018729,
+            "p95": 30.24515019511398
+          },
+          "dsp_ms": {
+            "count": 29812,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 1.3126631960584119,
+            "min": 0.9000999998534098,
+            "max": 44.043799993232824,
+            "p50": 1.1767500036512502,
+            "p95": 2.1010499986005016
+          },
+          "peak": {
+            "count": 29812,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 0.000727399755606069,
+            "min": 0.0,
+            "max": 0.002126264851540327,
+            "p50": 0.001096980704460293,
+            "p95": 0.0013309584464877844
+          },
+          "rms": {
+            "count": 29812,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 0.00026107324296147967,
+            "min": 0.0,
+            "max": 0.0009605493735424774,
+            "p50": 0.00032650358881091665,
+            "p95": 0.0005883607384913743
+          }
+        },
+        "probe_subscriber_drops": 0,
+        "logger_drops": 0,
+        "clean_shutdown": true,
+        "capture_error": false,
+        "metrics": {
+          "frames": 29812,
+          "events": 2441,
+          "dropped_blocks": 0,
+          "dropped_audio_frames": 0,
+          "queue_high_water": 7,
+          "discontinuities": 7,
+          "advanced_drops": 0,
+          "advanced_jobs": 0,
+          "advanced_processing_ms": null
+        },
+        "native_dropped_packets": 0,
+        "sampled_clock_age_slope_ms_per_minute": -0.04883527561656894,
+        "clock_slope_scope": "linear trend in per-second observation-minus-latest-audio time; includes poll jitter, not physical latency"
+      },
+      {
+        "kind": "system_audio",
+        "configuration": {
+          "window_ms": 46.44,
+          "hop_ms": 20,
+          "capture_ms": 10,
+          "queue_blocks": 16,
+          "silence_dbfs": -65,
+          "band_edges": [
+            20,
+            60,
+            250,
+            500,
+            2000,
+            4000,
+            6000,
+            24000
+          ],
+          "advanced": false,
+          "debug_audio_seconds": 0
+        },
+        "whole_session": {
+          "signed_center_age_ms": {
+            "count": 29966,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 242.1644607232239,
+            "min": 27.57645000202924,
+            "max": 409.44015024581404,
+            "p50": 248.67389998541967,
+            "p95": 368.8520002325504
+          },
+          "dsp_ms": {
+            "count": 29966,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 1.7601885237170416,
+            "min": 1.3165999989723787,
+            "max": 40.41339999821503,
+            "p50": 1.6395999991800636,
+            "p95": 2.3482499964302406
+          },
+          "peak": {
+            "count": 29966,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 0.013183045358171252,
+            "min": 3.9399543311446905e-05,
+            "max": 0.16615061461925507,
+            "p50": 0.0132365170866251,
+            "p95": 0.02515315916389227
+          },
+          "rms": {
+            "count": 29966,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 0.002076686412466335,
+            "min": 6.553792376951216e-06,
+            "max": 0.026579594073546604,
+            "p50": 0.0019549113693692072,
+            "p95": 0.00427349938772039
+          }
+        },
+        "probe_subscriber_drops": 0,
+        "logger_drops": 0,
+        "clean_shutdown": true,
+        "capture_error": false,
+        "metrics": {
+          "frames": 29966,
+          "events": 6414,
+          "dropped_blocks": 0,
+          "dropped_audio_frames": 0,
+          "queue_high_water": 5,
+          "discontinuities": 0,
+          "advanced_drops": 0,
+          "advanced_jobs": 0,
+          "advanced_processing_ms": null
+        },
+        "native_dropped_packets": null,
+        "sampled_clock_age_slope_ms_per_minute": 33.98203905104009,
+        "clock_slope_scope": "linear trend in per-second observation-minus-latest-audio time; includes poll jitter, not physical latency"
+      }
+    ]
+  },
+  "candidate_advanced_on": {
+    "starting_commit": "10870604c82de15b333357549e3ee8ff5ac5eba8",
+    "ui": false,
+    "logging": true,
+    "advanced": true,
+    "raw_audio_saved": false,
+    "elapsed_seconds": 600.0196091000107,
+    "resources": {
+      "rss_mb": {
+        "count": 595,
+        "scope": "whole-session uniform reservoir; approximate percentiles",
+        "reservoir_size": 595,
+        "mean": 178.9244419642857,
+        "min": 135.8828125,
+        "max": 196.10546875,
+        "p50": 179.34375,
+        "p95": 182.01328125
+      },
+      "cpu_one_core_percent": {
+        "count": 595,
+        "scope": "whole-session uniform reservoir; approximate percentiles",
+        "reservoir_size": 595,
+        "mean": 40.04840336134453,
+        "min": 24.8,
+        "max": 93.1,
+        "p50": 40.2,
+        "p95": 51.58999999999999
+      }
+    },
+    "remaining_owned_child_processes": 0,
+    "remaining_new_thread_count": 0,
+    "sources": [
+      {
+        "kind": "application_audio",
+        "configuration": {
+          "window_ms": 46.44,
+          "hop_ms": 20,
+          "capture_ms": 10,
+          "queue_blocks": 16,
+          "silence_dbfs": -65,
+          "band_edges": [
+            20,
+            60,
+            250,
+            500,
+            2000,
+            4000,
+            6000,
+            24000
+          ],
+          "advanced": true,
+          "experimental_beat_phase": false,
+          "debug_audio_seconds": 0,
+          "analysis_channel_weights": null
+        },
+        "whole_session": {
+          "signed_center_age_ms": {
+            "count": 29950,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 29.966887049939697,
+            "min": 28.14445014115563,
+            "max": 152.07724996312777,
+            "p50": 29.093550077334385,
+            "p95": 35.15702498171436
+          },
+          "dsp_ms": {
+            "count": 29950,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 1.3882485776503168,
+            "min": 0.9328000014647841,
+            "max": 115.02219999965746,
+            "p50": 1.200400001835078,
+            "p95": 1.90277500951197
+          },
+          "peak": {
+            "count": 29950,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "p50": 0.0,
+            "p95": 0.0
+          },
+          "rms": {
+            "count": 29950,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "p50": 0.0,
+            "p95": 0.0
+          }
+        },
+        "probe_subscriber_drops": 0,
+        "logger_drops": 0,
+        "clean_shutdown": true,
+        "capture_error": false,
+        "metrics": {
+          "frames": 29950,
+          "events": 0,
+          "dropped_blocks": 0,
+          "dropped_audio_frames": 0,
+          "queue_high_water": 12,
+          "discontinuities": 0,
+          "advanced_drops": 0,
+          "advanced_jobs": 299,
+          "advanced_processing_ms": {
+            "samples": 256,
+            "p50": 15.575799996440765,
+            "p95": 32.373375001043314,
+            "max": 46.67979999794625
+          }
+        },
+        "native_dropped_packets": 0,
+        "sampled_clock_age_slope_ms_per_minute": -0.014393485422211246,
+        "clock_slope_scope": "linear trend in per-second observation-minus-latest-audio time; includes poll jitter, not physical latency"
+      },
+      {
+        "kind": "system_audio",
+        "configuration": {
+          "window_ms": 46.44,
+          "hop_ms": 20,
+          "capture_ms": 10,
+          "queue_blocks": 16,
+          "silence_dbfs": -65,
+          "band_edges": [
+            20,
+            60,
+            250,
+            500,
+            2000,
+            4000,
+            6000,
+            24000
+          ],
+          "advanced": true,
+          "experimental_beat_phase": false,
+          "debug_audio_seconds": 0,
+          "analysis_channel_weights": null
+        },
+        "whole_session": {
+          "signed_center_age_ms": {
+            "count": 29880,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 782.2295850086737,
+            "min": 27.00645000871721,
+            "max": 1391.3584502521417,
+            "p50": 846.5376499704007,
+            "p95": 1322.0301252345052
+          },
+          "dsp_ms": {
+            "count": 29880,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 1.8991899263586178,
+            "min": 1.3400000025285408,
+            "max": 69.0409999951953,
+            "p50": 1.727700000628829,
+            "p95": 2.7029249977204017
+          },
+          "peak": {
+            "count": 29880,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 0.01530037730725375,
+            "min": 3.253163959016092e-05,
+            "max": 0.05140593647956848,
+            "p50": 0.015994202345609665,
+            "p95": 0.029085672460496426
+          },
+          "rms": {
+            "count": 29880,
+            "scope": "whole-session uniform reservoir; approximate percentiles",
+            "reservoir_size": 4096,
+            "mean": 0.0023918706819194067,
+            "min": 6.466789830511234e-06,
+            "max": 0.009725290434414433,
+            "p50": 0.0024295159477710957,
+            "p95": 0.004850926696965039
+          }
+        },
+        "probe_subscriber_drops": 0,
+        "logger_drops": 0,
+        "clean_shutdown": true,
+        "capture_error": false,
+        "metrics": {
+          "frames": 29881,
+          "events": 6015,
+          "dropped_blocks": 0,
+          "dropped_audio_frames": 0,
+          "queue_high_water": 10,
+          "discontinuities": 0,
+          "advanced_drops": 0,
+          "advanced_jobs": 298,
+          "advanced_processing_ms": {
+            "samples": 256,
+            "p50": 57.70440000196686,
+            "p95": 74.20897500196588,
+            "max": 103.89940001186915
+          }
+        },
+        "native_dropped_packets": null,
+        "sampled_clock_age_slope_ms_per_minute": 134.22741536691345,
+        "clock_slope_scope": "linear trend in per-second observation-minus-latest-audio time; includes poll jitter, not physical latency"
+      }
+    ]
+  },
+  "comparison_limit": "same source types/formats, UI off and logging on; audio content, manual transitions, DSP version and background workload differ",
+  "concurrent_model_observations": [
+    {
+      "kind": "application_audio",
+      "windows_seconds": 31.0422133999964,
+      "scope": "same ongoing paired capture, UI off/logging and HPSS on; changing music and other developer load; observational, not causal isolation",
+      "periods": {
+        "before": {
+          "dsp_ms": {
+            "count": 1552,
+            "p95": 1.6868949998752194,
+            "max": 22.93170000484679
+          },
+          "capture_to_publish_ms": {
+            "count": 1552,
+            "p95": 35.336578926740906,
+            "max": 63.170522109954625
+          }
+        },
+        "during": {
+          "dsp_ms": {
+            "count": 1553,
+            "p95": 2.9977600002894165,
+            "max": 115.02219999965746
+          },
+          "capture_to_publish_ms": {
+            "count": 1553,
+            "p95": 48.760432641371125,
+            "max": 152.05701138672885
+          }
+        },
+        "after": {
+          "dsp_ms": {
+            "count": 1552,
+            "p95": 1.811569992423756,
+            "max": 27.585200004978105
+          },
+          "capture_to_publish_ms": {
+            "count": 1552,
+            "p95": 34.897371382045066,
+            "max": 68.48120652337093
+          }
+        }
+      }
+    },
+    {
+      "kind": "system_audio",
+      "windows_seconds": 31.0422133999964,
+      "scope": "same ongoing paired capture, UI off/logging and HPSS on; changing music and other developer load; observational, not causal isolation",
+      "periods": {
+        "before": {
+          "dsp_ms": {
+            "count": 1550,
+            "p95": 2.642559990636072,
+            "max": 27.121100007207133
+          },
+          "capture_to_publish_ms": {
+            "count": 1550,
+            "p95": 438.29960717682843,
+            "max": 467.3260161440121
+          }
+        },
+        "during": {
+          "dsp_ms": {
+            "count": 1539,
+            "p95": 3.496739995898677,
+            "max": 59.88159999833442
+          },
+          "capture_to_publish_ms": {
+            "count": 1539,
+            "p95": 679.1761501391884,
+            "max": 724.9708099485142
+          }
+        },
+        "after": {
+          "dsp_ms": {
+            "count": 1550,
+            "p95": 2.5568800054315943,
+            "max": 24.406600001384504
+          },
+          "capture_to_publish_ms": {
+            "count": 1550,
+            "p95": 741.2600910529145,
+            "max": 763.0528040104546
+          }
+        }
+      }
+    }
+  ]
+}
