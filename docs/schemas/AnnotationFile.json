@@ -19,6 +19,8 @@
             "kick",
             "snare",
             "cymbals",
+            "hi_hat",
+            "toms",
             "bass",
             "guitar",
             "rhythm_guitar",
@@ -106,6 +108,8 @@
             "kick",
             "snare",
             "cymbals",
+            "hi_hat",
+            "toms",
             "bass",
             "guitar",
             "rhythm_guitar",
@@ -150,6 +154,38 @@
         "label"
       ],
       "title": "InstrumentEvent",
+      "type": "object"
+    },
+    "LayerSource": {
+      "additionalProperties": false,
+      "properties": {
+        "annotator_id": {
+          "title": "Annotator Id",
+          "type": "string"
+        },
+        "reference_kind": {
+          "enum": [
+            "human_annotation",
+            "dataset_annotation",
+            "stem_derived",
+            "pseudo_label",
+            "model_prediction",
+            "combined"
+          ],
+          "title": "Reference Kind",
+          "type": "string"
+        },
+        "tool": {
+          "title": "Tool",
+          "type": "string"
+        }
+      },
+      "required": [
+        "annotator_id",
+        "reference_kind",
+        "tool"
+      ],
+      "title": "LayerSource",
       "type": "object"
     },
     "MixEvent": {
@@ -255,8 +291,11 @@
   "additionalProperties": false,
   "properties": {
     "annotation_schema_version": {
-      "const": "1.0",
-      "default": "1.0",
+      "default": "1.1",
+      "enum": [
+        "1.0",
+        "1.1"
+      ],
       "title": "Annotation Schema Version",
       "type": "string"
     },
@@ -295,10 +334,31 @@
       "enum": [
         "machine_draft",
         "in_progress",
-        "reviewed"
+        "reviewed",
+        "automatic"
       ],
       "title": "Status",
       "type": "string"
+    },
+    "reference_kind": {
+      "default": "human_annotation",
+      "enum": [
+        "human_annotation",
+        "dataset_annotation",
+        "stem_derived",
+        "pseudo_label",
+        "model_prediction",
+        "combined"
+      ],
+      "title": "Reference Kind",
+      "type": "string"
+    },
+    "layer_sources": {
+      "additionalProperties": {
+        "$ref": "#/$defs/LayerSource"
+      },
+      "title": "Layer Sources",
+      "type": "object"
     },
     "uncertainty_seconds": {
       "default": 0.02,

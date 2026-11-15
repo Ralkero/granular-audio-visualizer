@@ -14,8 +14,8 @@ import mir_eval
 import numpy as np
 
 from gmv.corpus import registry
-from gmv.corpus.compare import consensus
-from gmv.corpus.intervals import total
+from gmv.corpus.compare import combine, consensus
+from gmv.corpus.intervals import merge, total
 from gmv.corpus.schema import ANNOTATION_SCHEMA_VERSION, CORPUS_SCHEMA_VERSION, event_layer
 
 from .corpus import CLASSES
@@ -38,6 +38,14 @@ CANDIDATE_TARGETS = {
     "high_frequency_percussion_candidate": ("cymbals",),
 }
 OBSERVED_BEATS = ("beat_observed", "beat_candidate")
+# Activity layers that must be sounding for a candidate to be what its name suggests.
+# If every available one is silent around the event, the event is refuted. An active
+# layer does not confirm the event; this is a lower bound on false positives only.
+CANDIDATE_ACTIVITY = {
+    "bass_transient_candidate": ("drums", "kick", "bass"),
+    "snare_like_candidate": ("drums", "snare"),
+    "high_frequency_percussion_candidate": ("drums", "cymbals"),
+}
 NOT_ANNOTATED = {"status": "not_annotated"}
 
 
@@ -88,14 +96,23 @@ def evaluate_recording(
     def predicted(*kinds):
         return [e for e in events if e.event_type in kinds and inside(e.timestamp)]
 
+    def kind_of(layer):
+        return annotation.source_of(layer).reference_kind
+
     result = {
         "recording": {
             key: getattr(recording, key)
             for key in ("recording_id", "sha256", "split", "group_id", "source_kind", "duration_s")
+            + ("dataset", "dataset_track_id")
         }
         | {"tags": list(recording.tags)},
         "annotation": {
             "annotator_id": annotation.annotator_id,
+            "reference_kind": annotation.reference_kind,
+            "reference_sources": {
+                layer: annotation.source_of(layer).model_dump()
+                for layer in annotation.coverage.layers
+            },
             "status": annotation.status,
             "tool": annotation.tool,
             "uncertainty_seconds": annotation.uncertainty_seconds,
@@ -110,6 +127,7 @@ def evaluate_recording(
         stamps = [e.timestamp for e in found]
         wide = 0.05 + annotation.uncertainty_seconds
         result["onsets"] = {
+            "reference_kind": kind_of("onset"),
             "25": _score_points(certain, uncertain, stamps, 0.025),
             "50": _score_points(certain, uncertain, stamps, 0.05),
             "50_plus_annotation_uncertainty": _score_points(certain, uncertain, stamps, wide),
@@ -123,6 +141,7 @@ def evaluate_recording(
     if annotation.covers("beat"):
         certain, _ = split([e for e in annotation.events if e.kind == "beat"])
         result["beats"] = {
+            "reference_kind": kind_of("beat"),
             "reference_count": len(certain),
             "observed": beat_score(certain, [e.timestamp for e in predicted(*OBSERVED_BEATS)]),
             "predicted": beat_score(certain, [e.timestamp for e in predicted("beat_prediction")]),
@@ -160,11 +179,31 @@ def evaluate_recording(
         label: split([e for e in annotation.instrument_events if e.label == label])
         for label in hit_layers
     }
+    onset_times = np.sort([e.timestamp for e in predicted("onset")])
+
+    def found_as_onset(times):
+        if not len(onset_times) or not times:
+            return 0
+        index = np.clip(np.searchsorted(onset_times, times), 0, len(onset_times) - 1)
+        nearest = np.minimum(
+            np.abs(onset_times[index] - times),
+            np.abs(onset_times[np.maximum(index - 1, 0)] - times),
+        )
+        return int((nearest <= 0.05).sum())
+
     result["instrument_events"] = {
         label: {
             "status": "no_detector_output",
+            "reference_kind": kind_of(f"hits.{label}"),
             "reference_count": len(certain),
             "abstained_references": len(uncertain),
+            # Every annotated attack is an acoustic onset in the mix, so recall of the
+            # full-mix onset detector on these attacks is valid. Precision is not: other
+            # instruments' onsets are real but unannotated here.
+            "detected_as_full_mix_onset_50ms": found_as_onset(certain),
+            "full_mix_onset_recall_50ms": found_as_onset(certain) / len(certain)
+            if certain
+            else None,
         }
         for label, (certain, uncertain) in hits.items()
     }
@@ -194,7 +233,7 @@ def evaluate_recording(
             confusion[kind] = {"emitted": len(stamps), "coincides_with": counts}
     result["candidates"], result["candidate_coincidence"] = candidates, confusion
 
-    activity = {}
+    activity, sounding = {}, {}
     for layer in annotation.coverage.layers:
         if not layer.startswith("activity."):
             continue
@@ -202,21 +241,43 @@ def evaluate_recording(
         spans = [a for a in annotation.activity if a.label == label]
         certain = [(a.start, a.end) for a in spans if a.certainty == "certain"]
         uncertain = [(a.start, a.end) for a in spans if a.certainty == "uncertain"]
+        sounding[label] = merge(certain + uncertain)
         if activity_predictions and label in activity_predictions:
             activity[label] = {
                 "status": "scored",
+                "reference_kind": kind_of(layer),
                 **interval_score(certain, activity_predictions[label], ranges, uncertain),
             }
         else:
             reference = interval_score(certain, [], ranges, uncertain)
             activity[label] = {
                 "status": "no_detector_output",
+                "reference_kind": kind_of(layer),
                 "reference_active_seconds": reference["reference_active_seconds"],
                 "scored_seconds": reference["scored_seconds"],
                 "abstained_seconds": reference["abstained_seconds"],
                 "reference_intervals": len(certain),
             }
     result["instrument_activity"] = activity
+    refuted = {}
+    for kind in CLASSES:
+        layers = [label for label in CANDIDATE_ACTIVITY[kind] if label in sounding]
+        if not layers:
+            refuted[kind] = {**NOT_ANNOTATED, "needs_any_of": list(CANDIDATE_ACTIVITY[kind])}
+            continue
+        spans = merge([span for label in layers for span in sounding[label]])
+        stamps = [e.timestamp for e in predicted(kind)]
+        silent = sum(not any(s - 0.05 <= t <= e + 0.05 for s, e in spans) for t in stamps)
+        refuted[kind] = {
+            "checked_against": layers,
+            "reference_kinds": sorted({kind_of(f"activity.{label}") for label in layers}),
+            "events": len(stamps),
+            "refuted_events": silent,
+            "refuted_fraction": silent / len(stamps) if stamps else None,
+            "meaning": "events with none of these instruments sounding within 50 ms; "
+            "a lower bound on false positives, not an accuracy",
+        }
+    result["candidates_vs_activity"] = refuted
     result["performance"] = {
         "frames": len(frames),
         "dsp_p95_ms": float(np.percentile(times, 95)) if times else None,
@@ -226,33 +287,43 @@ def evaluate_recording(
 
 
 def _choose_annotation(manifest_path, recording, annotator, allow_unreviewed):
+    """Pick the reference for a recording.
+
+    ``auto`` (default) takes, per layer, the best usable tier: human-reviewed, then
+    dataset-provided, then stem-derived. Pseudo-labels, model predictions and drafts are
+    never reference; ``allow_unreviewed`` admits them for exploration and is stamped.
+    """
     available = registry.annotations_for(manifest_path, recording.recording_id)
-    usable = [a for a in available if a.usable_as_reference or allow_unreviewed]
-    if annotator != "consensus":
+    if annotator not in ("auto", "consensus"):
         chosen = [a for a in available if a.annotator_id == annotator]
         if not chosen:
             return None, f"no annotation by {annotator}"
-        if chosen[0] not in usable:
-            return None, f"annotation by {annotator} is {chosen[0].status}, not reviewed"
+        if not (chosen[0].usable_as_reference or allow_unreviewed):
+            return None, (
+                f"annotation by {annotator} is {chosen[0].reference_kind} with status "
+                f"{chosen[0].status}, not usable as reference"
+            )
         return chosen[0], None
+    usable = [a for a in available if a.usable_as_reference]
+    humans = [a for a in usable if a.reference_kind == "human_annotation"]
+    if len(humans) > 2:
+        return None, "more than two reviewed annotators; name one with --annotator"
+    if len(humans) == 2:
+        usable = [a for a in usable if a not in humans] + [consensus(*humans)]
     if not usable:
-        return None, "no reviewed annotation" if not available else "annotations not reviewed"
-    if len(usable) == 1:
-        return usable[0], None
-    if len(usable) == 2:
-        return consensus(*usable), None
-    return None, "more than two reviewed annotators; name one with --annotator"
+        if allow_unreviewed and len(available) == 1:
+            return available[0], None
+        return None, "no usable reference annotation" if available else "no annotation"
+    return (usable[0] if len(usable) == 1 else combine(usable)), None
 
 
 def _content_hash(manifest_path, used):
+    """Manifest plus every annotation file of each evaluated recording."""
     digest = hashlib.sha256(Path(manifest_path).read_bytes())
-    for recording_id, annotator_id in sorted(used):
-        for part in (
-            annotator_id.split(".")[1:] if annotator_id.startswith("consensus.") else [annotator_id]
-        ):
-            path = registry.annotation_path(manifest_path, recording_id, part)
-            if path.is_file():
-                digest.update(path.read_bytes())
+    for recording_id, _ in sorted(used):
+        folder = Path(manifest_path).parent / "annotations" / recording_id
+        for path in sorted(folder.glob("*.json")):
+            digest.update(path.read_bytes())
     return digest.hexdigest()
 
 
@@ -260,11 +331,12 @@ def evaluate_corpus(
     manifest_path,
     split,
     *,
-    annotator="consensus",
+    annotator="auto",
     detector="candidate",
     config=None,
     final=False,
     allow_unreviewed=False,
+    dataset=None,
 ):
     if split == "test" and not final:
         raise ValueError(
@@ -275,7 +347,7 @@ def evaluate_corpus(
     paths = registry.load_paths(manifest_path)
     results, skipped, used = [], [], []
     for recording in manifest.recordings:
-        if recording.split != split:
+        if recording.split != split or (dataset and recording.dataset != dataset):
             continue
         annotation, reason = _choose_annotation(
             manifest_path, recording, annotator, allow_unreviewed
@@ -328,6 +400,10 @@ def evaluate_corpus(
             if any(tag in r["recording"]["tags"] and "50" in r["onsets"] for r in results)
         },
         "instrument_activity": _activity_summary(results),
+        "candidates_vs_activity": _refuted_summary(results),
+        "onset_recall_on_instrument_attacks": _attack_recall_summary(results),
+        "reference_kinds_by_layer": _reference_summary(results),
+        "evaluated_seconds": sum(r["annotation"]["covered_seconds"] for r in results),
     }
     return {
         "data_kind": "real_corpus",
@@ -337,6 +413,7 @@ def evaluate_corpus(
         "corpus_version": manifest.corpus_version,
         "corpus_content_sha256": _content_hash(manifest_path, used),
         "split": split,
+        "dataset_filter": dataset,
         "final_test_evaluation": bool(final and split == "test"),
         "annotator": annotator,
         "unreviewed_annotations_allowed": allow_unreviewed,
@@ -348,16 +425,76 @@ def evaluate_corpus(
     }
 
 
+def _reference_summary(results):
+    summary = {}
+    for result in results:
+        for layer, source in result["annotation"]["reference_sources"].items():
+            kinds = summary.setdefault(layer, {})
+            kinds[source["reference_kind"]] = kinds.get(source["reference_kind"], 0) + 1
+    return dict(sorted(summary.items()))
+
+
+def _attack_recall_summary(results):
+    summary = {}
+    for result in results:
+        for label, entry in result["instrument_events"].items():
+            row = summary.setdefault(
+                label, {"recordings": 0, "reference_count": 0, "detected": 0, "kinds": set()}
+            )
+            row["recordings"] += 1
+            row["reference_count"] += entry["reference_count"]
+            row["detected"] += entry["detected_as_full_mix_onset_50ms"]
+            row["kinds"].add(entry["reference_kind"])
+    return {
+        label: {
+            "recordings": row["recordings"],
+            "reference_count": row["reference_count"],
+            "detected_as_full_mix_onset_50ms": row["detected"],
+            "recall": row["detected"] / row["reference_count"] if row["reference_count"] else None,
+            "reference_kinds": sorted(row["kinds"]),
+        }
+        for label, row in sorted(summary.items())
+    }
+
+
+def _refuted_summary(results):
+    summary = {}
+    for kind in CLASSES:
+        rows = [r["candidates_vs_activity"][kind] for r in results]
+        rows = [row for row in rows if "events" in row]
+        if not rows:
+            summary[kind] = None
+            continue
+        events, silent = sum(r["events"] for r in rows), sum(r["refuted_events"] for r in rows)
+        summary[kind] = {
+            "recordings": len(rows),
+            "events": events,
+            "refuted_events": silent,
+            "refuted_fraction": silent / events if events else None,
+            "reference_kinds": sorted({k for r in rows for k in r["reference_kinds"]}),
+        }
+    return summary
+
+
 def _activity_summary(results):
     summary = {}
     for result in results:
         for label, entry in result["instrument_activity"].items():
             row = summary.setdefault(
                 label,
-                {"recordings": 0, "reference_active_seconds": 0.0, "scored_seconds": 0.0}
-                | {"tp_seconds": 0.0, "fp_seconds": 0.0, "fn_seconds": 0.0, "scored_recordings": 0},
+                {
+                    "recordings": 0,
+                    "scored_recordings": 0,
+                    "reference_kinds": set(),
+                    "reference_active_seconds": 0.0,
+                    "scored_seconds": 0.0,
+                    "tp_seconds": 0.0,
+                    "fp_seconds": 0.0,
+                    "fn_seconds": 0.0,
+                },
             )
             row["recordings"] += 1
+            row["reference_kinds"].add(entry["reference_kind"])
             row["reference_active_seconds"] += entry["reference_active_seconds"]
             row["scored_seconds"] += entry["scored_seconds"]
             if entry["status"] == "scored":
@@ -365,6 +502,7 @@ def _activity_summary(results):
                 for key in ("tp_seconds", "fp_seconds", "fn_seconds"):
                     row[key] += entry[key]
     for row in summary.values():
+        row["reference_kinds"] = sorted(row["reference_kinds"])
         tp, fp, fn = row["tp_seconds"], row["fp_seconds"], row["fn_seconds"]
         if row["scored_recordings"]:
             row.update(
@@ -375,7 +513,7 @@ def _activity_summary(results):
             )
         else:
             row.update(status="no_detector_output")
-    return summary
+    return dict(sorted(summary.items()))
 
 
 def render_markdown(report):
@@ -390,7 +528,8 @@ def render_markdown(report):
         )
 
     lines = [
-        f"# Corpus evaluation — {report['split']} split",
+        f"# Corpus evaluation — {report['split']} split"
+        + (f", {report['dataset_filter']}" if report.get("dataset_filter") else ""),
         "",
         f"- Status: **{report['real_music_status']}**"
         + (" (FINAL held-out test evaluation)" if report["final_test_evaluation"] else ""),
@@ -398,6 +537,7 @@ def render_markdown(report):
         f"`{report['corpus_content_sha256'][:16]}`; detector `{report['detector']}` at commit "
         f"`{report['code_commit'][:7]}`",
         f"- Recordings evaluated: {report['evaluated']}; skipped: {len(report['skipped'])}",
+        f"- Annotated audio evaluated: {report['aggregate']['evaluated_seconds'] / 60:.1f} min",
         "",
     ]
     if report["skipped"]:
@@ -433,16 +573,61 @@ def render_markdown(report):
         lines += [
             "## Instrument activity",
             "",
-            "| Instrument | Recordings | Reference active | Detector | F1 |",
-            "|---|---:|---:|---|---:|",
+            "| Instrument | Recordings | Reference | Reference active | Detector | F1 |",
+            "|---|---:|---|---:|---|---:|",
         ]
         for label, entry in sorted(summary["instrument_activity"].items()):
             score = f"{entry['f1']:.3f}" if entry["status"] == "scored" else "—"
             lines.append(
-                f"| {label} | {entry['recordings']} | {entry['reference_active_seconds']:.1f} s | "
+                f"| {label} | {entry['recordings']} | {', '.join(entry['reference_kinds'])} | "
+                f"{entry['reference_active_seconds']:.1f} s | "
                 f"{entry['status'].replace('_', ' ')} | {score} |"
             )
         lines.append("")
+    if summary["onset_recall_on_instrument_attacks"]:
+        lines += [
+            "## Full-mix onset detector: recall on annotated instrument attacks (±50 ms)",
+            "",
+            "Recall only. Precision cannot be measured where other instruments' onsets are "
+            "not annotated.",
+            "",
+            "| Instrument attacks | Recordings | Annotated | Detected | Recall | Reference |",
+            "|---|---:|---:|---:|---:|---|",
+        ]
+        for label, entry in summary["onset_recall_on_instrument_attacks"].items():
+            recall = entry["recall"]
+            lines.append(
+                f"| {label} | {entry['recordings']} | {entry['reference_count']} | "
+                f"{entry['detected_as_full_mix_onset_50ms']} | "
+                f"{'—' if recall is None else f'{recall:.3f}'} | "
+                f"{', '.join(entry['reference_kinds'])} |"
+            )
+        lines.append("")
+    checked = {k: v for k, v in summary["candidates_vs_activity"].items() if v}
+    if checked:
+        lines += [
+            "## Band-ratio candidates refuted by instrument activity",
+            "",
+            "Events fired while none of the instruments the candidate's name suggests was "
+            "sounding. This is a lower bound on false positives, not an accuracy.",
+            "",
+            "| Candidate | Events | Refuted | Fraction | Reference |",
+            "|---|---:|---:|---:|---|",
+        ]
+        for kind, entry in checked.items():
+            fraction = entry["refuted_fraction"]
+            lines.append(
+                f"| `{kind}` | {entry['events']} | {entry['refuted_events']} | "
+                f"{'—' if fraction is None else f'{fraction:.3f}'} | "
+                f"{', '.join(entry['reference_kinds'])} |"
+            )
+        lines.append("")
+    lines += ["## Reference used per layer (recordings)", ""]
+    lines += [
+        f"- `{layer}`: " + ", ".join(f"{kind} ×{count}" for kind, count in sorted(kinds.items()))
+        for layer, kinds in summary["reference_kinds_by_layer"].items()
+    ]
+    lines.append("")
     return "\n".join(lines) + "\n"
 
 

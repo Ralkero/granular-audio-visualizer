@@ -142,9 +142,67 @@ def consensus(a, b, tolerance=None):
             f"{a.annotator_id} and {b.annotator_id}; disagreements excluded, see compare report"
         ),
         status="reviewed" if a.usable_as_reference and b.usable_as_reference else "in_progress",
+        reference_kind="human_annotation",
         uncertainty_seconds=min(0.5, tolerance),
         coverage=Coverage(
             ranges=tuple(TimeRange(start=s, end=e) for s, e in ranges), layers=tuple(layers)
+        ),
+        events=tuple(sorted(events, key=lambda e: (e.time, e.kind))),
+        instrument_events=tuple(sorted(hits, key=lambda e: (e.time, e.label))),
+        activity=tuple(sorted(activity, key=lambda x: (x.start, x.label))),
+    )
+
+
+def combine(annotations):
+    """One reference per layer from several usable annotations of a recording.
+
+    For each layer the best available tier wins: human-reviewed, then dataset-provided, then
+    stem-derived. The result records which annotation supplied each layer, so a report can
+    always say what kind of reference a number rests on. Unusable annotations (drafts,
+    pseudo-labels, model predictions) are ignored.
+    """
+    from .schema import REFERENCE_PRIORITY, LayerSource
+
+    usable = [a for a in annotations if a.usable_as_reference and a.reference_kind != "combined"]
+    if not usable:
+        raise ValueError("No usable reference annotation")
+    if len({(a.recording_id, a.recording_sha256) for a in usable}) != 1:
+        raise ValueError("Annotations describe different recordings")
+    ranked = sorted(usable, key=lambda a: REFERENCE_PRIORITY.index(a.reference_kind))
+    chosen = {}
+    for annotation in ranked:
+        for layer in annotation.coverage.layers:
+            chosen.setdefault(layer, annotation)
+    contributors = list({id(a): a for a in chosen.values()}.values())
+    ranges = [(r.start, r.end) for r in contributors[0].coverage.ranges]
+    for other in contributors[1:]:
+        ranges = intersect(ranges, [(r.start, r.end) for r in other.coverage.ranges])
+    if not ranges:
+        raise ValueError("Reference annotations share no covered time range")
+    events, hits, activity = [], [], []
+    for layer, source in chosen.items():
+        events += [e for e in source.events if event_layer(e.kind) == layer]
+        hits += [e for e in source.instrument_events if f"hits.{e.label}" == layer]
+        activity += [a for a in source.activity if f"activity.{a.label}" == layer]
+    first = ranked[0]
+    return AnnotationFile(
+        recording_id=first.recording_id,
+        recording_sha256=first.recording_sha256,
+        annotator_id="combined",
+        tool="combine_v1",
+        provenance="Best available reference tier per layer; see layer_sources",
+        status="automatic",
+        reference_kind="combined",
+        layer_sources={
+            layer: LayerSource(
+                annotator_id=a.annotator_id, reference_kind=a.reference_kind, tool=a.tool
+            )
+            for layer, a in chosen.items()
+        },
+        uncertainty_seconds=max(a.uncertainty_seconds for a in contributors),
+        coverage=Coverage(
+            ranges=tuple(TimeRange(start=s, end=e) for s, e in ranges),
+            layers=tuple(sorted(chosen)),
         ),
         events=tuple(sorted(events, key=lambda e: (e.time, e.kind))),
         instrument_events=tuple(sorted(hits, key=lambda e: (e.time, e.label))),

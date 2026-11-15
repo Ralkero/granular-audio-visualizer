@@ -121,6 +121,7 @@ def corpus_main(args, parser):
             config=config,
             final=args.final,
             allow_unreviewed=args.allow_unreviewed,
+            dataset=args.dataset,
         )
     except ValueError as exc:
         parser.error(str(exc))
@@ -152,8 +153,9 @@ def main(argv=None):
     parser.add_argument("--corpus", help="Evaluate a real-music corpus manifest instead")
     parser.add_argument("--corpus-split", choices=["train", "validation", "test"])
     parser.add_argument(
-        "--annotator", default="consensus", help="Annotator id, or 'consensus' (default)"
+        "--annotator", default="auto", help="Annotator id, or 'auto': best tier per layer"
     )
+    parser.add_argument("--dataset", help="Corpus mode: only recordings of this dataset")
     parser.add_argument("--final", action="store_true", help="Required to score the test split")
     parser.add_argument(
         "--allow-unreviewed", action="store_true", help="Also use non-reviewed annotations"

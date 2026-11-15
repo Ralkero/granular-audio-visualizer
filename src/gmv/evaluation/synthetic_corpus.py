@@ -42,7 +42,8 @@ def fixture_annotation(fixture, recording, annotator_id="synthetic-truth"):
         annotator_id=annotator_id,
         tool="synthetic_fixture",
         provenance="Exact synthesis positions of an original procedural CC0 fixture",
-        status="reviewed",
+        status="automatic",
+        reference_kind="dataset_annotation",
         uncertainty_seconds=0.001,
         coverage=Coverage(
             ranges=(TimeRange(start=0, end=recording.duration_s),), layers=tuple(layers)

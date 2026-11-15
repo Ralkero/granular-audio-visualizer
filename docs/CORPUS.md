@@ -23,7 +23,18 @@ Committed (`corpus/`):
 
 Never committed: audio, stems, file paths, file names, titles and artist names. The location of each file on your machine is stored in `corpus-local/paths.json`, which is git-ignored along with common audio extensions. Choose `group_id` and `tags` values that you are comfortable publishing (for example `album-03`, not the album title).
 
-## Adding a recording
+## Adding recordings from a research dataset (no manual work)
+
+The normal way to build the corpus. See [DATASETS.md](DATASETS.md) for the datasets, their licences and what each provides.
+
+```powershell
+gmv corpus datasets
+gmv corpus import-dataset mdbdrums "E:\datasets\MDBDrums"
+```
+
+The import registers every track, its stems, the artist group and split, writes the references and validates the result. For open datasets the manifest also records the dataset name and its public track identifier.
+
+## Adding a single recording by hand (optional)
 
 ```powershell
 gmv corpus register "D:\Music\track.flac" --source-kind owned_local `
@@ -41,7 +52,7 @@ Registration hashes the file and reads its header; it does not copy or modify it
 
 ## Splits and leakage protection
 
-- Splits are `train`, `validation` and `test`, assigned **per group**, never per segment. A group is the unit that must not straddle splits: an album, a recording session, one dataset song with its alternate versions.
+- Splits are `train`, `validation` and `test`, assigned **per group**, never per segment. A group is the unit that must not straddle splits: an album, a recording session, or — for imported datasets — the artist, shared across all datasets because several of them reuse the same source recordings.
 - The manifest is invalid, and cannot be loaded, if any group appears in more than one split.
 - `gmv corpus assign-splits` assigns only groups that are still `unassigned`, in a deterministic order derived from a seed, each to the split furthest below its target share (default 60/20/20). Existing assignments never move, so adding recordings later cannot shift a recording between splits. A recording added to an existing group inherits that group's split.
 - `test` is the held-out set. The evaluation command refuses to score it without `--final`, and stamps the report when it does. Do not tune against it.
@@ -59,4 +70,18 @@ Tags describe musical conditions so results can be broken down by them. Suggeste
 
 ## Current contents
 
-The committed manifest is empty. Real-music evaluation is **pending** until recordings are registered, annotated and reviewed.
+See the [Phase 1.2 report](PHASE1_2_REPORT.md) for what is currently registered and evaluated.
+
+## Reference tiers
+
+Every annotation file states where its content came from (`reference_kind`), and every number in a report names the tier it rests on.
+
+| Tier | Meaning | Counts as reference? |
+|---|---|---|
+| `human_annotation` | A person labelled it (Audacity workflow) | yes, once marked `reviewed` |
+| `dataset_annotation` | Shipped with a research dataset | yes |
+| `stem_derived` | Measured from the dataset's own isolated, time-aligned stems (activity from stem energy) | yes, reported separately from the two above |
+| `pseudo_label` | Produced by an algorithm from the mix | **never** |
+| `model_prediction` | Output of a separation or detection model | **never** |
+
+When a recording has several references, evaluation takes the best available tier for each layer (human, then dataset, then stem-derived) and records which was used. The output of the detector being evaluated, or of any separation model, is never accepted as reference. Where a dataset has stems but no attacks, onsets or beats, those classes are reported as not annotated; nothing is invented to fill them.

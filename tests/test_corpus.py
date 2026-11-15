@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from gmv import cli
 from gmv.corpus import audacity, registry, stems
 from gmv.corpus.cli import validate_corpus
-from gmv.corpus.compare import compare, consensus
+from gmv.corpus.compare import combine, compare, consensus
 from gmv.corpus.intervals import intersect, merge, rasterize
 from gmv.corpus.schema import (
     Activity,
@@ -143,15 +143,71 @@ def test_audacity_rejects_bad_files(tmp_path):
         audacity.import_folder(tmp_path, rec, "a")
 
 
-def test_stem_activity_finds_gated_regions_and_is_only_a_draft():
+def test_stem_activity_is_its_own_reference_tier():
     spans = stems.activity_intervals(tone(gate=[(0.5, 1.5), (2.5, 3.5)]), RATE)
     assert len(spans) == 2
     for (start, end), (want_start, want_end) in zip(spans, [(0.5, 1.5), (2.5, 3.5)], strict=True):
         assert abs(start - want_start) < 0.05 and abs(end - want_end) < 0.05
     assert stems.activity_intervals(np.zeros((RATE, 2), dtype=np.float32), RATE) == []
-    draft = stems.draft(recording(), {"bass": (tone(gate=[(1, 2)]), RATE)})
-    assert draft.status == "machine_draft" and not draft.usable_as_reference
-    assert draft.coverage.layers == ("activity.bass",) and draft.activity[0].label == "bass"
+    derived = stems.reference(
+        recording(),
+        {"bass": (tone(gate=[(1, 2)]), RATE), "drums": (tone(gate=[(0, 1)]), RATE)},
+        uncertain=("drums",),
+    )
+    assert derived.reference_kind == "stem_derived" and derived.usable_as_reference
+    assert derived.coverage.layers == ("activity.bass", "activity.drums")
+    assert {a.label: a.certainty for a in derived.activity} == {
+        "bass": "certain",
+        "drums": "uncertain",
+    }
+
+
+def test_only_real_reference_tiers_are_usable_and_best_tier_wins_per_layer():
+    rec = recording()
+    human = annotation(
+        rec, "me", layers=("activity.bass",), activity=(Activity(start=0, end=1, label="bass"),)
+    )
+    dataset = annotation(
+        rec,
+        "dataset",
+        status="automatic",
+        layers=("activity.bass", "activity.drums", "beat"),
+        activity=(
+            Activity(start=2, end=3, label="bass"),
+            Activity(start=0, end=4, label="drums"),
+        ),
+        events=(MixEvent(time=1, kind="beat"),),
+    ).model_copy(update={"reference_kind": "dataset_annotation"})
+    stem = stems.reference(
+        rec, {"drums": (tone(gate=[(1, 2)]), RATE), "vocals": (tone(gate=[(1, 2)]), RATE)}
+    )
+    for kind in ("pseudo_label", "model_prediction"):
+        assert not dataset.model_copy(update={"reference_kind": kind}).usable_as_reference
+    assert not human.model_copy(update={"status": "in_progress"}).usable_as_reference
+    merged = combine(
+        [stem, dataset, human, dataset.model_copy(update={"reference_kind": "pseudo_label"})]
+    )
+    kinds = {layer: merged.source_of(layer).reference_kind for layer in merged.coverage.layers}
+    assert kinds == {
+        "activity.bass": "human_annotation",
+        "activity.drums": "dataset_annotation",
+        "activity.vocals": "stem_derived",
+        "beat": "dataset_annotation",
+    }
+    assert [(a.start, a.end) for a in merged.activity if a.label == "bass"] == [(0, 1)]
+    assert [(a.start, a.end) for a in merged.activity if a.label == "drums"] == [(0, 4)]
+    assert merged.reference_kind == "combined" and merged.usable_as_reference
+    with pytest.raises(ValueError, match="No usable"):
+        combine([dataset.model_copy(update={"reference_kind": "model_prediction"})])
+
+
+def test_dataset_identity_is_only_allowed_for_open_datasets():
+    with pytest.raises(ValidationError, match="open datasets"):
+        recording(dataset="musdb18hq", dataset_track_id="x")
+    kept = Recording(
+        **{**recording().model_dump(), "source_kind": "open_dataset", "dataset": "musdb18hq"}
+    )
+    assert kept.dataset == "musdb18hq"
 
 
 def test_compare_and_consensus_keep_disagreements_out():
@@ -210,7 +266,9 @@ def test_cli_register_split_label_validate_flow(tmp_path, capsys):
     run(tmp_path, "draft-from-stems", rid)
     capsys.readouterr()
     problems, warnings = validate_corpus(manifest_path)
-    assert problems == [] and any("machine_draft" in w for w in warnings)
+    assert problems == [] and not any("not reference" in w for w in warnings)
+    derived = registry.load_annotation(registry.annotation_path(manifest_path, rid, "stem-energy"))
+    assert derived.reference_kind == "stem_derived" and derived.usable_as_reference
     run(tmp_path, "export-labels", rid, "--annotator", "stem-energy", "--out", str(tmp_path / "l"))
     run(tmp_path, "import-labels", rid, str(tmp_path / "l"), "--annotator", "me")
     run(tmp_path, "review", rid, "--annotator", "me")

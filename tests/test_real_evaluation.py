@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from gmv.corpus import registry
+from gmv.corpus import registry, stems
 from gmv.corpus.schema import CorpusManifest, MixEvent, Recording
 from gmv.evaluation import run as evaluation_run
 from gmv.evaluation.corpus import generate
@@ -149,12 +149,12 @@ def test_unusable_recordings_are_skipped_with_reasons(tmp_path):
         tmp_path, fixture("isolated_bass")
     )
     registry.save_annotation(
-        manifest_path, annotation.model_copy(update={"status": "machine_draft"})
+        manifest_path, annotation.model_copy(update={"reference_kind": "pseudo_label"})
     )
     report = evaluate_corpus(manifest_path, "validation")
     assert report["real_music_status"] == "pending"
     assert report["skipped"] == [
-        {"recording_id": recording.recording_id, "reason": "annotations not reviewed"}
+        {"recording_id": recording.recording_id, "reason": "no usable reference annotation"}
     ]
     assert "pending" in render_markdown(
         {**report, "detector": "candidate", "code_commit": "0" * 40}
@@ -229,3 +229,65 @@ def test_legacy_single_file_import_still_validates(tmp_path):
     path.write_text(json.dumps({**manifest, "permission_verified": False}), encoding="utf-8")
     with pytest.raises(ValueError, match="permission"):
         load_import(path)
+
+
+def test_reports_say_which_reference_tier_each_number_rests_on(tmp_path):
+    item = fixture()
+    manifest_path, recording, annotation, _ = build_corpus(tmp_path, item)
+    stem_audio = {label: (audio, item.rate) for label, audio in item.stems.items()}
+    registry.save_annotation(manifest_path, stems.reference(recording, stem_audio))
+    activity_only = tuple(x for x in annotation.coverage.layers if not x.startswith("activity."))
+    registry.save_annotation(
+        manifest_path,
+        annotation.model_copy(
+            update={
+                "activity": (),
+                "coverage": annotation.coverage.model_copy(update={"layers": activity_only}),
+            }
+        ),
+    )
+    report = evaluate_corpus(manifest_path, "validation")
+    result = report["recordings"][0]
+    assert result["annotation"]["reference_kind"] == "combined"
+    assert result["onsets"]["reference_kind"] == "dataset_annotation"
+    assert result["instrument_activity"]["drums"]["reference_kind"] == "stem_derived"
+    kinds = report["aggregate"]["reference_kinds_by_layer"]
+    assert kinds["onset"] == {"dataset_annotation": 1}
+    assert kinds["activity.drums"] == {"stem_derived": 1}
+    assert report["aggregate"]["instrument_activity"]["drums"]["reference_kinds"] == [
+        "stem_derived"
+    ]
+    assert report["aggregate"]["evaluated_seconds"] == pytest.approx(recording.duration_s)
+    text = render_markdown({**report, "detector": "candidate", "code_commit": "0" * 40})
+    assert "stem_derived" in text and "Reference used per layer" in text
+
+
+def test_candidates_are_refuted_when_their_instrument_is_silent(tmp_path):
+    item = fixture("dense")
+    _, recording, annotation, _ = build_corpus(tmp_path, item)
+    silent_drums = annotation.model_copy(
+        update={"activity": tuple(a for a in annotation.activity if a.label != "drums")}
+    )
+    result = evaluate_recording(recording, silent_drums, item.audio, item.rate)
+    snare = result["candidates_vs_activity"]["snare_like_candidate"]
+    assert snare["checked_against"] == ["drums"] and snare["events"] > 0
+    assert snare["refuted_events"] == snare["events"] and snare["refuted_fraction"] == 1
+    bass = result["candidates_vs_activity"]["bass_transient_candidate"]
+    assert bass["checked_against"] == ["drums", "bass"]
+
+    real = evaluate_recording(recording, annotation, item.audio, item.rate)
+    assert real["candidates_vs_activity"]["snare_like_candidate"]["refuted_events"] == 0
+    no_activity = annotation.model_copy(
+        update={
+            "activity": (),
+            "coverage": annotation.coverage.model_copy(
+                update={
+                    "layers": tuple(
+                        x for x in annotation.coverage.layers if not x.startswith("activity.")
+                    )
+                }
+            ),
+        }
+    )
+    unchecked = evaluate_recording(recording, no_activity, item.audio, item.rate)
+    assert unchecked["candidates_vs_activity"]["snare_like_candidate"]["status"] == "not_annotated"

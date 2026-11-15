@@ -70,13 +70,11 @@ uv sync --locked --extra dev --extra evaluation
 .venv\Scripts\python.exe scripts/clock_probe.py --engine --advanced --pair-app APP.exe --seconds 600 --output local-evidence/clock.json
 ```
 
-Real-music evaluation uses a versioned corpus whose audio stays on your machine: see the [corpus specification](docs/CORPUS.md), [annotation workflow](docs/ANNOTATION.md), [evaluation methodology](docs/EVALUATION.md) and the [Phase 1.2 report](docs/PHASE1_2_REPORT.md). The corpus is currently empty, so no real-music accuracy is claimed.
+Real-music evaluation uses a versioned corpus whose audio stays on your machine: see the [corpus specification](docs/CORPUS.md), [annotation workflow](docs/ANNOTATION.md), [evaluation methodology](docs/EVALUATION.md) and the [Phase 1.2 report](docs/PHASE1_2_REPORT.md). Reference data comes from research datasets and their stems ([dataset comparison](docs/DATASETS.md)); no manual labelling is required. No real-music accuracy is claimed until a dataset has been imported and evaluated.
 
 ```powershell
-gmv corpus register PATH --source-kind owned_local --license "..." --permission-basis "..." --group GROUP
-gmv corpus assign-splits
-gmv corpus import-labels RECORDING_ID LABEL_FOLDER --annotator YOU
-gmv corpus review RECORDING_ID --annotator YOU
+gmv corpus datasets
+gmv corpus import-dataset mdbdrums "E:\datasets\MDBDrums"
 .venv\Scripts\python.exe -m gmv.evaluation.run --detector candidate --corpus corpus/manifest.json --corpus-split validation --output local-evidence/validation.json
 ```
 

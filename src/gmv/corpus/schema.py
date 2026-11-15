@@ -18,18 +18,36 @@ from pydantic import Field, model_validator
 from ..models import FrozenModel
 
 CORPUS_SCHEMA_VERSION = "1.0"
-ANNOTATION_SCHEMA_VERSION = "1.0"
+ANNOTATION_SCHEMA_VERSION = "1.1"
 
 Split = Literal["unassigned", "train", "validation", "test"]
 SourceKind = Literal["owned_local", "open_dataset", "original", "public_domain", "licensed"]
 Certainty = Literal["certain", "uncertain"]
-Status = Literal["machine_draft", "in_progress", "reviewed"]
+Status = Literal["machine_draft", "in_progress", "reviewed", "automatic"]
+# Where a reference came from. Only the first three can ever count as reference:
+#   human_annotation   a person labelled it (needs status 'reviewed')
+#   dataset_annotation shipped with a research dataset
+#   stem_derived       measured from the dataset's own isolated, aligned stems
+#   pseudo_label       produced by an algorithm from the mix (exploratory only)
+#   model_prediction   output of a separation or detection model (exploratory only)
+#   combined           per-layer mix of the reference kinds; see layer_sources
+ReferenceKind = Literal[
+    "human_annotation",
+    "dataset_annotation",
+    "stem_derived",
+    "pseudo_label",
+    "model_prediction",
+    "combined",
+]
+REFERENCE_PRIORITY = ("human_annotation", "dataset_annotation", "stem_derived")
 EventKind = Literal["onset", "beat", "downbeat", "tempo_change", "transition", "section_change"]
 Label = Literal[
     "drums",
     "kick",
     "snare",
     "cymbals",
+    "hi_hat",
+    "toms",
     "bass",
     "guitar",
     "rhythm_guitar",
@@ -46,7 +64,7 @@ EVENT_KINDS = EventKind.__args__
 LABELS = Label.__args__
 # A parent is active whenever any child is; used only for explicit roll-up reporting.
 HIERARCHY = {
-    "drums": ("kick", "snare", "cymbals"),
+    "drums": ("kick", "snare", "cymbals", "hi_hat", "toms"),
     "guitar": ("rhythm_guitar", "lead_guitar"),
     "vocals": ("vocals_clean", "vocals_harsh"),
 }
@@ -79,11 +97,17 @@ class Recording(FrozenModel):
     split: Split = "unassigned"
     tags: tuple[str, ...] = ()
     stems: dict[str, str] = Field(default_factory=dict)
+    # Public dataset identity (open datasets only); never used for personal files.
+    dataset: str | None = Field(default=None, pattern=IDENTIFIER)
+    dataset_track_id: str | None = None
+    dataset_split: str | None = None
 
     @model_validator(mode="after")
     def _check(self):
         if self.recording_id != "r-" + self.sha256[:12]:
             raise ValueError("recording_id must be 'r-' plus the first 12 hex digits of sha256")
+        if (self.dataset or self.dataset_track_id) and self.source_kind != "open_dataset":
+            raise ValueError("Dataset identity is only recorded for open datasets")
         for label, digest in self.stems.items():
             if label not in LABELS or len(digest) != 64:
                 raise ValueError(f"Invalid stem entry: {label}")
@@ -164,8 +188,14 @@ class Coverage(FrozenModel):
         return self
 
 
+class LayerSource(FrozenModel):
+    annotator_id: str
+    reference_kind: ReferenceKind
+    tool: str
+
+
 class AnnotationFile(FrozenModel):
-    annotation_schema_version: Literal["1.0"] = ANNOTATION_SCHEMA_VERSION
+    annotation_schema_version: Literal["1.0", "1.1"] = ANNOTATION_SCHEMA_VERSION
     recording_id: str = Field(pattern=r"^r-[0-9a-f]{12}$")
     recording_sha256: str = Field(pattern=SHA256)
     annotator_id: str = Field(pattern=IDENTIFIER)
@@ -173,6 +203,8 @@ class AnnotationFile(FrozenModel):
     tool_version: str = ""
     provenance: str = Field(min_length=1)
     status: Status = "in_progress"
+    reference_kind: ReferenceKind = "human_annotation"
+    layer_sources: dict[str, LayerSource] = Field(default_factory=dict)
     uncertainty_seconds: float = Field(default=0.02, gt=0, le=0.5)
     coverage: Coverage
     events: tuple[MixEvent, ...] = ()
@@ -192,7 +224,14 @@ class AnnotationFile(FrozenModel):
 
     @property
     def usable_as_reference(self):
-        return self.status == "reviewed"
+        if self.reference_kind == "human_annotation":
+            return self.status == "reviewed"
+        return self.reference_kind in ("dataset_annotation", "stem_derived", "combined")
+
+    def source_of(self, layer):
+        return self.layer_sources.get(layer) or LayerSource(
+            annotator_id=self.annotator_id, reference_kind=self.reference_kind, tool=self.tool
+        )
 
     def covers(self, layer):
         return layer in self.coverage.layers

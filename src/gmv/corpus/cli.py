@@ -49,8 +49,9 @@ def add_parser(commands):
     review.add_argument("recording_id")
     review.add_argument("--annotator", required=True)
 
-    draft = sub.add_parser("draft-from-stems", help="Draft activity intervals from stems")
-    draft.add_argument("recording_id")
+    for name in ("reference-from-stems", "draft-from-stems"):
+        derived = sub.add_parser(name, help="Derive activity reference from registered stems")
+        derived.add_argument("recording_id")
 
     check = sub.add_parser("validate", help="Check manifest, annotations and local audio")
     check.add_argument("--no-audio", action="store_true", help="Skip local file hash checks")
@@ -61,6 +62,13 @@ def add_parser(commands):
     diff.add_argument("annotator_b")
 
     sub.add_parser("status", help="What is registered, annotated and available locally")
+    sub.add_parser("datasets", help="Supported research datasets, licences and access")
+    dataset = sub.add_parser(
+        "import-dataset", help="Register a downloaded dataset and build its references"
+    )
+    dataset.add_argument("name")
+    dataset.add_argument("root", help="Folder the dataset was extracted to")
+    dataset.add_argument("--limit", type=int, help="Import at most this many new tracks")
     version = sub.add_parser("set-version", help="Set the corpus version (x.y.z)")
     version.add_argument("version")
     return parser
@@ -190,9 +198,9 @@ def draft_from_stems(args):
     found, problems = registry.resolve_stems(recording, registry.load_paths(args.manifest))
     if problems or not found:
         raise SystemExit(f"Stems unavailable: {problems or 'none registered'}")
-    annotation = stems.draft(recording, {k: registry.read_audio(p) for k, p in found.items()})
+    annotation = stems.reference(recording, {k: registry.read_audio(p) for k, p in found.items()})
     path = registry.save_annotation(args.manifest, annotation)
-    print(json.dumps({"written": str(path), "status": annotation.status}))
+    print(json.dumps({"written": str(path), "reference_kind": annotation.reference_kind}))
 
 
 def validate_corpus(manifest_path, *, check_audio=True):
@@ -236,7 +244,10 @@ def validate_corpus(manifest_path, *, check_audio=True):
             if ends and max(ends) > recording.duration_s + 0.05:
                 problems.append(f"{rid}/{path.name}: labels extend past the recording end")
             if not annotation.usable_as_reference:
-                warnings.append(f"{rid}/{path.name}: status {annotation.status}, not reference")
+                warnings.append(
+                    f"{rid}/{path.name}: {annotation.reference_kind} with status "
+                    f"{annotation.status}, not reference"
+                )
     return problems, warnings
 
 
@@ -261,16 +272,47 @@ def status(args):
         rows.append(
             {
                 "recording_id": recording.recording_id,
+                "dataset": recording.dataset,
                 "split": recording.split,
                 "group": recording.group_id,
                 "duration_s": round(recording.duration_s, 1),
                 "tags": list(recording.tags),
                 "stems": sorted(recording.stems),
                 "audio": reason or "available",
-                "annotations": {a.annotator_id: a.status for a in annotations},
+                "annotations": {
+                    a.annotator_id: {
+                        "reference_kind": a.reference_kind,
+                        "status": a.status,
+                        "usable_as_reference": a.usable_as_reference,
+                        "layers": len(a.coverage.layers),
+                    }
+                    for a in annotations
+                },
             }
         )
     print(json.dumps({"corpus_version": manifest.corpus_version, "recordings": rows}, indent=2))
+
+
+def list_datasets(args):
+    from .datasets import adapters
+
+    print(json.dumps([a.describe() for a in adapters().values()], indent=2))
+
+
+def import_dataset_cmd(args):
+    from .datasets import adapters, import_dataset
+
+    available = adapters()
+    if args.name not in available:
+        raise SystemExit(f"Unknown dataset '{args.name}'. Known: {', '.join(sorted(available))}")
+    adapter = available[args.name]
+    print(f"{adapter.title}: {adapter.audio_license}")
+    summary = import_dataset(args.manifest, adapter, args.root, limit=args.limit)
+    problems, warnings = validate_corpus(args.manifest, check_audio=False)
+    summary.update(validation_problems=problems, validation_warnings=len(warnings))
+    print(json.dumps(summary, indent=2))
+    if problems:
+        raise SystemExit(1)
 
 
 def set_version(args):
@@ -289,9 +331,12 @@ HANDLERS = {
     "export-labels": export_labels,
     "review": review,
     "draft-from-stems": draft_from_stems,
+    "reference-from-stems": draft_from_stems,
     "validate": validate,
     "compare": compare_cmd,
     "status": status,
+    "datasets": list_datasets,
+    "import-dataset": import_dataset_cmd,
     "set-version": set_version,
 }
 

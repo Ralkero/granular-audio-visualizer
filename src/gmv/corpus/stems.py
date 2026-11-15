@@ -2,9 +2,15 @@
 
 A stem is called active where its short-term RMS is above both an absolute floor and a level
 relative to that stem's own loudest passage. This is a measurement of stem energy, not a
-musical judgement: bleed, reverb tails and noise can count as activity. Drafts are therefore
-written with status ``machine_draft`` and are not usable as reference until a person has
-reviewed them and marked the annotation reviewed.
+musical judgement: bleed, reverb tails and noise can count as activity. The result is
+therefore its own reference tier, ``stem_derived``: usable as reference because it is measured
+from the dataset's isolated, time-aligned stems, but always reported separately from
+annotations supplied by a dataset or made by a person. Stems flagged as containing bleed
+are marked uncertain and are excluded from scoring.
+
+Only stems that ship with a dataset or a multitrack session qualify. The output of a
+source-separation model is a model prediction and must never be passed through here as
+reference.
 """
 
 import numpy as np
@@ -40,10 +46,16 @@ def activity_intervals(audio, rate):
     ]
 
 
-def draft(recording, stems):
-    """``stems`` maps label -> (audio, rate). Returns a machine-draft AnnotationFile."""
+def reference(recording, stems, uncertain=()):
+    """``stems`` maps label -> (audio, rate). Labels in ``uncertain`` (e.g. stems with bleed)
+    are written as uncertain. Returns a ``stem_derived`` AnnotationFile."""
     activity = [
-        Activity(start=start, end=end, label=label)
+        Activity(
+            start=start,
+            end=end,
+            label=label,
+            certainty="uncertain" if label in uncertain else "certain",
+        )
         for label, (audio, rate) in sorted(stems.items())
         for start, end in activity_intervals(audio, rate)
     ]
@@ -56,7 +68,8 @@ def draft(recording, stems):
             f"Stem RMS above max({FLOOR_DBFS:g} dBFS, stem peak {RELATIVE_DB:g} dB); "
             f"{WINDOW_S * 1000:g} ms window; gaps under {JOIN_GAP_S:g} s joined"
         ),
-        status="machine_draft",
+        status="automatic",
+        reference_kind="stem_derived",
         uncertainty_seconds=WINDOW_S,
         coverage=Coverage(
             ranges=(TimeRange(start=0, end=recording.duration_s),),
@@ -64,3 +77,6 @@ def draft(recording, stems):
         ),
         activity=tuple(sorted(activity, key=lambda a: (a.start, a.label))),
     )
+
+
+draft = reference  # Former name, kept for callers of the Milestone B API.

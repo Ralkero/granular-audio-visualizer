@@ -27,7 +27,9 @@ See [PHASE1_2_REPORT.md](PHASE1_2_REPORT.md).
 | A — audit and baseline | Done: baseline reproduced; stale JSON schemas regenerated with a drift test |
 | B — corpus and annotation foundation | Done: versioned manifest, group-level splits, annotation schema 1.0, Audacity workflow, stem drafts, annotator comparison, validation |
 | C — reproducible evaluation | Done: per-class corpus evaluation, interval and beat metrics, held-out guard, pending status when no data |
-| D — first real-music assessment | Blocked on registered, annotated recordings (none yet) |
-| E — targeted improvements | Not started; depends on D |
-| F — separation research and capture device checks | Not started; physical device tests still unrun |
-| G — final validation and report | Not started |
+| D1 — dataset research and selection | Done: see [DATASETS.md](DATASETS.md); manual annotation removed as a requirement |
+| D2 — dataset import and reference integration | Done: reference tiers, automatic stem-derived activity, adapters for MDB Drums, MUSDB18-HQ, MoisesDB (not yet run on real downloads) |
+| D3 — automated evaluation | Waiting for the datasets to be downloaded |
+| D4 — next detection improvements | Depends on D3 |
+| Separation research and capture device checks | Not started; physical device tests still unrun |
+| Final validation and report | Not started |

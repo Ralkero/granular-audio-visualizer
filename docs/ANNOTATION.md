@@ -1,6 +1,8 @@
-# Annotation format and workflow (annotation schema 1.0)
+# Annotation format and optional manual workflow (annotation schema 1.1)
 
-Annotations are made in [Audacity](https://www.audacityteam.org/) label tracks and imported into a versioned JSON file per recording and annotator. Nothing is uploaded anywhere.
+**Manual annotation is optional.** The corpus is normally built from research datasets and their stems with no labelling at all (see [DATASETS.md](DATASETS.md)). This document describes the annotation file format, which every reference uses, and the optional Audacity workflow for anyone who wants to add or correct labels by hand.
+
+Hand annotations are made in [Audacity](https://www.audacityteam.org/) label tracks and imported into a versioned JSON file per recording and annotator. Nothing is uploaded anywhere.
 
 ## Two kinds of ground truth
 
@@ -23,7 +25,7 @@ They are separate on purpose and are never merged.
 | `activity.<label>.txt` | regions | The instrument is sounding. Regions in different files overlap freely |
 | `hits.<label>.txt` | points | Individual attacks of that instrument (a kick hit, a snare hit, a pick attack) |
 
-Labels: `drums`, `kick`, `snare`, `cymbals`, `bass`, `guitar`, `rhythm_guitar`, `lead_guitar`, `vocals`, `vocals_clean`, `vocals_harsh`, `other_harmonic`, `ambient`, `other`, `unknown`. Parents and children (`drums` ⊃ `kick`/`snare`/`cymbals`, `guitar` ⊃ `rhythm_guitar`/`lead_guitar`, `vocals` ⊃ `vocals_clean`/`vocals_harsh`) are separate layers; annotate at whatever level you can hear reliably.
+Labels: `drums`, `kick`, `snare`, `cymbals`, `hi_hat`, `toms`, `bass`, `guitar`, `rhythm_guitar`, `lead_guitar`, `vocals`, `vocals_clean`, `vocals_harsh`, `other_harmonic`, `ambient`, `other`, `unknown`. Parents and children (`drums` ⊃ `kick`/`snare`/`cymbals`/`hi_hat`/`toms`, `guitar` ⊃ `rhythm_guitar`/`lead_guitar`, `vocals` ⊃ `vocals_clean`/`vocals_harsh`) are separate layers; annotate at whatever level you can hear reliably.
 
 A full-mix onset is not an instrument attack. A kick, a crash and a vocal entrance at the same instant are **one** label in `onset.txt` and one label each in `hits.kick.txt`, `hits.cymbals.txt` and (as a region start) `activity.vocals_clean.txt`. A kick is not automatically a beat, and a beat needs no kick: `beat.txt` is the pulse, `hits.kick.txt` is the drum.
 
@@ -49,7 +51,7 @@ gmv corpus validate
 gmv corpus review r-0123456789ab --annotator jm
 ```
 
-Only annotations with status `reviewed` are used as reference. Importing again replaces that annotator's file and resets it to `in_progress`.
+A human annotation is used as reference only once its status is `reviewed`. Importing again replaces that annotator's file and resets it to `in_progress`.
 
 To edit later, write the stored annotation back out as label files, import them into Audacity (**File ▸ Import ▸ Labels…**), edit, export and import again:
 
@@ -57,11 +59,11 @@ To edit later, write the stored annotation back out as label files, import them 
 gmv corpus export-labels r-0123456789ab --annotator jm --out "D:\labels\r-0123456789ab"
 ```
 
-## Drafts from stems (multitrack recordings)
+## Reference from stems (multitrack recordings)
 
-When a recording was registered with stems, `gmv corpus draft-from-stems <id>` writes activity intervals for each stem under the annotator id `stem-energy`. A stem counts as active where its 50 ms RMS exceeds both −60 dBFS and 40 dB below that stem's loudest passage; gaps under 0.2 s are joined.
+Dataset imports do this automatically. For a recording registered by hand with stems, `gmv corpus reference-from-stems <id>` writes activity intervals for each stem under the annotator id `stem-energy`. A stem counts as active where its 50 ms RMS exceeds both −60 dBFS and 40 dB below that stem's loudest passage; gaps under 0.2 s are joined.
 
-This is a measurement of stem energy, not a judgement. Bleed, reverb tails and noise count as activity, and a stem named "other" says nothing about which instrument is in it. The draft has status `machine_draft` and is **not** used as reference. To use it, export it to label files, check and correct it in Audacity against the audio, import it under your own annotator id, and mark it reviewed.
+This is a measurement of stem energy, not a judgement. Bleed, reverb tails and noise count as activity, and a stem named "other" says nothing about which instrument is in it. The result is its own reference tier, `stem_derived`: it is used as reference without review, and is always reported separately from dataset-provided and human annotations. Stems flagged as containing bleed are marked uncertain and excluded from scoring. Only stems that ship with a dataset or a multitrack session qualify; the output of a source-separation model is a model prediction and is never reference. A human annotation of the same layer, once reviewed, takes precedence.
 
 ## More than one annotator
 
@@ -75,4 +77,18 @@ The comparison lists, per shared layer, how many point labels agree within toler
 
 ## File format
 
-`corpus/annotations/<recording_id>/<annotator_id>.json`, validated against [AnnotationFile.json](schemas/AnnotationFile.json): schema version, recording id and audio hash, annotator id, tool and tool version, provenance, status, timing uncertainty, coverage (time ranges and layers), `events` (full-mix), `instrument_events` (point attacks) and `activity` (regions), each with a certainty and an optional intensity (0–1). Intensity and free-text notes can be added by editing the JSON; the Audacity round trip does not carry them.
+`corpus/annotations/<recording_id>/<annotator_id>.json`, validated against [AnnotationFile.json](schemas/AnnotationFile.json): schema version, recording id and audio hash, annotator id, tool and tool version, provenance, `reference_kind`, status, timing uncertainty, coverage (time ranges and layers), `events` (full-mix), `instrument_events` (point attacks) and `activity` (regions), each with a certainty and an optional intensity (0–1). Intensity and free-text notes can be added by editing the JSON; the Audacity round trip does not carry them.
+
+## Reference tiers
+
+Every annotation file states where its content came from (`reference_kind`), and every number in a report names the tier it rests on.
+
+| Tier | Meaning | Counts as reference? |
+|---|---|---|
+| `human_annotation` | A person labelled it (Audacity workflow) | yes, once marked `reviewed` |
+| `dataset_annotation` | Shipped with a research dataset | yes |
+| `stem_derived` | Measured from the dataset's own isolated, time-aligned stems (activity from stem energy) | yes, reported separately from the two above |
+| `pseudo_label` | Produced by an algorithm from the mix | **never** |
+| `model_prediction` | Output of a separation or detection model | **never** |
+
+When a recording has several references, evaluation takes the best available tier for each layer (human, then dataset, then stem-derived) and records which was used. The output of the detector being evaluated, or of any separation model, is never accepted as reference. Where a dataset has stems but no attacks, onsets or beats, those classes are reported as not annotated; nothing is invented to fill them.

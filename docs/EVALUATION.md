@@ -5,7 +5,7 @@ Two kinds of evaluation exist and their results are never combined. Every report
 | | Synthetic | Real corpus |
 |---|---|---|
 | Material | 13 procedural CC0 fixtures per split, generated in code | Recordings registered in `corpus/manifest.json`, audio local only |
-| Reference | Exact synthesis positions | Reviewed annotation files (see [ANNOTATION.md](ANNOTATION.md)) |
+| Reference | Exact synthesis positions | Dataset annotations, stem-derived activity, or reviewed human annotations (see [DATASETS.md](DATASETS.md), [ANNOTATION.md](ANNOTATION.md)) |
 | Splits | `development`, `holdout` | `train`, `validation`, `test` (held out), by recording group |
 | `data_kind` | `synthetic` | `real_corpus` |
 | What it shows | Whether the detector solves a controlled attack-detection problem | How the engine behaves on actual music |
@@ -27,7 +27,7 @@ A synthetic score is not evidence of real-music accuracy.
   --corpus-split test --final --output local-evidence/test.json
 ```
 
-Options: `--annotator ID` uses one annotator; the default `consensus` uses the single reviewed annotation, or the consensus of two. `--allow-unreviewed` also uses drafts and is stamped in the report; do not quote such results as measurements. `--beat-phase` enables the experimental beat tracker.
+Options: `--dataset NAME` restricts the run to one imported dataset. `--annotator ID` uses one annotation file; the default `auto` takes the best reference tier per layer (human-reviewed, then dataset-provided, then stem-derived; two reviewed human annotators are first reduced to their consensus). `--allow-unreviewed` also admits drafts and exploratory labels and is stamped in the report; do not quote such results as measurements. `--beat-phase` enables the experimental beat tracker.
 
 Reports go to `local-evidence/` (ignored) by default because they contain per-recording detail. Commit a report only if it contains nothing you would not publish.
 
@@ -47,9 +47,13 @@ Only annotated layers are scored, and only inside the annotation's covered time 
 | Beats | `beat` | `beat_observed` (and `beat_prediction` when the experimental tracker is on), scored separately | F-measure at ±70 ms, continuity (CMLc/CMLt/AMLc/AMLt), estimated-to-reference tempo ratio and metrical level (same / half-time / double-time / other) |
 | Downbeats | `downbeat` | none | reported as `no_detector_output` with reference counts |
 | Tempo | `tempo` | per-frame tempo estimate | strict (±4%) and octave-tolerant accuracy per annotated tempo span, time to a stable estimate |
-| Instrument attacks | `hits.<label>` | none per instrument | reported as `no_detector_output`; see candidates below |
+| Instrument attacks | `hits.<label>` | none per instrument | reported as `no_detector_output`, plus **recall of the full-mix onset detector on those attacks** (every annotated attack is an acoustic onset; precision is not measurable when other instruments' onsets are unannotated); see candidates below |
 | Band-ratio candidates | `hits.kick`/`hits.bass`, `hits.snare`, `hits.cymbals` | `bass_transient_candidate`, `snare_like_candidate`, `high_frequency_percussion_candidate` | each candidate scored against the attacks it is compared with, plus a coincidence table showing which annotated attacks each candidate actually fires on |
 | Instrument activity | `activity.<label>` | none | reported as `no_detector_output` with reference active seconds; when a detector supplies intervals: frame-level precision, recall, F1, IoU, false-positive and false-negative rates, entrance and exit timing error |
+
+**Candidates against activity.** Where only instrument activity is known, each candidate is checked against the instruments its name suggests (for example `snare_like_candidate` against drums and snare activity). An event fired while none of them is sounding within 50 ms is *refuted*. The refuted fraction is a lower bound on false positives; an active instrument does not confirm the event, so this is not an accuracy.
+
+**Reference tier.** Each scored class carries the `reference_kind` it was scored against, and the report summarises tiers per layer. Stem-derived activity is never presented as annotated ground truth.
 
 The candidates are uncalibrated frequency-band ratios. Comparing them with instrument attacks measures how misleading it would be to read them as instruments; it does not make them instrument detectors.
 
