@@ -70,4 +70,14 @@ uv sync --locked --extra dev --extra evaluation
 .venv\Scripts\python.exe scripts/clock_probe.py --engine --advanced --pair-app APP.exe --seconds 600 --output local-evidence/clock.json
 ```
 
-See [capture test matrix and authorized local-import format](docs/CAPTURE_VALIDATION.md), [schema 1.1 / replay / stale-event policy](docs/SCHEMA.md), and [isolated Demucs benchmark](experiments/separation/README.md). Demucs is an offline research experiment: overlap throughput, latency, synthetic quality and unresolved weight licensing did not justify live integration. The control center distinguishes observed/candidate/predicted/delayed events, reports separate losses and helper resources, and shows pending hardware checks. Raw recording stays off.
+Real-music evaluation uses a versioned corpus whose audio stays on your machine: see the [corpus specification](docs/CORPUS.md), [annotation workflow](docs/ANNOTATION.md), [evaluation methodology](docs/EVALUATION.md) and the [Phase 1.2 report](docs/PHASE1_2_REPORT.md). The corpus is currently empty, so no real-music accuracy is claimed.
+
+```powershell
+gmv corpus register PATH --source-kind owned_local --license "..." --permission-basis "..." --group GROUP
+gmv corpus assign-splits
+gmv corpus import-labels RECORDING_ID LABEL_FOLDER --annotator YOU
+gmv corpus review RECORDING_ID --annotator YOU
+.venv\Scripts\python.exe -m gmv.evaluation.run --detector candidate --corpus corpus/manifest.json --corpus-split validation --output local-evidence/validation.json
+```
+
+See [capture test matrix and legacy single-file import format](docs/CAPTURE_VALIDATION.md), [schema 1.1 / replay / stale-event policy](docs/SCHEMA.md), and [isolated Demucs benchmark](experiments/separation/README.md). Demucs is an offline research experiment: overlap throughput, latency, synthetic quality and unresolved weight licensing did not justify live integration. The control center distinguishes observed/candidate/predicted/delayed events, reports separate losses and helper resources, and shows pending hardware checks. Raw recording stays off.

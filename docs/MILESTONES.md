@@ -17,3 +17,17 @@ Subsequent hardening added opt-in duration-capped debug recording, startup-error
 ## Next development increment
 
 Keep the visualization engine out of scope until capture reliability and schema behavior are exercised on real music. First run Spotify through both system and process capture, verify paused/quiet periods and app restart, then physically switch/disconnect outputs with user participation. Build an annotated fixture corpus and measure musical detection errors. For advanced work, benchmark a separately installed CPU Demucs environment on short authorized excerpts, measuring realtime factor, RAM, chunk boundaries and timestamp alignment before considering any default-enabled model. Retain the current lightweight HPSS option as a clearly labeled spectral diagnostic.
+
+## Phase 1.2 (in progress)
+
+See [PHASE1_2_REPORT.md](PHASE1_2_REPORT.md).
+
+| Milestone | Status |
+|---|---|
+| A — audit and baseline | Done: baseline reproduced; stale JSON schemas regenerated with a drift test |
+| B — corpus and annotation foundation | Done: versioned manifest, group-level splits, annotation schema 1.0, Audacity workflow, stem drafts, annotator comparison, validation |
+| C — reproducible evaluation | Done: per-class corpus evaluation, interval and beat metrics, held-out guard, pending status when no data |
+| D — first real-music assessment | Blocked on registered, annotated recordings (none yet) |
+| E — targeted improvements | Not started; depends on D |
+| F — separation research and capture device checks | Not started; physical device tests still unrun |
+| G — final validation and report | Not started |

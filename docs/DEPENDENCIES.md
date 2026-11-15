@@ -9,6 +9,8 @@
 | PySide6 Essentials | Desktop controls and diagnostic meters | QtCore/Gui/Widgets only; LGPL/GPL/commercial options. Preserve licensing notices and relinking rights in future distribution. |
 | psutil / pycaw | Resource metrics / read-only Windows endpoint/session discovery | BSD / MIT; pycaw depends on comtypes. Never call setters for volume or routing. |
 | NAudio.Wasapi 3.3.0 / .NET 9 | Optional native API bridge for application capture | MIT; pinned NuGet lock. Small C# console helper, bounded 16-packet transfer queue, binary stdout. .NET runtime required only for this source. |
+| mir_eval 0.8.2 | Evaluation only (`evaluation`/`dev` extras): one-to-one event matching and beat continuity | MIT; pinned; never imported by capture or the live pipeline. |
+| Audacity | External annotation editor (not a dependency) | GPL application used by the annotator; the project only reads and writes its label text files. |
 | Librosa | Considered, not a Tier A dependency | ISC, useful offline algorithms; extra runtime/JIT dependencies unnecessary for basic features. |
 | Demucs | Investigate after immediate pipeline validation | MIT code; original Meta repository archived, successor limited maintenance. Torch/model downloads and CPU cost unsuitable as a mandatory dependency. Check each weight license before shipping. |
 | Essentia | Not selected | AGPL/commercial and model-specific licensing; Windows installation and redistribution need separate evaluation. |

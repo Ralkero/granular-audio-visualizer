@@ -48,3 +48,7 @@ Events declare `provenance` (mixed_signal_heuristic, harmonic_percussive_proxy, 
 Advanced work is generation-tagged. New source formats, segments, gaps and queue overflow invalidate in-flight results; shutdown discards pending work. The compute thread cannot publish old-generation results after invalidation. Queues remain bounded; skipped blocks and discarded results are separate diagnostics.
 
 Replay supports committed 1.0 fixtures and 1.1 logs, preserves original evidence/detection times and relationships, schedules original publication spacing, sets replayed=true, stores original_published_monotonic and assigns new publication sequence/time. Replay age_at_publication_ms is null; original capture_to_publish_ms is historical. Never infer capture latency from a replay arrival.
+
+## Related schemas
+
+The JSON schema files in `docs/schemas/` are generated from the models (`python -m gmv.schema_export`; a test fails when they drift). Reference annotations for evaluation use a separate, versioned schema that is not part of the live message contract: see [CORPUS.md](CORPUS.md) and [ANNOTATION.md](ANNOTATION.md).

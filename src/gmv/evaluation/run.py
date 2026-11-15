@@ -3,42 +3,19 @@ import hashlib
 import json
 import subprocess
 from pathlib import Path
-from time import perf_counter
 import numpy as np
 import soundfile as sf
-from gmv.dsp import Analyzer, WindowAssembler
 from gmv.models import AnalysisConfig
-from gmv.sources.base import AudioBlock
-from .baseline_dsp import Analyzer as BaselineAnalyzer
 from .corpus import CLASSES, CORPUS_VERSION, generate, Fixture
+from .detect import run_detector
 from .metrics import aggregate, onset_score, rhythm_score
 
 
 def evaluate(fixture, detector="baseline", config=None):
     config = config or AnalysisConfig()
-    analyzer = (BaselineAnalyzer if detector == "baseline" else Analyzer)(
-        fixture.rate, fixture.audio.shape[1], config, "evaluation", fixture.name
+    frames, events, times, _ = run_detector(
+        fixture.audio, fixture.rate, detector, config, fixture.name
     )
-    assembler = WindowAssembler(config)
-    frames, events, times = [], [], []
-    step = round(fixture.rate * config.capture_ms / 1000)
-    for pos in range(0, len(fixture.audio), step):
-        audio = fixture.audio[pos : pos + step]
-        block = AudioBlock(
-            audio.astype("<f4").tobytes(),
-            len(audio),
-            fixture.rate,
-            audio.shape[1],
-            pos / fixture.rate,
-            pos / fixture.rate,
-            0,
-        )
-        for window, start, mono, _reset in assembler.push(block):
-            began = perf_counter()
-            frame, new_events = analyzer.process(window, start, mono, block, live=False)
-            times.append((perf_counter() - began) * 1000)
-            frames.append(frame)
-            events.extend(new_events)
     predictions = [e.timestamp for e in events if e.event_type == "onset"]
     scores = {str(ms): onset_score(fixture.onsets, predictions, ms / 1000) for ms in (25, 50)}
     classes = {
@@ -116,7 +93,51 @@ def load_import(manifest):
     return fixture
 
 
-def main():
+def provenance(detector):
+    return {
+        "code_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+        "detector": detector,
+        "baseline_source_commit": "6d30da28242b4a34b56a221cfc6513fa9cd62bc7",
+        "detector_source_sha256": hashlib.sha256(
+            Path(__file__).with_name("baseline_dsp.py").read_bytes()
+            if detector == "baseline"
+            else Path(__file__).parents[1].joinpath("dsp.py").read_bytes()
+        ).hexdigest(),
+    }
+
+
+def corpus_main(args, parser):
+    from .real import evaluate_corpus, render_markdown
+
+    if not args.corpus_split:
+        parser.error("--corpus requires --corpus-split")
+    config = AnalysisConfig(experimental_beat_phase=args.beat_phase)
+    try:
+        result = evaluate_corpus(
+            args.corpus,
+            args.corpus_split,
+            annotator=args.annotator,
+            detector=args.detector,
+            config=config,
+            final=args.final,
+            allow_unreviewed=args.allow_unreviewed,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+    report = {**provenance(args.detector), "configuration": config.model_dump(), **result}
+    path = Path(args.output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2, allow_nan=False), encoding="utf-8")
+    if args.report_md:
+        Path(args.report_md).write_text(render_markdown(report), encoding="utf-8", newline="\n")
+    summary = {
+        key: report[key]
+        for key in ("real_music_status", "corpus_version", "split", "evaluated", "skipped")
+    }
+    print(json.dumps({"output": str(path), **summary, "aggregate": report["aggregate"]}, indent=2))
+
+
+def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--detector", choices=["baseline", "candidate"], default="baseline")
     parser.add_argument("--split", choices=["development", "holdout"], default="development")
@@ -128,7 +149,19 @@ def main():
     parser.add_argument(
         "--export-fixtures", help="Explicitly generate original synthetic WAVs and annotations"
     )
-    args = parser.parse_args()
+    parser.add_argument("--corpus", help="Evaluate a real-music corpus manifest instead")
+    parser.add_argument("--corpus-split", choices=["train", "validation", "test"])
+    parser.add_argument(
+        "--annotator", default="consensus", help="Annotator id, or 'consensus' (default)"
+    )
+    parser.add_argument("--final", action="store_true", help="Required to score the test split")
+    parser.add_argument(
+        "--allow-unreviewed", action="store_true", help="Also use non-reviewed annotations"
+    )
+    parser.add_argument("--report-md", help="Also write a Markdown summary (corpus mode)")
+    args = parser.parse_args(argv)
+    if args.corpus:
+        return corpus_main(args, parser)
     fixtures = [load_import(args.import_manifest)] if args.import_manifest else generate(args.split)
     results = []
     for fixture in fixtures:
@@ -145,14 +178,8 @@ def main():
             )
         )
     report = {
-        "code_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
-        "detector": args.detector,
-        "baseline_source_commit": "6d30da28242b4a34b56a221cfc6513fa9cd62bc7",
-        "detector_source_sha256": hashlib.sha256(
-            Path(__file__).with_name("baseline_dsp.py").read_bytes()
-            if args.detector == "baseline"
-            else Path(__file__).parents[1].joinpath("dsp.py").read_bytes()
-        ).hexdigest(),
+        **provenance(args.detector),
+        "data_kind": "real_single_import" if args.import_manifest else "synthetic",
         "corpus_version": CORPUS_VERSION,
         "split": args.split,
         "configuration": AnalysisConfig(experimental_beat_phase=args.beat_phase).model_dump(),
