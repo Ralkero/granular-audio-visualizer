@@ -2,8 +2,8 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": "1.0",
-      "default": "1.0",
+      "const": "1.1",
+      "default": "1.1",
       "title": "Schema Version",
       "type": "string"
     },
@@ -35,6 +35,52 @@
       "title": "Sequence",
       "type": "integer"
     },
+    "segment": {
+      "default": 0,
+      "title": "Segment",
+      "type": "integer"
+    },
+    "evidence_monotonic": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Evidence Monotonic"
+    },
+    "age_at_publication_ms": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Age At Publication Ms"
+    },
+    "replayed": {
+      "default": false,
+      "title": "Replayed",
+      "type": "boolean"
+    },
+    "original_published_monotonic": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Original Published Monotonic"
+    },
     "type": {
       "const": "feature_frame",
       "default": "feature_frame",
@@ -51,11 +97,6 @@
     },
     "channels": {
       "title": "Channels",
-      "type": "integer"
-    },
-    "segment": {
-      "default": 0,
-      "title": "Segment",
       "type": "integer"
     },
     "rms": {
@@ -174,6 +215,61 @@
       "default": "sample_clock",
       "title": "Timestamp Quality",
       "type": "string"
+    },
+    "analysis_rms": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Analysis Rms"
+    },
+    "analysis_weights": {
+      "default": [],
+      "items": {
+        "type": "number"
+      },
+      "title": "Analysis Weights",
+      "type": "array"
+    },
+    "measurement_semantics": {
+      "default": "raw_channel_mean_v1; analysis_fixed_power_v1",
+      "title": "Measurement Semantics",
+      "type": "string"
+    },
+    "band_flux": {
+      "default": [],
+      "items": {
+        "type": "number"
+      },
+      "title": "Band Flux",
+      "type": "array"
+    },
+    "attack_energy_ratio": {
+      "default": 0,
+      "title": "Attack Energy Ratio",
+      "type": "number"
+    },
+    "beat_locked": {
+      "default": false,
+      "title": "Beat Locked",
+      "type": "boolean"
+    },
+    "beat_phase": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Beat Phase"
     }
   },
   "required": [

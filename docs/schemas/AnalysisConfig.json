@@ -58,12 +58,32 @@
       "title": "Advanced",
       "type": "boolean"
     },
+    "experimental_beat_phase": {
+      "default": false,
+      "title": "Experimental Beat Phase",
+      "type": "boolean"
+    },
     "debug_audio_seconds": {
       "default": 0,
       "maximum": 60,
       "minimum": 0,
       "title": "Debug Audio Seconds",
       "type": "integer"
+    },
+    "analysis_channel_weights": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Analysis Channel Weights"
     }
   },
   "title": "AnalysisConfig",

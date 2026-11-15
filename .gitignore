@@ -12,3 +12,11 @@ dist/
 .separation-venv/
 .model-cache/
 separated/
+*.flac
+*.mp3
+*.m4a
+*.ogg
+*.opus
+*.aiff
+*.aif
+corpus-local/
