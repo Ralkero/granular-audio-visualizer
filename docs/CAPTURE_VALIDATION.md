@@ -16,7 +16,7 @@ Start `scripts/validate_capture.py --pid PID --pair-system --seconds 600 --outpu
 | Default output switch | User switches default output while playing; capture should reopen with a new segment | Physical test unrun on both system backends; simulated change tested in Phase One (PortAudio backend) |
 | Explicit device disconnection | User disconnects selected USB output; source must wait for that device, not broaden to another | Physical test unrun |
 | USB reconnect | User reconnects; verify timeline gap, segment reset, no synthetic transient | Physical test unrun |
-| System clock, paired 10-minute | `scripts/clock_probe.py --engine --advanced --pair-app NAME.exe --backend native` (and `portaudio`); compare timeline drift, drops, discontinuities | Observed: PortAudio 90 ms drift from nine silently lost blocks; native 0.001 ms, zero drops/discontinuities. Native run's paired application was silent; rerun with it playing is pending |
+| System clock, paired 10-minute | `scripts/clock_probe.py --engine --advanced --pair-app NAME.exe --backend native` (and `portaudio`); compare timeline drift, drops, discontinuities | Observed: PortAudio 90 ms drift from nine silently lost blocks; native 0.001 ms (paired application silent) and -0.017 ms (paired application playing, 3,618 events), zero drops/discontinuities in both |
 | 10-minute soak off/on | Repeat equivalent source/device/logging/UI settings, note content/load differences | Observed: 600 s advanced off complete; advanced on pending |
 | Failures | Inject logger writes, helper exit, slow subscriber and advanced overload; preserve boundedness | Simulated logger failure, helper launch failure and bounded subscriber tests pass; stale-worker test pending |
 

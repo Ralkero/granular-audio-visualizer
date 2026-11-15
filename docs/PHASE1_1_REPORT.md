@@ -119,12 +119,13 @@ Observed facts about endpoint loopback QPC on this device: per-packet values jit
 
 Limits of this validation, stated plainly:
 
-- One device, one 600 s run. In that run the paired application engine ran but its target produced no events (it was silent), so the second engine supplied load without signal; the PortAudio failing run had signal on both. The system mix had signal throughout (3,458 events).
-- 91 of 60,011 blocks (0.15%) were delivered back-to-back with the previous packet and ended up to 8.5 ms after their own delivery time. Events at the very end of such a block could be rejected by the fail-closed freshness check. Raising the margin to a full block removes this at the cost of about 7 ms of reported age; it was left at 3 ms.
+- One device. In the first native run (tabled above) the paired application engine ran but its target was silent (zero events), so it supplied load without signal; the system mix had signal (3,458 events).
+- **Second native run, application audibly playing** (same configuration, 600 s, continuous): timestamp-vs-arrival drift -0.017 ms (slope -0.001 ms/min); zero helper drops, WASAPI discontinuities, re-anchors and queue drops; max QPC disagreement 0.54 ms; 30,007 system frames with 3,271 events and 30,018 application frames with 3,618 events; system capture-center age p50 / p95 31.6 / 33.6 ms, application 29.4 / 31.0 ms. This matches the signal conditions of the PortAudio failing run. Two runs are still a small sample.
+- In the first native run 91 of 60,011 blocks (0.15%) were delivered back-to-back with the previous packet and ended up to 8.5 ms after their own delivery time; in the second run none did (minimum margin 2.4 ms). Events at the very end of such a block could be rejected by the fail-closed freshness check. Raising the margin to a full block removes this at the cost of about 7 ms of reported age; it was left at 3 ms.
 - The first packet after a playback pause was not separately examined for the same early-delivery effect.
 - Physical sound-to-screen latency remains unmeasured. Physical USB disconnect and default-output switching remain unrun on both backends; the native backend's reopen path is covered only by the shared endpoint-snapshot logic, not by a physical test.
 - The native backend requires the .NET helper; without it the PortAudio backend, with the defect above, is still what runs.
 
 **63 tests and Ruff pass**; native build has zero warnings. New tests cover the step/slope/outage analysis, QPC jitter tolerance, loss becoming a discontinuity without drift, signed slow skew and re-anchoring, monotonic timeline, drop/flag/format handling, lead measurement, packet validation and backend fallback. All of those are simulated; the tables above are the hardware observations.
 
-Recommended next: rerun the paired validation with the application actually playing, perform the physical device checks with the user on the native backend, then the annotated real-music corpus.
+Recommended next: perform the physical device checks with the user on the native backend, then the annotated real-music corpus.
