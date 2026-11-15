@@ -11,7 +11,7 @@ from .sources.system_native import system_audio_source
 from .sources.windows import list_output_devices
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description="Granular Music Visualizer — Phase One")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("devices")
@@ -33,7 +33,12 @@ def main():
     replay_cmd = commands.add_parser("replay")
     replay_cmd.add_argument("path")
     replay_cmd.add_argument("--speed", type=float, default=1)
-    args = parser.parse_args()
+    from .corpus import cli as corpus_cli
+
+    corpus_cli.add_parser(commands)
+    args = parser.parse_args(argv)
+    if args.command == "corpus":
+        return corpus_cli.run(args)
     if args.command == "ui":
         from .ui import main as ui_main
 

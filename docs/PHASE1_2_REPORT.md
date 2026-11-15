@@ -39,3 +39,27 @@ These match the figures reported in Phase 1.1. The holdout was only re-run to co
 | `MusicalEvent.event_type` is a free string with no registry | Noted; not changed (no schema change is justified yet) |
 
 No regression was found against the Phase 1.1 documentation.
+
+## Milestone B: corpus and annotation foundation
+
+New package `gmv.corpus` and the `gmv corpus` commands. Specification: [CORPUS.md](CORPUS.md); format and workflow: [ANNOTATION.md](ANNOTATION.md); generated schemas: [CorpusManifest.json](schemas/CorpusManifest.json), [AnnotationFile.json](schemas/AnnotationFile.json).
+
+| Capability | Implementation |
+|---|---|
+| Versioned manifest with stable ids | `corpus/manifest.json`; `recording_id` is `r-` + 12 hex digits of the file SHA-256; `corpus_version` x.y.z |
+| No audio or identifying metadata in Git | Manifest holds hashes, format, licence statement, permission basis, group, split, tags; file locations live in ignored `corpus-local/paths.json` |
+| Registration without copying audio | `gmv corpus register` hashes the file, reads its header, records optional stems by hash |
+| Recording-level splits with leakage protection | Split is a property of the group (album / session / dataset song); a manifest with one group in two splits fails to load; `assign-splits` is deterministic and never moves an existing assignment |
+| Changed or missing audio | Detected by hash on `validate` and at evaluation; reported and skipped, never substituted |
+| Annotation schema 1.0 | Full-mix `events` (onset, beat, downbeat, tempo change, transition, section change) kept apart from instrument `activity` intervals (overlapping) and `instrument_events` (point attacks); certainty per label; `unknown` label; declared coverage (time ranges and layers) so "not annotated" is never read as "absent" |
+| Provenance | Annotator id, tool, tool version, provenance text, status, timing uncertainty, audio hash, schema version in every file |
+| Local-first annotation workflow | Audacity label tracks, one file per layer; `import-labels` / `export-labels` round-trip; `review` marks an annotation usable as reference |
+| Drafts from multitrack stems | `draft-from-stems` derives activity intervals from stem RMS; written as `machine_draft` and excluded from reference until a person reviews them |
+| Annotator disagreement | One file per annotator; `compare` reports per-layer agreement and lists disagreements; consensus keeps only what both marked |
+| Validation | `gmv corpus validate` checks manifest, leakage, annotation/audio hash agreement, label bounds, stray files and local audio |
+
+Deviation from the plan: instead of an `--accept-stem-derived` evaluation flag, a stem draft becomes reference only through the ordinary import-and-`review` step under a human annotator id. That keeps one rule for what counts as reference.
+
+Tests: 9 new (schema and leakage validation, interval helpers, Audacity round trip with overlap, points, uncertainty and empty layers, malformed label files, stem drafting, comparison and consensus, the full register → split → draft → export → import → review CLI flow, and changed / missing / mismatched audio reporting). All use procedurally generated audio in temporary directories.
+
+**The committed corpus is empty.** No recording has been registered or annotated, so nothing in this milestone is a real-music result.

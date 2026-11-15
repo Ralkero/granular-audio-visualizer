@@ -1,0 +1,353 @@
+{
+  "$defs": {
+    "Activity": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "number"
+        },
+        "end": {
+          "exclusiveMinimum": 0,
+          "title": "End",
+          "type": "number"
+        },
+        "label": {
+          "enum": [
+            "drums",
+            "kick",
+            "snare",
+            "cymbals",
+            "bass",
+            "guitar",
+            "rhythm_guitar",
+            "lead_guitar",
+            "vocals",
+            "vocals_clean",
+            "vocals_harsh",
+            "other_harmonic",
+            "ambient",
+            "other",
+            "unknown"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "certainty": {
+          "default": "certain",
+          "enum": [
+            "certain",
+            "uncertain"
+          ],
+          "title": "Certainty",
+          "type": "string"
+        },
+        "intensity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Intensity"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "label"
+      ],
+      "title": "Activity",
+      "type": "object"
+    },
+    "Coverage": {
+      "additionalProperties": false,
+      "description": "What was actually annotated. Anything outside is unknown, never 'absent'.",
+      "properties": {
+        "ranges": {
+          "items": {
+            "$ref": "#/$defs/TimeRange"
+          },
+          "title": "Ranges",
+          "type": "array"
+        },
+        "layers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Layers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ranges",
+        "layers"
+      ],
+      "title": "Coverage",
+      "type": "object"
+    },
+    "InstrumentEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "minimum": 0,
+          "title": "Time",
+          "type": "number"
+        },
+        "label": {
+          "enum": [
+            "drums",
+            "kick",
+            "snare",
+            "cymbals",
+            "bass",
+            "guitar",
+            "rhythm_guitar",
+            "lead_guitar",
+            "vocals",
+            "vocals_clean",
+            "vocals_harsh",
+            "other_harmonic",
+            "ambient",
+            "other",
+            "unknown"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "certainty": {
+          "default": "certain",
+          "enum": [
+            "certain",
+            "uncertain"
+          ],
+          "title": "Certainty",
+          "type": "string"
+        },
+        "intensity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Intensity"
+        }
+      },
+      "required": [
+        "time",
+        "label"
+      ],
+      "title": "InstrumentEvent",
+      "type": "object"
+    },
+    "MixEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "minimum": 0,
+          "title": "Time",
+          "type": "number"
+        },
+        "kind": {
+          "enum": [
+            "onset",
+            "beat",
+            "downbeat",
+            "tempo_change",
+            "transition",
+            "section_change"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "certainty": {
+          "default": "certain",
+          "enum": [
+            "certain",
+            "uncertain"
+          ],
+          "title": "Certainty",
+          "type": "string"
+        },
+        "intensity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Intensity"
+        }
+      },
+      "required": [
+        "time",
+        "kind"
+      ],
+      "title": "MixEvent",
+      "type": "object"
+    },
+    "TimeRange": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "number"
+        },
+        "end": {
+          "exclusiveMinimum": 0,
+          "title": "End",
+          "type": "number"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "TimeRange",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "annotation_schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Annotation Schema Version",
+      "type": "string"
+    },
+    "recording_id": {
+      "pattern": "^r-[0-9a-f]{12}$",
+      "title": "Recording Id",
+      "type": "string"
+    },
+    "recording_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Recording Sha256",
+      "type": "string"
+    },
+    "annotator_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+      "title": "Annotator Id",
+      "type": "string"
+    },
+    "tool": {
+      "minLength": 1,
+      "title": "Tool",
+      "type": "string"
+    },
+    "tool_version": {
+      "default": "",
+      "title": "Tool Version",
+      "type": "string"
+    },
+    "provenance": {
+      "minLength": 1,
+      "title": "Provenance",
+      "type": "string"
+    },
+    "status": {
+      "default": "in_progress",
+      "enum": [
+        "machine_draft",
+        "in_progress",
+        "reviewed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "uncertainty_seconds": {
+      "default": 0.02,
+      "exclusiveMinimum": 0,
+      "maximum": 0.5,
+      "title": "Uncertainty Seconds",
+      "type": "number"
+    },
+    "coverage": {
+      "$ref": "#/$defs/Coverage"
+    },
+    "events": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/MixEvent"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "instrument_events": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/InstrumentEvent"
+      },
+      "title": "Instrument Events",
+      "type": "array"
+    },
+    "activity": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Activity"
+      },
+      "title": "Activity",
+      "type": "array"
+    },
+    "notes": {
+      "default": "",
+      "title": "Notes",
+      "type": "string"
+    }
+  },
+  "required": [
+    "recording_id",
+    "recording_sha256",
+    "annotator_id",
+    "tool",
+    "provenance",
+    "coverage"
+  ],
+  "title": "AnnotationFile",
+  "type": "object"
+}

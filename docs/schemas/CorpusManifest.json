@@ -1,0 +1,128 @@
+{
+  "$defs": {
+    "Recording": {
+      "additionalProperties": false,
+      "properties": {
+        "recording_id": {
+          "pattern": "^r-[0-9a-f]{12}$",
+          "title": "Recording Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "duration_s": {
+          "exclusiveMinimum": 0,
+          "title": "Duration S",
+          "type": "number"
+        },
+        "sample_rate": {
+          "maximum": 384000,
+          "minimum": 8000,
+          "title": "Sample Rate",
+          "type": "integer"
+        },
+        "channels": {
+          "maximum": 32,
+          "minimum": 1,
+          "title": "Channels",
+          "type": "integer"
+        },
+        "source_kind": {
+          "enum": [
+            "owned_local",
+            "open_dataset",
+            "original",
+            "public_domain",
+            "licensed"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "license": {
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        },
+        "permission_basis": {
+          "minLength": 1,
+          "title": "Permission Basis",
+          "type": "string"
+        },
+        "group_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+          "title": "Group Id",
+          "type": "string"
+        },
+        "split": {
+          "default": "unassigned",
+          "enum": [
+            "unassigned",
+            "train",
+            "validation",
+            "test"
+          ],
+          "title": "Split",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "stems": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Stems",
+          "type": "object"
+        }
+      },
+      "required": [
+        "recording_id",
+        "sha256",
+        "duration_s",
+        "sample_rate",
+        "channels",
+        "source_kind",
+        "license",
+        "permission_basis",
+        "group_id"
+      ],
+      "title": "Recording",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "corpus_schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Corpus Schema Version",
+      "type": "string"
+    },
+    "corpus_version": {
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "title": "Corpus Version",
+      "type": "string"
+    },
+    "recordings": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Recording"
+      },
+      "title": "Recordings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "corpus_version"
+  ],
+  "title": "CorpusManifest",
+  "type": "object"
+}
