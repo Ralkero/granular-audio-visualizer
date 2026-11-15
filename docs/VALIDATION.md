@@ -50,3 +50,7 @@ Reproducible CPU benchmark: `python scripts/benchmark.py --seconds 60`. A 60-sec
 - Linux/PipeWire capture implementation and validation.
 
 Private session evidence is retained locally in `sessions/`; the public-safe source and documentation do not include audio, screenshots, app identifiers, process IDs or library metadata.
+
+## 2026-11-15 addendum: system loopback clock
+
+The callback-anchored PortAudio system backend lost whole 10 ms blocks without any counter or flag when a second engine ran in the same process (90 ms in 600 s; nine blocks), which is the drift reported in Phase 1.1. A native WASAPI loopback backend with per-packet QPC checks replaced it as the default when the helper is built: in the same paired 600 s configuration its timestamp-vs-arrival drift was 0.001 ms with zero drops, discontinuities and re-anchors, and estimated capture-center age p95 was 33.8 ms. See [Milestone 7](PHASE1_1_REPORT.md) for tables and limits. This is one device and one run; the paired application was silent in the native run; physical latency and physical device changes remain unmeasured/unrun. The "Timing limits" statement above about the system backend describes the PortAudio fallback only.

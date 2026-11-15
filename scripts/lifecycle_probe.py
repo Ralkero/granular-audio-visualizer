@@ -8,7 +8,7 @@ from threading import enumerate as threads
 import psutil
 from gmv.engine import Engine
 from gmv.sources.application import ApplicationAudioSource
-from gmv.sources.windows import SystemAudioSource
+from gmv.sources.system_native import system_audio_source
 
 
 def main():
@@ -24,7 +24,7 @@ def main():
     original_children = {p.pid for p in psutil.Process().children(recursive=True)}
     rows = []
     for _ in range(args.cycles):
-        source = ApplicationAudioSource(args.pid) if args.pid else SystemAudioSource()
+        source = ApplicationAudioSource(args.pid) if args.pid else system_audio_source()
         engine = Engine(source)
         engine.start()
         sleep(args.seconds)

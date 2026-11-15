@@ -78,12 +78,17 @@ def read_exact(stream, size):
     return bytes(chunks)
 
 
-def read_packet(stream):
+def read_packet(stream, fixed_format=True):
     header = read_exact(stream, HEADER.size)
     if header is None:
         return None
     magic, size, rate, channels, sequence, qpc, flags = HEADER.unpack(header)
-    if magic != b"GMV1" or rate != 48000 or channels != 2 or not 0 < size <= 1_048_576 or size % 8:
+    format_ok = (
+        (rate == 48000 and channels == 2)
+        if fixed_format
+        else (8000 <= rate <= 384000 and 1 <= channels <= 32)
+    )
+    if magic != b"GMV1" or not format_ok or not 0 < size <= 1_048_576 or size % (4 * channels):
         raise ValueError("Invalid process-capture packet header")
     data = read_exact(stream, size)
     if data is None:

@@ -89,3 +89,42 @@ Holdout was evaluated once after that freeze. v2 F1 **0.9825** (562 TP, 0 FP, 20
 Heuristic class scores on holdout, still uncalibrated: bass candidate F1 0.994 to 0.998, snare-like 0.849 to 0.897, high-frequency 0.669 to 0.647. The high-frequency label got worse because more true onsets also tripped that ratio. It is not an instrument detector.
 
 These are original synthetic proxies. They do not show that kick, snare, cymbal, bass guitar, or vocal activity is identified in commercial music. HTDemucs stays an offline benchmark. Physical device changes and Linux capture remain open. The next useful increment is an annotated, rights-cleared recording corpus with a predeclared split, plus the still-unrun USB and default-device checks. Do not retune these gates against the current holdout.
+
+## Milestone 7: system loopback clock diagnosis and native QPC backend
+
+**Diagnosis.** `scripts/clock_probe.py` taps the blocks a system source emits and `gmv.clock_analysis` splits any divergence between delivered sample time and arrival time into sudden steps (audio that never arrived) and a smooth slope (rate mismatch). Arrival jitter only delays a block, so the per-second minimum is used as a jitter-robust envelope. Results on the Sound BlasterX G6 (48 kHz, eight channels), PortAudio backend, raw audio never saved:
+
+| Run (PortAudio callback backend) | Envelope drift | Net steps | Smooth slope | Counted drops / flags |
+|---|---:|---:|---:|---:|
+| System capture alone, 600 s (two playback pauses, 24 s) | 1.6 ms | 0 | 0.20 ms/min | 0 / 0 |
+| System + engine + delayed HPSS, 180 s (65 s paused; weak) | 1.0 ms | 0 | 0.41 ms/min | 0 / 0 |
+| System + engine + delayed HPSS **+ second engine capturing an application**, 600 s continuous | **90.0 ms** | 89.5 ms | -0.17 ms/min | 0 / 0 |
+
+The drift is lost audio, not a clock-rate mismatch: effectively all of it arrived as steps of about one 10 ms block (one of 30 ms), the residual slope was zero, and the measured delivery rate alone was 48,000.06 Hz. Nine blocks disappeared with every drop counter and callback flag at zero, so the callback-anchored sample clock kept counting as if nothing happened. Load is the trigger: the loss appeared only with a second engine in the same Python process (longest callback gap 59 ms against 14 ms alone). The Milestone 2 and 5 failures show the same signature in their saved samples (the system path produced about 70 fewer feature frames than the process path in the 1,322 ms run). This run drifted less than those; the cause of the larger earlier loss rate is not separately established. The probe reported 77 envelope steps, mostly matched late/catch-up pairs; the net loss is the nine blocks. PortAudio ADC timestamps were invalid on every callback.
+
+**Fix.** The native helper gained `ProcessLoopback system <endpoint-id|default>`: shared-mode endpoint loopback in the endpoint mix format, every packet carrying its WASAPI QPC position and a sequence number, read-only (no render stream, no routing or volume change). `gmv.sources.system_native.NativeSystemAudioSource` reads it behind the unchanged `AudioSource` contract and keeps the existing endpoint-identity and device-change reopen behaviour. Capture no longer runs on a Python callback thread. `QpcSampleClock` keeps a contiguous sample clock per run and checks it against QPC on every packet; helper sequence gaps, WASAPI discontinuity flags, format changes, or a disagreement above 10 ms re-anchor the timeline and mark a discontinuity. The signed disagreement is exposed and never clamped. `system_audio_source()` selects the native backend when the helper is built and the PortAudio backend otherwise; the control center, CLI (`--system-backend`) and validation scripts use it. The PortAudio path is unchanged.
+
+Observed facts about endpoint loopback QPC on this device: per-packet values jitter by up to about 1 ms against the sample clock, and they sit about 21 ms **ahead** of packet delivery, independent of the helper buffer length (20 ms and 100 ms gave the same lead). That may be render presentation time, but this is unverified and not claimed. Because the freshness contract rejects evidence from the future, the source measures the lead once per device open (median over the first 20 packets, about 200 ms that are not published) and subtracts it plus a 3 ms margin, so a block's end is normally at or before its delivery. The measured lead is reported in the source description.
+
+**Validation (observed).** Same paired configuration as the failing run: native system capture + engine + delayed HPSS + a second engine capturing an application, 600 s, UI off, logging on.
+
+| Measure | PortAudio backend (failing run) | Native backend |
+|---|---:|---:|
+| Timestamp-vs-arrival drift over 600 s | 90.0 ms | **0.001 ms** (slope -0.0006 ms/min) |
+| Helper sequence drops / WASAPI discontinuities / re-anchors | n/a | 0 / 0 / 0 |
+| Max QPC vs sample clock disagreement | n/a | 0.92 ms |
+| Feature frames; capture/queue drops | 29,989; 0 | 30,004; 0 |
+| Estimated capture-center age p50 / p95 (last 4,096 frames) | 118.2 / 120.0 ms | **30.6 / 33.8 ms** |
+| DSP p95 | — | 2.18 ms |
+
+Limits of this validation, stated plainly:
+
+- One device, one 600 s run. In that run the paired application engine ran but its target produced no events (it was silent), so the second engine supplied load without signal; the PortAudio failing run had signal on both. The system mix had signal throughout (3,458 events).
+- 91 of 60,011 blocks (0.15%) were delivered back-to-back with the previous packet and ended up to 8.5 ms after their own delivery time. Events at the very end of such a block could be rejected by the fail-closed freshness check. Raising the margin to a full block removes this at the cost of about 7 ms of reported age; it was left at 3 ms.
+- The first packet after a playback pause was not separately examined for the same early-delivery effect.
+- Physical sound-to-screen latency remains unmeasured. Physical USB disconnect and default-output switching remain unrun on both backends; the native backend's reopen path is covered only by the shared endpoint-snapshot logic, not by a physical test.
+- The native backend requires the .NET helper; without it the PortAudio backend, with the defect above, is still what runs.
+
+**63 tests and Ruff pass**; native build has zero warnings. New tests cover the step/slope/outage analysis, QPC jitter tolerance, loss becoming a discontinuity without drift, signed slow skew and re-anchoring, monotonic timeline, drop/flag/format handling, lead measurement, packet validation and backend fallback. All of those are simulated; the tables above are the hardware observations.
+
+Recommended next: rerun the paired validation with the application actually playing, perform the physical device checks with the user on the native backend, then the annotated real-music corpus.

@@ -10,7 +10,7 @@ from threading import enumerate as threads
 from gmv.diagnostics import ResourceMonitor, RunningStats
 from gmv.engine import Engine
 from gmv.models import AnalysisConfig
-from gmv.sources.windows import SystemAudioSource
+from gmv.sources.system_native import system_audio_source
 
 
 def main():
@@ -18,6 +18,7 @@ def main():
     parser.add_argument("--seconds", type=float, default=600)
     parser.add_argument("--pid", type=int)
     parser.add_argument("--device")
+    parser.add_argument("--system-backend", choices=("auto", "native", "portaudio"), default="auto")
     parser.add_argument("--pair-system", action="store_true")
     parser.add_argument("--advanced", action="store_true")
     parser.add_argument("--output", default="local-evidence/phase1_1/capture.json")
@@ -38,8 +39,9 @@ def main():
 
         source = ApplicationAudioSource(args.pid)
     else:
-        source = SystemAudioSource(args.device)
-    sources = [source] + ([SystemAudioSource()] if args.pid and args.pair_system else [])
+        source = system_audio_source(args.device, args.system_backend)
+    paired = args.pid and args.pair_system
+    sources = [source] + ([system_audio_source(backend=args.system_backend)] if paired else [])
     engines = [Engine(s, AnalysisConfig(advanced=args.advanced)) for s in sources]
     queues = [e.bus.subscribe(512) for e in engines]
     stats = [

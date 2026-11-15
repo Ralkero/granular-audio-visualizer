@@ -31,7 +31,8 @@ from PySide6.QtWidgets import (
 from .engine import Engine
 from .models import AnalysisConfig, FeatureFrame, MusicalEvent
 from .sources.file import FileAudioSource
-from .sources.windows import SystemAudioSource, list_output_devices
+from .sources.system_native import system_audio_source
+from .sources.windows import list_output_devices
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -271,7 +272,7 @@ class ControlCenter(QMainWindow):
             else:
                 if index == 1 and not self.devices.currentData():
                     raise ValueError("No output device selected")
-                source = SystemAudioSource(self.devices.currentData() if index == 1 else None)
+                source = system_audio_source(self.devices.currentData() if index == 1 else None)
             self.engine = Engine(
                 source, config, session_root=ROOT / "sessions", logging=self.logging.isChecked()
             )

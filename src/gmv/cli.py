@@ -7,7 +7,8 @@ from time import perf_counter
 from .engine import Engine
 from .models import AnalysisConfig
 from .sources.file import FileAudioSource
-from .sources.windows import SystemAudioSource, list_output_devices
+from .sources.system_native import system_audio_source
+from .sources.windows import list_output_devices
 
 
 def main():
@@ -17,6 +18,9 @@ def main():
     commands.add_parser("ui")
     capture = commands.add_parser("capture")
     capture.add_argument("--device")
+    capture.add_argument(
+        "--system-backend", choices=("auto", "native", "portaudio"), default="auto"
+    )
     capture.add_argument("--pid", type=int, help="Capture this application's process tree")
     capture.add_argument("--seconds", type=float, default=30)
     file = commands.add_parser("file")
@@ -63,7 +67,7 @@ def main():
         source = ApplicationAudioSource(args.pid)
     else:
         source = (
-            SystemAudioSource(args.device)
+            system_audio_source(args.device, args.system_backend)
             if args.command == "capture"
             else FileAudioSource(args.path, realtime=args.realtime)
         )

@@ -16,7 +16,7 @@ Logging is enabled by default. Audio recording is disabled. The optional debug s
 
 ## Fresh development checkout
 
-Install Python 3.14 and `uv`, then run `./Setup.ps1`. Dependency versions are pinned in `uv.lock`. For application capture, install the .NET 9 SDK and run `./Build Process Capture.ps1`; the resulting helper uses the installed .NET 9 runtime. System capture and file analysis do not require .NET. Python project metadata supports 3.11+, but this checkout was validated with 3.14.3 only.
+Install Python 3.14 and `uv`, then run `./Setup.ps1`. Dependency versions are pinned in `uv.lock`. For application capture, install the .NET 9 SDK and run `./Build Process Capture.ps1`; the resulting helper uses the installed .NET 9 runtime. System capture uses the same helper when it is built (recommended: it timestamps every packet with the Windows audio clock); without it, system capture falls back to a PortAudio backend whose timestamps drift under load. File analysis does not require .NET. Python project metadata supports 3.11+, but this checkout was validated with 3.14.3 only.
 
 ```powershell
 .venv\Scripts\python.exe -m pytest -q
@@ -36,9 +36,9 @@ Each run produces an independent session under `sessions/`: manifest, capture in
 
 ```python
 from gmv.engine import Engine
-from gmv.sources.windows import SystemAudioSource
+from gmv.sources.system_native import system_audio_source
 
-engine = Engine(SystemAudioSource())
+engine = Engine(system_audio_source())
 subscription = engine.bus.subscribe(capacity=256)
 engine.start()
 message = subscription.get(timeout=1.0)  # immutable, versioned Pydantic model
@@ -52,7 +52,7 @@ Subscribers have independent bounded queues; slow consumers lose their oldest me
 
 ## Current limitations
 
-This is an initial Phase One implementation, not a claim that every acceptance criterion has been validated. User-assisted Spotify playback, pause/resume with audible browser audio, start while paused, seek/skip and quit/restart were observed using the Sound BlasterX G6. Physical device unplug/replug, default-device switching, alternate devices and Linux capture remain unverified. The system backend showed substantial fallback-clock drift in a ten-minute run; precise synchronization remains unresolved. Process capture QPC timing was substantially steadier. Musical accuracy is validated with synthetic fixtures, not an annotated music corpus. Percussion labels and tempo are preliminary heuristics with uncalibrated confidence scores.
+This is an initial Phase One implementation, not a claim that every acceptance criterion has been validated. User-assisted Spotify playback, pause/resume with audible browser audio, start while paused, seek/skip and quit/restart were observed using the Sound BlasterX G6. Physical device unplug/replug, default-device switching, alternate devices and Linux capture remain unverified. The PortAudio system fallback silently lost audio under load and drifted; the native system backend showed no drift in one paired ten-minute run on one device (limits in the Phase 1.1 report, Milestone 7). Physical sound-to-screen latency is unmeasured. Musical accuracy is validated with synthetic fixtures, not an annotated music corpus. Percussion labels and tempo are preliminary heuristics with uncalibrated confidence scores.
 
 No Spotify login, playback routing, system volume changes, protected-content bypass, GPU or NVIDIA dependency is used. The application does not control the player. Unsupported/protected audio may yield silence. Short-term loudness is RMS dBFS, not LUFS. See [measured performance and validation](docs/VALIDATION.md) for precise scope.
 
@@ -67,6 +67,7 @@ uv sync --locked --extra dev --extra evaluation
 .venv\Scripts\python.exe -m gmv.evaluation.run --detector candidate --split development --beat-phase --output local-evidence/candidate.json
 .venv\Scripts\python.exe scripts/compare_performance.py --output local-evidence/performance.json
 .venv\Scripts\python.exe scripts/validate_capture.py --pid PID --pair-system --seconds 600 --output local-evidence/soak.json
+.venv\Scripts\python.exe scripts/clock_probe.py --engine --advanced --pair-app APP.exe --seconds 600 --output local-evidence/clock.json
 ```
 
 See [capture test matrix and authorized local-import format](docs/CAPTURE_VALIDATION.md), [schema 1.1 / replay / stale-event policy](docs/SCHEMA.md), and [isolated Demucs benchmark](experiments/separation/README.md). Demucs is an offline research experiment: overlap throughput, latency, synthetic quality and unresolved weight licensing did not justify live integration. The control center distinguishes observed/candidate/predicted/delayed events, reports separate losses and helper resources, and shows pending hardware checks. Raw recording stays off.
