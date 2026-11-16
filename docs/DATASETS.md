@@ -76,7 +76,7 @@ Each import hashes and registers every track, registers its stems, assigns the a
 | `musdb18hq` | drums, bass, vocals, other activity | `stem_derived` |
 | `moisesdb` | drums, kick, snare, toms, cymbals, hi-hat, bass, vocals, guitar, other-harmonic activity; stems flagged `has_bleed` marked uncertain; mixture rendered locally as the sum of stems | `stem_derived` |
 
-`mdbdrums` has been run against the real dataset (23 of 23 tracks imported). `musdb18hq` and `moisesdb` were written from the documented layouts and tested against miniature stand-in folders only.
+`mdbdrums` (23 of 23 tracks) and `musdb18hq` (150 of 150 tracks) have been run against the real datasets. `moisesdb` was written from the documented layout and tested against a miniature stand-in folder only.
 
 **MDB Drums cannot be split.** All 23 tracks are by one artist, so they form one group and one split. It is development material; a held-out drum set has to come from another dataset.
 

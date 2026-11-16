@@ -28,8 +28,8 @@ See [PHASE1_2_REPORT.md](PHASE1_2_REPORT.md).
 | B — corpus and annotation foundation | Done: versioned manifest, group-level splits, annotation schema 1.0, Audacity workflow, stem drafts, annotator comparison, validation |
 | C — reproducible evaluation | Done: per-class corpus evaluation, interval and beat metrics, held-out guard, pending status when no data |
 | D1 — dataset research and selection | Done: see [DATASETS.md](DATASETS.md); manual annotation removed as a requirement |
-| D2 — dataset import and reference integration | Done: reference tiers, automatic stem-derived activity, adapters for MDB Drums (verified on the real dataset), MUSDB18-HQ and MoisesDB (not yet run on real downloads) |
-| D3 — automated evaluation | Done for MDB Drums: 23 real mixes, 21.8 min; drum-attack onset recall 0.69, beat tracking effectively absent, band-ratio candidates not usable as drum classes. Development data only (one artist group) |
+| D2 — dataset import and reference integration | Done: reference tiers, automatic stem-derived activity, adapters for MDB Drums and MUSDB18-HQ (both verified on the real datasets) and MoisesDB (not yet run on a real download) |
+| D3 — automated evaluation | Done for MDB Drums: 23 real mixes, 21.8 min; drum-attack onset recall 0.69, beat tracking effectively absent, band-ratio candidates not usable as drum classes. Development data only (one artist group). MUSDB18-HQ: 150 tracks imported, train and validation (6.1 h) evaluated, test split held out; activity reference exists but the engine has no activity output |
 | D4 — next detection improvements | Done: priorities are beat tracking, onset recall with a precision reference, drum classes, instrument activity |
 | Separation research and capture device checks | Not started; physical device tests still unrun |
 | Final validation and report | Not started |

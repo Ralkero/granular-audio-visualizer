@@ -135,7 +135,7 @@ Findings that shape what can be claimed:
 
 Tests: 93 passed (82 after Milestone C; 11 new for tiers, best-tier selection, the three adapters, cross-dataset artist groups, and dataset evaluation). Ruff clean.
 
-The `mdbdrums` adapter has since been run against the real dataset (Milestone D3). The `musdb18hq` and `moisesdb` adapters have only been tested on miniature stand-in folders and are unverified against the real files.
+The `mdbdrums` and `musdb18hq` adapters have since been run against the real datasets (Milestone D3). The `moisesdb` adapter has only been tested on a miniature stand-in folder and is unverified against the real files.
 
 ## Milestone D3: first automated real-music evaluation (MDB Drums)
 
@@ -218,15 +218,42 @@ Ordered by what the measurements support.
 
 Data steps that unblock the above, none needing manual labelling: import MUSDB18-HQ (22.7 GB, open download) for drums/bass/vocals activity and the 12 heavy-metal tracks; add a rendered-multitrack adapter for onset precision; add a beat dataset with a different artist pool for a held-out rhythm set; request MoisesDB.
 
+## Milestone D3, continued: MUSDB18-HQ
+
+The owner approved downloading MUSDB18-HQ (22.66 GB, academic / non-commercial terms). It was extracted outside the repository and imported with one command.
+
+| | |
+|---|---|
+| Import | 150 of 150 tracks, 9.82 hours, 0 failed, validation clean; the real layout matched the adapter |
+| Reference | drums, bass, vocals and other activity for every track — `stem_derived`. No attacks, onsets, beats or tempo: none are annotated in this dataset |
+| Splits (by artist) | train 81 tracks / 4.78 h, validation 15 / 1.29 h, test 54 / 3.76 h. All 50 official test tracks are in test, plus 4 official train tracks whose artists also appear in the official test set |
+| Shared artist | The 13 MUSDB18-HQ tracks by the MDB Drums artist share its group and split (train) |
+| Evaluated | train and validation: 96 tracks, 363.6 minutes. **The test split was not evaluated and remains held out** |
+| Summary tables | [evaluation/musdb18hq_train.md](evaluation/musdb18hq_train.md), [evaluation/musdb18hq_validation.md](evaluation/musdb18hq_validation.md) |
+
+**Instrument activity.** Reference active time: train — drums 14,384 s, bass 14,281 s, vocals 10,873 s, other 16,047 s; validation — drums 3,580 s, bass 3,418 s, vocals 2,939 s, other 4,472 s. The engine has **no instrument-activity output**, so every class is reported as no detector output. This is now the largest block of reference the engine cannot be scored against.
+
+**Band-ratio candidates refuted by activity** (fired while none of the instruments the name suggests was sounding within 50 ms; a lower bound on false positives):
+
+| Candidate | Checked against | Train: events / refuted | Validation: events / refuted |
+|---|---|---:|---:|
+| `bass_transient_candidate` | drums, bass | 34,468 / 798 (2.3%) | 7,868 / 326 (4.1%) |
+| `snare_like_candidate` | drums | 16,281 / 1,576 (9.7%) | 6,301 / 908 (14.4%) |
+| `high_frequency_percussion_candidate` | drums | 1,881 / 203 (10.8%) | 547 / 29 (5.3%) |
+
+At least one in ten snare-like events on this material fires with no drums playing at all. The true false-positive rate is higher, because drums being active does not make an event a snare (see the MDB Drums precision of 0.41).
+
+Not broken down by genre: the importer does not yet tag MUSDB18 tracks with the genre list published by the dataset, so the 12 heavy-metal tracks are not reported separately.
+
 ## Status of the phase
 
-Done: A, B, C, D1, D2, D3 (MDB Drums), D4.
+Done: A, B, C, D1, D2, D3 (MDB Drums, MUSDB18-HQ train and validation), D4.
 
 Outstanding:
 
-- More reference material: MUSDB18-HQ and MoisesDB imports (adapters unverified on real files), a rendered-multitrack tier, a held-out beat set, MedleyDB adapter.
+- More reference material: genre tags for MUSDB18-HQ, MoisesDB import (adapter unverified on real files), a rendered-multitrack tier, a held-out beat set, MedleyDB adapter.
 - Detection work from D4: beat tracking, onset recall with a precision reference, drum classes, instrument activity.
 - Capture reliability (USB disconnect/reconnect, default-output switch on the native backend) and source-separation research: not started in this phase.
 - Final validation and report.
 
-**Real-music analysis is not validated.** What exists is a first development measurement on 21.8 minutes of real music for drum attacks and beats only, with no held-out set.
+**Real-music analysis is not validated.** What exists is a development measurement on 21.8 minutes of real music for drum attacks and beats, and stem-derived activity reference for 9.8 hours that the engine cannot yet be scored against. The MUSDB18-HQ test split (3.76 h) is reserved and untouched.
