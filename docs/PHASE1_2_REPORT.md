@@ -135,14 +135,98 @@ Findings that shape what can be claimed:
 
 Tests: 93 passed (82 after Milestone C; 11 new for tiers, best-tier selection, the three adapters, cross-dataset artist groups, and dataset evaluation). Ruff clean.
 
-**Not yet run against real downloads.** The adapters were written from the documented layouts and tested on miniature stand-in folders. Until a dataset has actually been imported, its adapter is unverified against the real files, and no real-music number exists.
+The `mdbdrums` adapter has since been run against the real dataset (Milestone D3). The `musdb18hq` and `moisesdb` adapters have only been tested on miniature stand-in folders and are unverified against the real files.
+
+## Milestone D3: first automated real-music evaluation (MDB Drums)
+
+The owner approved downloading MDB Drums (CC BY-NC-SA 4.0). It was cloned to a local folder outside the repository, imported with one command and evaluated with no manual labelling. Dataset-derived manifests and annotations are kept in the ignored `corpus-data/` directory, not committed.
+
+| | |
+|---|---|
+| Material evaluated | 23 real full mixes, 21.8 minutes, 44.1 kHz stereo |
+| Genres | rock, punk, grunge, one speed-metal excerpt, jazz styles, reggae, disco, gospel, country |
+| Reference: drum attacks | 7,898 distinct attack times (kick 1,539; snare 2,654; hi-hat 2,639; cymbals 1,002; toms 90) — `dataset_annotation` |
+| Reference: beats | 2,694 beats, with downbeats — `dataset_annotation` |
+| Reference: drums activity | 1,231.8 s active, from the drum-only stem — `stem_derived` |
+| Import | 23 imported, 0 failed, validation clean; the real layout and file formats matched the adapter |
+| Split | All 23 tracks are by one artist, so they form one group and sit in one split (`train`). **This dataset cannot provide a held-out set.** These are development measurements |
+| Summary table | [evaluation/mdbdrums_v3.md](evaluation/mdbdrums_v3.md) |
+
+### Results (detector v3, default configuration)
+
+**Full-mix onset detector — recall on annotated drum attacks, ±50 ms.** Precision is not measurable here because other instruments' onsets are not annotated.
+
+| Attacks | Annotated | Detected | Recall |
+|---|---:|---:|---:|
+| All drum attacks | 7,898 | 5,455 | **0.691** |
+| Kick | 1,539 | 1,256 | 0.816 |
+| Cymbals | 1,002 | 698 | 0.697 |
+| Toms | 90 | 62 | 0.689 |
+| Hi-hat | 2,639 | 1,749 | 0.663 |
+| Snare | 2,654 | 1,714 | 0.646 |
+
+- By tolerance: 0.587 at ±25 ms, 0.691 at ±50 ms, 0.747 at ±100 ms, 0.902 at ±200 ms. Widening the window recovers little, so most misses are attacks the detector did not report at all rather than attacks it reported late.
+- Hit spacing is not the main cause: recall is 0.740 for attacks less than 120 ms after the previous one and 0.721 for attacks at least 250 ms after it.
+- Per track, recall ranges from 0.36 (free jazz) to 0.97 (80s rock). The heavier, faster styles are below average: punk 0.57, speed metal 0.62. Grunge is 0.96.
+- 85.9% of the 4,769 onset events fall within 50 ms of an annotated drum attack. The other 14.1% are either other instruments' onsets or false positives; this reference cannot tell which.
+- For comparison, the same detector scores recall 0.991 on the synthetic holdout. The synthetic fixtures overstate real-music recall by a wide margin.
+- The frozen v1 detector has higher recall on these attacks (0.751) than v3 (0.691). v3's per-band gating was selected on synthetic material. Without a precision reference it is not known whether v1's extra detections are correct, so this is a warning sign, not a verdict.
+
+**Band-ratio candidates against annotated attacks, ±50 ms.**
+
+| Candidate | Compared with | Events | Precision | Recall | F1 |
+|---|---|---:|---:|---:|---:|
+| `bass_transient_candidate` | kick | 2,607 | 0.385 | 0.652 | 0.484 |
+| `snare_like_candidate` | snare | 2,105 | 0.413 | 0.328 | 0.366 |
+| `high_frequency_percussion_candidate` | cymbals, hi-hat | 219 | 0.772 | 0.046 | 0.088 |
+
+What they actually coincide with (an event can coincide with several): of 2,607 bass-transient events, 1,043 are within 50 ms of a kick, 923 of a snare, 854 of a hi-hat, and 321 of no drum attack. Of 2,105 snare-like events, 898 are near a snare and 913 near a hi-hat. The high-frequency candidate fires on 219 events against 3,641 cymbal and hi-hat attacks. **These candidates are not usable as kick, snare or cymbal detectors on real music.** Bass-guitar attacks are not annotated, so some bass-transient "false positives" may be real bass notes.
+
+**Candidates refuted by drum activity** (fired with the drum stem silent): 0.9% of bass-transient, 1.2% of snare-like and 2.7% of high-frequency events. Drums play through most of this material, so this lower bound says little here.
+
+**Beats, ±70 ms, 2,694 annotated.**
+
+| Configuration | Events | Precision | Recall | F1 |
+|---|---:|---:|---:|---:|
+| v3 default (beat tracker off) | 0 | — | 0.000 | 0.000 |
+| v3 with the experimental beat-phase tracker, observed beats | 15 | 0.867 | 0.005 | 0.010 |
+| v3 with the experimental tracker, predicted beats | 25 | 0.880 | 0.008 | 0.016 |
+| Frozen v1 (labels onsets as beat candidates) | 1,621 | 0.382 | 0.230 | 0.287 |
+
+The engine has, in practice, no beat tracking on real music. Downbeats are annotated (dataset) and the engine has no downbeat output. Tempo was not scored: the dataset gives beats, not tempo marks.
+
+**Instrument activity.** Drums: reference available (stem-derived), no detector output. No other instrument has a reference in this dataset.
+
+**Performance.** Offline DSP p95 stayed at or below 1.6 ms per frame on every track.
+
+### What this evaluation does not show
+
+- Nothing about bass, vocals or guitars: no reference in this dataset.
+- Nothing about full-mix onset precision.
+- Little about metal: one 36-second speed-metal excerpt.
+- Not a held-out result. All tracks are one artist group and the numbers are development measurements. Nothing was tuned on them in this milestone.
+
+## Milestone D4: where detection needs to improve
+
+Ordered by what the measurements support.
+
+1. **Beat tracking is effectively absent** (recall 0.5–0.8% with the experimental tracker, none by default). A new causal beat and tempo tracker is needed; rhythm is the largest gap between what the visualizer needs and what the engine provides. Reference: MDB Drums beats for development. A held-out beat set with obtainable audio (RWC, Ballroom) is needed before any claim.
+2. **Onset recall on real drums is about 0.69**, far below the synthetic 0.99, and lowest on snare and hi-hat and on punk and speed metal. The misses are unreported attacks, not late ones. Before changing thresholds, a precision reference is required, otherwise recall can be raised simply by firing more. Options that need no labelling: exact-onset rendered multitracks (Tiny AAM, BabySlakh) as a separate "rendered" tier, and stem-based checks on MUSDB18-HQ and MoisesDB (an onset while every stem is silent is a definite false positive).
+3. **Drum-class labels need a real method.** Band-energy ratios reach F1 0.48 (kick), 0.37 (snare) and 0.09 (cymbals and hi-hat). A kick/snare/hi-hat classifier on detected onsets should be developed against MDB Drums, with ENST-Drums or MoisesDB kick and snare stems for a held-out check.
+4. **There is no instrument-activity output at all.** The reference side now exists (stem-derived drums here; drums, bass, vocals from MUSDB18-HQ; kick, snare, cymbals, guitar from MoisesDB). A first activity estimator for drums, bass and vocals is the next capability to build, and whether lightweight DSP suffices or a separation model is needed is exactly what the MUSDB18-HQ stems can decide.
+5. **v3 versus v1 on real music** should be re-examined once a precision reference exists; v3 was selected on synthetic data and loses recall on real drums.
+
+Data steps that unblock the above, none needing manual labelling: import MUSDB18-HQ (22.7 GB, open download) for drums/bass/vocals activity and the 12 heavy-metal tracks; add a rendered-multitrack adapter for onset precision; add a beat dataset with a different artist pool for a held-out rhythm set; request MoisesDB.
 
 ## Status of the phase
 
-Done: A, B, C, D1, D2. Outstanding:
+Done: A, B, C, D1, D2, D3 (MDB Drums), D4.
 
-- **D3 — automated evaluation.** Needs the selected datasets on disk. Downloading them requires the owner to accept each dataset's terms.
-- **D4 — identify the next detection improvements** from D3's measurements.
-- **Capture reliability** (USB disconnect/reconnect, default-output switch on the native backend) and **source-separation research**: not started in this phase.
+Outstanding:
 
-Real-music analysis is **not validated**.
+- More reference material: MUSDB18-HQ and MoisesDB imports (adapters unverified on real files), a rendered-multitrack tier, a held-out beat set, MedleyDB adapter.
+- Detection work from D4: beat tracking, onset recall with a precision reference, drum classes, instrument activity.
+- Capture reliability (USB disconnect/reconnect, default-output switch on the native backend) and source-separation research: not started in this phase.
+- Final validation and report.
+
+**Real-music analysis is not validated.** What exists is a first development measurement on 21.8 minutes of real music for drum attacks and beats only, with no held-out set.

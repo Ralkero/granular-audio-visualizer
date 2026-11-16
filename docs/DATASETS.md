@@ -52,7 +52,7 @@ Deferred: synthetic renderings (Tiny AAM, BabySlakh) as a separate "rendered" ti
 
 | Dataset | Train / validation | Held-out test |
 |---|---|---|
-| MDB Drums | yes | yes, by artist (small: expect a handful of tracks) |
+| MDB Drums | yes (all 23 tracks are one artist group) | **no** |
 | MUSDB18-HQ | official train tracks, divided 80/20 by artist | official test tracks plus any artist that overlaps them |
 | MoisesDB | yes, by artist (no official split) | yes, by artist |
 
@@ -65,16 +65,20 @@ gmv corpus import-dataset musdb18hq "E:\datasets\musdb18hq"
 gmv corpus import-dataset moisesdb  "E:\datasets\moisesdb"
 ```
 
+Dataset imports belong in a local corpus that is not committed. Pass `--manifest corpus-data/corpus/manifest.json` (the `corpus-data/` directory is git-ignored) so that dataset track lists and dataset-derived annotations stay on your machine; pass the same manifest to the evaluation command with `--corpus`.
+
 Each import hashes and registers every track, registers its stems, assigns the artist group and split, writes the references, and validates the corpus. It can be interrupted and run again; tracks already registered are skipped. `--limit N` imports only the first N new tracks.
 
 | Adapter | Reference written | Tier |
 |---|---|---|
-| `mdbdrums` | attacks for drums, kick, snare, hi-hat, toms, cymbals; beats; downbeats when the beat file numbers them | `dataset_annotation` |
+| `mdbdrums` | attacks for drums, kick, snare, hi-hat, toms, cymbals; beats and downbeats | `dataset_annotation` |
 | `mdbdrums` | drums activity from the drum-only stem | `stem_derived` |
 | `musdb18hq` | drums, bass, vocals, other activity | `stem_derived` |
 | `moisesdb` | drums, kick, snare, toms, cymbals, hi-hat, bass, vocals, guitar, other-harmonic activity; stems flagged `has_bleed` marked uncertain; mixture rendered locally as the sum of stems | `stem_derived` |
 
-The adapters were written from the documented layouts and tested against miniature stand-in folders. See the Phase 1.2 report for which have been run against the real downloads.
+`mdbdrums` has been run against the real dataset (23 of 23 tracks imported). `musdb18hq` and `moisesdb` were written from the documented layouts and tested against miniature stand-in folders only.
+
+**MDB Drums cannot be split.** All 23 tracks are by one artist, so they form one group and one split. It is development material; a held-out drum set has to come from another dataset.
 
 ## What still needs a person
 

@@ -35,7 +35,7 @@ from .metrics import (
 CANDIDATE_TARGETS = {
     "bass_transient_candidate": ("kick", "bass"),
     "snare_like_candidate": ("snare",),
-    "high_frequency_percussion_candidate": ("cymbals",),
+    "high_frequency_percussion_candidate": ("cymbals", "hi_hat"),
 }
 OBSERVED_BEATS = ("beat_observed", "beat_candidate")
 # Activity layers that must be sounding for a candidate to be what its name suggests.
@@ -44,7 +44,7 @@ OBSERVED_BEATS = ("beat_observed", "beat_candidate")
 CANDIDATE_ACTIVITY = {
     "bass_transient_candidate": ("drums", "kick", "bass"),
     "snare_like_candidate": ("drums", "snare"),
-    "high_frequency_percussion_candidate": ("drums", "cymbals"),
+    "high_frequency_percussion_candidate": ("drums", "cymbals", "hi_hat"),
 }
 NOT_ANNOTATED = {"status": "not_annotated"}
 
