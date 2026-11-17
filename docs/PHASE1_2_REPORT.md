@@ -245,15 +245,55 @@ At least one in ten snare-like events on this material fires with no drums playi
 
 Not broken down by genre: the importer does not yet tag MUSDB18 tracks with the genre list published by the dataset, so the 12 heavy-metal tracks are not reported separately.
 
+## Milestone E1: causal beat and tempo tracker
+
+D4's first priority. The circular-phase prototype behind `experimental_beat_phase` is replaced by a new tracker (`gmv.beat.BeatTracker`, event method `causal_beat_tracker_v1`). It is still **opt-in and off by default**: the default stream and the synthetic onset results are unchanged (development 565/0/0, holdout 577/0/5).
+
+How it works:
+
+- **Its own onset-strength signal.** The rise in log magnitude between consecutive analysis windows, averaged inside each of the seven bands and then summed, so the many high-frequency bins do not outvote the few bass bins.
+- **Tempo.** Autocorrelation of the last 6 seconds of that signal, scored at the first four multiples of each candidate beat period (60–240 BPM), with a broad preference for 120 BPM and a penalty on sudden tempo jumps.
+- **Phase.** A running cumulative score (the method of Ellis 2007 and of Stark, Davies and Plumbley's real-time tracker, reimplemented). Each beat is announced ahead of time as a `beat_prediction` event carrying the tracker's tempo in its `tempo_bpm` measurement.
+- **Gates.** No beats until 3 seconds of audio have been heard, and none unless the onset detector has reported at least 4 attacks in the last 4 seconds. This is what stops a sustained tone from producing beats.
+- `beat_observed` keeps its meaning: a detected onset within 50 ms of a predicted beat.
+- The frame field `tempo_bpm` still comes from the older autocorrelation estimate; the two are not yet unified.
+
+### Result on MDB Drums (development data, 23 tracks, 2,694 annotated beats, ±70 ms)
+
+| Configuration | Events | Precision | Recall | F1 |
+|---|---:|---:|---:|---:|
+| Previous prototype, predicted beats | 25 | 0.880 | 0.008 | 0.016 |
+| Frozen v1 (onsets labelled as beat candidates) | 1,621 | 0.382 | 0.230 | 0.287 |
+| **New tracker, predicted beats** | 2,431 | **0.726** | **0.656** | **0.689** |
+| New tracker, observed beats (onset on a predicted beat) | 1,855 | 0.762 | 0.524 | 0.621 |
+
+- Median absolute timing error of matched beats: 11 ms. Continuity, mean over tracks: CMLt 0.53, AMLt 0.67.
+- Announced a median of 247 ms before the beat (5th percentile 120 ms). The first beat comes about 3.3 s into a track, so every track's opening beats count as misses; these tracks are 13 to 125 seconds long.
+- Per track: median F1 0.81; 12 of 23 tracks at 0.8 or above; 5 below 0.4.
+- **Main failure: locking onto the off-beat.** Punk (F1 0.00) and the Beatles-style track (0.15) have the right tempo and the wrong phase (AMLt 0.89 and 0.69). Latin jazz (0.13), the Zeppelin-style track (0.26) and free jazz (0.36) are also poor.
+- Metrical level: 19 tracks at the annotated level, 2 at half time (bebop and gospel, annotated near 220 BPM), 1 at double time, 1 other.
+- Cost: offline DSP p95 stayed at or below 1.7 ms per frame per track.
+- Summary table: [evaluation/mdbdrums_beat_v1.md](evaluation/mdbdrums_beat_v1.md).
+
+### What this result does not show
+
+- **It is not a held-out result.** The onset-strength signal was chosen from six candidates, and the history length set, on these same 23 tracks. All are by one artist group.
+- **The tempo range is narrow.** 20 of the 23 tracks are annotated near 110 BPM, close to the tracker's 120 BPM preference, which flatters it. Behaviour at metal tempos is unmeasured: the only metal is one 36-second excerpt (F1 0.94, annotated near 110 BPM).
+- **Tempo changes and dense patterns are weak** on the synthetic development fixtures: tempo-change fixture precision 0.70 / recall 0.51; the dense fixture precision 0.39 / recall 0.27 at the wrong metrical level. The synthetic holdout was not run with the tracker.
+- No downbeats, bars or time signature.
+- Not yet tried on live capture.
+
+Before the tracker can be turned on by default it needs a held-out beat set from other artists and tempos (RWC or Ballroom; neither is imported), and the off-beat failure needs work.
+
 ## Status of the phase
 
-Done: A, B, C, D1, D2, D3 (MDB Drums, MUSDB18-HQ train and validation), D4.
+Done: A, B, C, D1, D2, D3 (MDB Drums, MUSDB18-HQ train and validation), D4, E1 (beat tracker, development result only).
 
 Outstanding:
 
 - More reference material: genre tags for MUSDB18-HQ, MoisesDB import (adapter unverified on real files), a rendered-multitrack tier, a held-out beat set, MedleyDB adapter.
-- Detection work from D4: beat tracking, onset recall with a precision reference, drum classes, instrument activity.
+- Detection work from D4: a held-out check and off-beat fix for the beat tracker, onset recall with a precision reference, drum classes, instrument activity.
 - Capture reliability (USB disconnect/reconnect, default-output switch on the native backend) and source-separation research: not started in this phase.
 - Final validation and report.
 
-**Real-music analysis is not validated.** What exists is a development measurement on 21.8 minutes of real music for drum attacks and beats, and stem-derived activity reference for 9.8 hours that the engine cannot yet be scored against. The MUSDB18-HQ test split (3.76 h) is reserved and untouched.
+**Real-music analysis is not validated.** What exists is a development measurement on 21.8 minutes of real music for drum attacks and beats (including an opt-in beat tracker at F1 0.69 on the data it was developed on), and stem-derived activity reference for 9.8 hours that the engine cannot yet be scored against. The MUSDB18-HQ test split (3.76 h) is reserved and untouched.

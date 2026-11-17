@@ -52,3 +52,5 @@ Replay supports committed 1.0 fixtures and 1.1 logs, preserves original evidence
 ## Related schemas
 
 The JSON schema files in `docs/schemas/` are generated from the models (`python -m gmv.schema_export`; a test fails when they drift). Reference annotations for evaluation use a separate, versioned schema that is not part of the live message contract: see [CORPUS.md](CORPUS.md) and [ANNOTATION.md](ANNOTATION.md).
+
+`beat_prediction` events (opt-in beat tracker, method `causal_beat_tracker_v1`) have a timestamp in the future of the audio analysed so far and a `tempo_bpm` measurement. `beat_observed` is a detected onset within 50 ms of a predicted beat. Frame fields `beat_locked` and `beat_phase` follow the same tracker.

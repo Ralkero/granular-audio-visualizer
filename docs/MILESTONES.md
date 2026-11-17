@@ -31,5 +31,6 @@ See [PHASE1_2_REPORT.md](PHASE1_2_REPORT.md).
 | D2 — dataset import and reference integration | Done: reference tiers, automatic stem-derived activity, adapters for MDB Drums and MUSDB18-HQ (both verified on the real datasets) and MoisesDB (not yet run on a real download) |
 | D3 — automated evaluation | Done for MDB Drums: 23 real mixes, 21.8 min; drum-attack onset recall 0.69, beat tracking effectively absent, band-ratio candidates not usable as drum classes. Development data only (one artist group). MUSDB18-HQ: 150 tracks imported, train and validation (6.1 h) evaluated, test split held out; activity reference exists but the engine has no activity output |
 | D4 — next detection improvements | Done: priorities are beat tracking, onset recall with a precision reference, drum classes, instrument activity |
+| E1 — beat and tempo tracker | Opt-in causal tracker: beat F1 0.69 on MDB Drums (was 0.016), beats announced about 250 ms ahead. Development result only; needs a held-out beat set and an off-beat fix before it is on by default |
 | Separation research and capture device checks | Not started; physical device tests still unrun |
 | Final validation and report | Not started |

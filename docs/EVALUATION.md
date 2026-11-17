@@ -44,7 +44,7 @@ Only annotated layers are scored, and only inside the annotation's covered time 
 | Class | Reference layer | Detector output today | Measures |
 |---|---|---|---|
 | Full-mix onsets | `onset` | `onset` events | TP/FP/FN, precision, recall, F1, duplicates, timing bias, median and p95 absolute error at ±25 ms, ±50 ms and ±(50 ms + annotation uncertainty); algorithmic latency |
-| Beats | `beat` | `beat_observed` (and `beat_prediction` when the experimental tracker is on), scored separately | F-measure at ±70 ms, continuity (CMLc/CMLt/AMLc/AMLt), estimated-to-reference tempo ratio and metrical level (same / half-time / double-time / other) |
+| Beats | `beat` | `beat_prediction` and `beat_observed` (both only when the opt-in beat tracker is on, `--beat-phase`), scored separately | F-measure at ±70 ms, continuity (CMLc/CMLt/AMLc/AMLt), estimated-to-reference tempo ratio and metrical level (same / half-time / double-time / other) |
 | Downbeats | `downbeat` | none | reported as `no_detector_output` with reference counts |
 | Tempo | `tempo` | per-frame tempo estimate | strict (±4%) and octave-tolerant accuracy per annotated tempo span, time to a stable estimate |
 | Instrument attacks | `hits.<label>` | none per instrument | reported as `no_detector_output`, plus **recall of the full-mix onset detector on those attacks** (every annotated attack is an acoustic onset; precision is not measurable when other instruments' onsets are unannotated); see candidates below |
