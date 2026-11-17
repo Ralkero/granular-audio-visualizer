@@ -18,7 +18,14 @@ BAND_EDGES_HZ = np.geomspace(40.0, 16000.0, 21)
 SMOOTHING_S = (0.25, 1.5)
 DEVIATION_S = 1.0
 LEVEL_S = 5.0
-FEATURE_VERSION = "activity_features_v1"
+# Pitch movement is measured on a log-frequency grid, in half-octave bands.
+PITCH_RANGE_HZ, PITCH_POINTS_PER_OCTAVE, PITCH_BAND_POINTS, PITCH_SHIFTS = (
+    (300.0, 4800.0),
+    48,
+    24,
+    3,
+)
+FEATURE_VERSION = "activity_features_v2"
 
 
 def _alpha(hop, seconds):
@@ -30,15 +37,52 @@ class FrameFeatures:
 
     def __init__(self, rate, size, hop):
         freq = np.fft.rfftfreq(size, 1 / rate)
-        edges = BAND_EDGES_HZ
-        self.masks = [(freq >= a) & (freq < b) for a, b in zip(edges, edges[1:], strict=False)]
-        self.used = [m for m in self.masks if m.any()]
-        if len(self.used) != len(self.masks):
+        # Bands are runs of neighbouring bins: starts[i] to starts[i + 1].
+        self.starts = np.searchsorted(freq, BAND_EDGES_HZ)
+        self.widths = np.diff(self.starts)
+        self.bands = len(self.widths)
+        if (self.widths <= 0).any():
             raise ValueError("Analysis window is too short for the activity bands")
         self.hop = hop
         self.previous = None
         self.level = None
-        self.count = 4 * len(self.masks) + 1
+        self.freq = freq
+        octaves = np.log2(PITCH_RANGE_HZ[1] / PITCH_RANGE_HZ[0])
+        points = round(octaves * PITCH_POINTS_PER_OCTAVE)
+        self.grid = PITCH_RANGE_HZ[0] * 2 ** (np.arange(points) / PITCH_POINTS_PER_OCTAVE)
+        self.pitch_bands = points // PITCH_BAND_POINTS
+        self.previous_grid = None
+        self.count = 6 * self.bands + 1 + 2 * self.pitch_bands
+
+    def _sums(self, values):
+        return np.add.reduceat(values, self.starts)[: self.bands]
+
+    def _peakiness(self, values):
+        top = np.maximum.reduceat(values, self.starts)[: self.bands]
+        return np.log10((top + 1e-12) / (self._sums(values) / self.widths + 1e-12))
+
+    def _pitch_movement(self, centre):
+        """Per band: how far the spectral pattern slid along log frequency since the last
+        frame (positive is upward), and how well it matched after sliding. Sung notes glide
+        and wobble; fretted and keyed notes mostly do not."""
+        grid = np.interp(self.grid, self.freq, 0.5 * np.log10(centre + 1e-12))
+        grid = grid[: self.pitch_bands * PITCH_BAND_POINTS].reshape(self.pitch_bands, -1)
+        previous, self.previous_grid = self.previous_grid, grid
+        if previous is None:
+            return np.zeros(self.pitch_bands), np.zeros(self.pitch_bands)
+        edge = PITCH_SHIFTS
+        core = grid[:, edge:-edge]
+        core = core - core.mean(axis=1, keepdims=True)
+        core_norm = np.linalg.norm(core, axis=1)
+        matches = np.empty((2 * edge + 1, self.pitch_bands))
+        for row, shift in enumerate(range(-edge, edge + 1)):
+            other = previous[:, edge + shift : previous.shape[1] - edge + shift]
+            other = other - other.mean(axis=1, keepdims=True)
+            matches[row] = (core * other).sum(axis=1) / (
+                core_norm * np.linalg.norm(other, axis=1) + 1e-12
+            )
+        best = matches.argmax(axis=0)
+        return (edge - best) / edge, matches.max(axis=0)
 
     def step(self, spectrum):
         """``spectrum``: complex array (bins, channels) of one windowed frame."""
@@ -48,7 +92,7 @@ class FrameFeatures:
             mid = np.abs(spectrum[:, 0] + spectrum[:, 1]) ** 2 / 4
         else:
             side, mid = np.zeros_like(power), power
-        energy = np.array([power[m].sum() for m in self.masks]) + 1e-12
+        energy = self._sums(power) + 1e-12
         total = float(energy.sum())
         log_energy = np.log10(energy)
         balance = log_energy - np.log10(total)
@@ -58,17 +102,32 @@ class FrameFeatures:
             else np.zeros(len(energy))
         )
         self.previous = log_energy
-        peak = np.array(
-            [np.log10((power[m].max() + 1e-12) / (power[m].mean() + 1e-12)) for m in self.masks]
-        )
-        width = np.array(
-            [side[m].sum() / (side[m].sum() + mid[m].sum() + 1e-12) for m in self.masks]
-        )
+        peak = self._peakiness(power)
+        side_energy, mid_energy = self._sums(side), self._sums(mid)
+        width = side_energy / (side_energy + mid_energy + 1e-12)
         log_total = np.log10(total)
         if self.level is None:
             self.level = log_total
         self.level += _alpha(self.hop, LEVEL_S) * (log_total - self.level)
-        return np.concatenate((balance, rise, peak, width, [log_total - self.level]))
+        # What both channels share: lead vocals, bass and the core of the drum kit sit here.
+        centre = mid * mid / (mid + side + 1e-20)
+        centre_energy = self._sums(centre) + 1e-12
+        centre_balance = np.log10(centre_energy) - np.log10(centre_energy.sum())
+        centre_peak = self._peakiness(centre)
+        shifts, matches = self._pitch_movement(centre)
+        return np.concatenate(
+            (
+                balance,
+                rise,
+                peak,
+                width,
+                [log_total - self.level],
+                centre_balance,
+                centre_peak,
+                shifts,
+                matches,
+            )
+        )
 
 
 def add_context(frames, hop):

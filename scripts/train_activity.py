@@ -22,52 +22,111 @@ LABELS = ("drums", "bass", "vocals")
 SPLITS = ("train", "validation")
 
 
-def cache_features(manifest_path, dataset, cache, progress=print):
+STEMS = ("drums", "bass", "vocals", "other")
+# Remixes of the train stems. Removing a stem gives the same music without that instrument,
+# which is the most direct counter-example for its detector. A bass-less remix is left out:
+# on validation it lowered bass recall on real mixes (AUC 0.94 against 0.96 without it).
+VARIANTS = {"no_vocals": ("vocals",), "no_drums": ("drums",), "random": ()}
+
+
+def frame_rows(audio, rate, config):
+    size, hop = round(rate * config.window_ms / 1000), round(rate * config.hop_ms / 1000)
+    window = np.hanning(size).astype(np.float32)
+    features = FrameFeatures(rate, size, hop / rate)
+    count = (len(audio) - size) // hop + 1
+    rows = np.empty((count, features.count), np.float32)
+    level = np.empty(count, np.float32)
+    for begin in range(0, count, 512):
+        index = np.arange(begin, min(count, begin + 512))
+        frames = audio[index[:, None] * hop + np.arange(size)[None, :]]
+        spectra = np.fft.rfft(frames * window[None, :, None], axis=1)
+        rms = np.sqrt(np.mean(frames.astype(np.float64) ** 2, axis=(1, 2)))
+        level[index] = np.maximum(-120, 20 * np.log10(np.maximum(rms, 1e-6)))
+        for k, i in enumerate(index):
+            rows[i] = features.step(spectra[k])
+    times = np.arange(count) * hop / rate + size / rate / 2
+    return rows, level, times, hop / rate
+
+
+def frame_labels(manifest_path, recording, times):
+    labels = np.zeros((len(times), len(LABELS)), bool)
+    for annotation in registry.annotations_for(manifest_path, recording.recording_id):
+        if not annotation.usable_as_reference:
+            continue
+        for span in annotation.activity:
+            if span.label in LABELS and span.certainty == "certain":
+                inside = (times >= span.start) & (times < span.end)
+                labels[inside, LABELS.index(span.label)] = True
+    return labels
+
+
+def remix(stems, variant, seed):
+    """Return (audio, labels still present) for one remix of the stems."""
+    rng = np.random.default_rng(seed)
+    removed = set(VARIANTS[variant])
+    gains = dict.fromkeys(STEMS, 1.0)
+    if variant == "random":
+        gains = {name: 10 ** (rng.uniform(-9, 6) / 20) for name in STEMS}
+        removed = {name for name in STEMS if rng.random() < 0.15}
+        if len(removed) == len(STEMS):
+            removed.discard("other")
+    audio = sum(gains[name] * stems[name] for name in STEMS if name not in removed)
+    return audio.astype(np.float32), [name not in removed for name in LABELS]
+
+
+def cache_features(manifest_path, dataset, cache, augment=True, progress=print):
     manifest = registry.load_manifest(manifest_path)
     paths = registry.load_paths(manifest_path)
     config = AnalysisConfig()
     cache.mkdir(parents=True, exist_ok=True)
     for recording in manifest.recordings:
+        if recording.dataset != dataset or recording.split not in SPLITS:
+            continue
         target = cache / f"{recording.split}-{recording.recording_id}.npz"
-        if recording.dataset != dataset or recording.split not in SPLITS or target.exists():
-            continue
-        path, reason = registry.resolve(recording, paths, verify_hash=False)
-        if not path:
-            progress(f"skipped {recording.recording_id}: {reason}")
-            continue
-        audio, rate = registry.read_audio(path)
-        size, hop = round(rate * config.window_ms / 1000), round(rate * config.hop_ms / 1000)
-        window = np.hanning(size).astype(np.float32)
-        features = FrameFeatures(rate, size, hop / rate)
-        count = (len(audio) - size) // hop + 1
-        rows = np.empty((count, features.count), np.float32)
-        level = np.empty(count, np.float32)
-        for begin in range(0, count, 512):
-            index = np.arange(begin, min(count, begin + 512))
-            frames = audio[index[:, None] * hop + np.arange(size)[None, :]]
-            spectra = np.fft.rfft(frames * window[None, :, None], axis=1)
-            rms = np.sqrt(np.mean(frames.astype(np.float64) ** 2, axis=(1, 2)))
-            level[index] = np.maximum(-120, 20 * np.log10(np.maximum(rms, 1e-6)))
-            for k, i in enumerate(index):
-                rows[i] = features.step(spectra[k])
-        times = np.arange(count) * hop / rate + size / rate / 2
-        labels = np.zeros((count, len(LABELS)), bool)
-        for annotation in registry.annotations_for(manifest_path, recording.recording_id):
-            if not annotation.usable_as_reference:
+        if not target.exists():
+            path, reason = registry.resolve(recording, paths, verify_hash=False)
+            if not path:
+                progress(f"skipped {recording.recording_id}: {reason}")
                 continue
-            for span in annotation.activity:
-                if span.label in LABELS and span.certainty == "certain":
-                    inside = (times >= span.start) & (times < span.end)
-                    labels[inside, LABELS.index(span.label)] = True
-        np.savez(target, x=rows, y=labels, db=level, hop=hop / rate)
-        progress(f"cached {recording.split} {recording.recording_id}: {count} frames")
+            audio, rate = registry.read_audio(path)
+            rows, level, times, hop = frame_rows(audio, rate, config)
+            labels = frame_labels(manifest_path, recording, times)
+            np.savez(target, x=rows, y=labels, db=level, hop=hop)
+            progress(f"cached {recording.split} {recording.recording_id}: {len(rows)} frames")
+        todo = [
+            v for v in VARIANTS if not (cache / f"train-{recording.recording_id}.{v}.npz").exists()
+        ]
+        # Only train tracks are remixed; validation stays the real mixes.
+        if not augment or recording.split != "train" or not todo:
+            continue
+        found, problems = registry.resolve_stems(recording, paths, verify_hash=False)
+        if problems or set(found) != set(STEMS):
+            progress(f"no remixes for {recording.recording_id}: stems incomplete")
+            continue
+        stems = {name: registry.read_audio(found[name]) for name in STEMS}
+        rate = stems["drums"][1]
+        length = min(len(audio) for audio, _ in stems.values())
+        stems = {name: audio[:length] for name, (audio, _) in stems.items()}
+        for variant in todo:
+            seed = int(recording.sha256[:8], 16)
+            audio, present = remix(stems, variant, seed)
+            rows, level, times, hop = frame_rows(audio, rate, config)
+            labels = frame_labels(manifest_path, recording, times) & np.array(present)
+            name = f"train-{recording.recording_id}.{variant}.npz"
+            np.savez(cache / name, x=rows, y=labels, db=level, hop=hop)
+        progress(f"remixed {recording.recording_id}: {len(todo)} variants")
 
 
-def load(cache, split, silence_dbfs):
+def load(cache, split, silence_dbfs, fraction=1.0, seed=0):
+    """Frames above the silence level. ``fraction`` keeps a random share of each file:
+    neighbouring frames are nearly identical, and the remixes multiply the data."""
+    rng = np.random.default_rng(seed)
     xs, ys = [], []
     for file in sorted(cache.glob(f"{split}-*.npz")):
         data = np.load(file)
         keep = data["db"] >= silence_dbfs
+        if fraction < 1:
+            keep &= rng.random(len(keep)) < fraction
         xs.append(add_context(data["x"], float(data["hop"]))[keep].astype(np.float32))
         ys.append(data["y"][keep][:, : len(LABELS)])
     return np.concatenate(xs), np.concatenate(ys).astype(np.float32)
@@ -96,9 +155,19 @@ def report(name, scores, truth, progress=print):
         )
 
 
-def train(cache, output, hidden=64, epochs=2, decay=1e-2, seed=0, progress=print):
+def train(
+    cache,
+    output,
+    hidden=128,
+    epochs=4,
+    decay=1e-2,
+    seed=0,
+    fraction=0.3,
+    name="activity_mlp_v2",
+    progress=print,
+):
     silence = AnalysisConfig().silence_dbfs
-    x, y = load(cache, "train", silence)
+    x, y = load(cache, "train", silence, fraction, seed)
     vx, vy = load(cache, "validation", silence)
     progress(f"train frames {len(x)}, validation frames {len(vx)}")
     mean, scale = x.mean(0), x.std(0) + 1e-6
@@ -151,7 +220,7 @@ def train(cache, output, hidden=64, epochs=2, decay=1e-2, seed=0, progress=print
     np.savez(
         output,
         feature_version=FEATURE_VERSION,
-        name="activity_mlp_v1",
+        name=name,
         labels=np.array(LABELS),
         mean=mean,
         scale=scale,
