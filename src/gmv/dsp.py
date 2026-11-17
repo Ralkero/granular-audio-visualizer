@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import numpy as np
 
+from .activity import ActivityEstimator, ActivityModel
 from .beat import BeatTracker
 from .models import AnalysisConfig, FeatureFrame, MusicalEvent
 
@@ -97,6 +98,11 @@ class Analyzer:
         self.beat_locked = False
         self.beats = BeatTracker(self.hop) if config.experimental_beat_phase else None
         self.previous_log = None
+        self.activity = (
+            ActivityEstimator(ActivityModel(config.activity_model_path), rate, self.size, self.hop)
+            if config.activity_model_path
+            else None
+        )
 
     def estimate_tempo(self, timestamp):
         if timestamp - self.last_tempo < 1 or len(self.flux_history) * self.hop < 4:
@@ -181,6 +187,12 @@ class Analyzer:
         )
         is_quiet = db < self.config.silence_dbfs
         strength = min(1.0, flux) if not is_quiet else 0.0
+        instrument_scores, instruments_active = (), ()
+        if self.activity is not None:
+            scores, active = self.activity.step(spectrum, is_quiet)
+            labels = self.activity.model.labels
+            instrument_scores = tuple((n, float(s)) for n, s in zip(labels, scores, strict=True))
+            instruments_active = tuple(n for n, on in zip(labels, active, strict=True) if on)
         self.flux_history.append(strength)
         self.estimate_tempo(timestamp)
         # Slow reference plus absolute anchor prevents equalizing every passage.
@@ -377,6 +389,9 @@ class Analyzer:
             analysis_weights=tuple(self.channel_weights),
             band_flux=tuple(band_flux),
             attack_energy_ratio=attack_ratio,
+            instrument_scores=instrument_scores,
+            instruments_active=instruments_active,
+            activity_method=self.activity.model.name if self.activity else None,
             beat_locked=self.beat_locked,
             beat_phase=float((timestamp - self.phase) % self.phase_period / self.phase_period)
             if self.beat_locked and self.phase is not None

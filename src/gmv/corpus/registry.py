@@ -5,6 +5,7 @@ Paths, file names, titles and artists never enter the committed manifest; they l
 """
 
 import hashlib
+import io
 import json
 from pathlib import Path
 
@@ -111,7 +112,11 @@ def probe(path):
 
 
 def read_audio(path):
-    with sf.SoundFile(path) as file:
+    path = Path(path)
+    if path.stat().st_size > MAX_BYTES:
+        raise ValueError("Audio file exceeds 2 GiB")
+    # Decode from memory: the decoder's many small reads are very slow on some drives.
+    with sf.SoundFile(io.BytesIO(path.read_bytes())) as file:
         if file.frames * file.channels * 4 > MAX_DECODED_BYTES:
             raise ValueError("Decoded audio would exceed 1 GiB; trim the recording")
         return file.read(dtype="float32", always_2d=True), file.samplerate

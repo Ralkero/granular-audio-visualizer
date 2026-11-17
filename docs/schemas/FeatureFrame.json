@@ -270,6 +270,44 @@
       ],
       "default": null,
       "title": "Beat Phase"
+    },
+    "instrument_scores": {
+      "default": [],
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "type": "array"
+      },
+      "title": "Instrument Scores",
+      "type": "array"
+    },
+    "instruments_active": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Instruments Active",
+      "type": "array"
+    },
+    "activity_method": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Activity Method"
     }
   },
   "required": [

@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import mir_eval
 import numpy as np
 
+from gmv.activity import intervals as activity_intervals
 from gmv.corpus import registry
 from gmv.corpus.compare import combine, consensus
 from gmv.corpus.intervals import merge, total
@@ -233,6 +234,14 @@ def evaluate_recording(
             confusion[kind] = {"emitted": len(stamps), "coincides_with": counts}
     result["candidates"], result["candidate_coincidence"] = candidates, confusion
 
+    if activity_predictions is None and any(getattr(f, "activity_method", None) for f in frames):
+        stamps = [f.timestamp for f in frames]
+        step = stamps[1] - stamps[0] if len(stamps) > 1 else 0.02
+        labels = [name for name, _ in next(f for f in frames if f.activity_method).instrument_scores]
+        activity_predictions = {
+            label: activity_intervals(stamps, [label in f.instruments_active for f in frames], step)
+            for label in labels
+        }
     activity, sounding = {}, {}
     for layer in annotation.coverage.layers:
         if not layer.startswith("activity."):
@@ -491,6 +500,7 @@ def _activity_summary(results):
                     "tp_seconds": 0.0,
                     "fp_seconds": 0.0,
                     "fn_seconds": 0.0,
+                    "inactive_seconds": 0.0,
                 },
             )
             row["recordings"] += 1
@@ -501,6 +511,7 @@ def _activity_summary(results):
                 row["scored_recordings"] += 1
                 for key in ("tp_seconds", "fp_seconds", "fn_seconds"):
                     row[key] += entry[key]
+                row["inactive_seconds"] += entry["scored_seconds"] - entry["reference_active_seconds"]
     for row in summary.values():
         row["reference_kinds"] = sorted(row["reference_kinds"])
         tp, fp, fn = row["tp_seconds"], row["fp_seconds"], row["fn_seconds"]
@@ -510,6 +521,11 @@ def _activity_summary(results):
                 precision=tp / (tp + fp) if tp + fp else 0,
                 recall=tp / (tp + fn) if tp + fn else 0,
                 f1=2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else 0,
+                false_positive_rate=fp / row["inactive_seconds"] if row["inactive_seconds"] else None,
+                # What an estimator that always says "active" would score on the same audio.
+                always_active_f1=2 * (tp + fn) / (2 * (tp + fn) + row["inactive_seconds"])
+                if tp + fn
+                else 0,
             )
         else:
             row.update(status="no_detector_output")
@@ -573,11 +589,19 @@ def render_markdown(report):
         lines += [
             "## Instrument activity",
             "",
-            "| Instrument | Recordings | Reference | Reference active | Detector | F1 |",
-            "|---|---:|---|---:|---|---:|",
+            "| Instrument | Recordings | Reference | Reference active | Detector | Precision | "
+            "Recall | F1 | Always-active F1 | False-positive rate |",
+            "|---|---:|---|---:|---|---:|---:|---:|---:|---:|",
         ]
         for label, entry in sorted(summary["instrument_activity"].items()):
-            score = f"{entry['f1']:.3f}" if entry["status"] == "scored" else "—"
+            if entry["status"] == "scored":
+                rate = entry["false_positive_rate"]
+                score = (
+                    f"{entry['precision']:.3f} | {entry['recall']:.3f} | {entry['f1']:.3f} | "
+                    f"{entry['always_active_f1']:.3f} | {'—' if rate is None else f'{rate:.3f}'}"
+                )
+            else:
+                score = "— | — | — | — | —"
             lines.append(
                 f"| {label} | {entry['recordings']} | {', '.join(entry['reference_kinds'])} | "
                 f"{entry['reference_active_seconds']:.1f} s | "

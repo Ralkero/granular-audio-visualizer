@@ -19,6 +19,8 @@ class AnalysisConfig(FrozenModel):
     band_edges: tuple[float, ...] = (20, 60, 250, 500, 2000, 4000, 6000, 24000)
     advanced: bool = False
     experimental_beat_phase: bool = False
+    # Weights file for the instrument-activity estimator; no file, no activity output.
+    activity_model_path: str | None = None
     debug_audio_seconds: int = Field(default=0, ge=0, le=60)
     analysis_channel_weights: tuple[float, ...] | None = None
 
@@ -89,6 +91,10 @@ class FeatureFrame(Message):
     attack_energy_ratio: float = 0
     beat_locked: bool = False
     beat_phase: float | None = None
+    # Uncalibrated per-instrument scores and the instruments currently judged to be sounding.
+    instrument_scores: tuple[tuple[str, float], ...] = ()
+    instruments_active: tuple[str, ...] = ()
+    activity_method: str | None = None
 
 
 class MusicalEvent(Message):

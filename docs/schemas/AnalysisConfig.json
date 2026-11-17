@@ -63,6 +63,18 @@
       "title": "Experimental Beat Phase",
       "type": "boolean"
     },
+    "activity_model_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Activity Model Path"
+    },
     "debug_audio_seconds": {
       "default": 0,
       "maximum": 60,
