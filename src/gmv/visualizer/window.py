@@ -11,7 +11,7 @@ from collections import deque
 import numpy as np
 from time import perf_counter
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
+from PySide6.QtCore import QLineF, QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -90,6 +90,14 @@ class Canvas(QWidget):
         self.show_stats = False
         self._background = None
         self._colors = []
+        self._cache = {}
+        self.static = False  # True while the rarely-changing picture is being drawn
+        self.ring_offset = 0.0
+        edges = np.linspace(0, 2 * np.pi, 97)
+        self._dashes = [  # 48 short arcs of a unit circle, as straight strokes
+            (math.cos(a), math.sin(a), math.cos(b), math.sin(b))
+            for a, b in zip(edges[0::2].tolist(), edges[1::2].tolist(), strict=False)
+        ]
         self.lane_strip, self.level_strip, self.mark_strip = Strip(), Strip(), Strip()
         self.setMinimumSize(720, 480)
 
@@ -158,9 +166,6 @@ class Canvas(QWidget):
 
     def paintEvent(self, _event):
         began = perf_counter()
-        painter = QPainter(self)
-        painter.drawPixmap(self.rect(), self.background())
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         width, height = self.width(), self.height()
         self.scale = max(0.85, min(1.6, height / 900))
         margin = round(28 * self.scale)
@@ -177,25 +182,69 @@ class Canvas(QWidget):
             width - 2 * margin,
             body - timeline_h - lanes_h - gap * (bool(rows) + bool(lanes)),
         )
-        self.draw_header(painter, QRectF(margin, 0, width - 2 * margin, header))
-        self.draw_glow(painter, spectrum)
-        if self.mode == "radial":
-            self.draw_radial(painter, spectrum)
-        else:
-            self.draw_bars(painter, spectrum)
-        if self.now is None:
-            self.draw_idle(painter, spectrum)
         gutter = round(150 * self.scale)
         top = spectrum.bottom() + gap
-        axis = QRectF(margin + gutter, top, width - 2 * margin - gutter, timeline_h + lanes_h)
-        if rows:
-            self.draw_timeline(painter, QRectF(margin, top, width - 2 * margin, timeline_h), rows)
-            top += timeline_h + gap
-            axis.setHeight(timeline_h + gap + lanes_h)
-        if lanes:
-            self.draw_lanes(painter, QRectF(margin, top, width - 2 * margin, lanes_h), lanes)
-        if (rows or lanes) and self.now is not None:
-            self.draw_now(painter, axis)
+        timeline = QRectF(margin, top, width - 2 * margin, timeline_h)
+        lane_block = QRectF(
+            margin, top + (timeline_h + gap) * bool(rows), width - 2 * margin, lanes_h
+        )
+        axis = QRectF(margin + gutter, top, width - 2 * margin - gutter, lane_block.bottom() - top)
+
+        def everything(painter):
+            self.draw_header(painter, QRectF(margin, 0, width - 2 * margin, header))
+            if not self.static:
+                self.draw_glow(painter, spectrum)
+            if self.mode == "radial":
+                if not self.static:
+                    self.draw_radial(painter, spectrum)
+            else:
+                self.draw_bars(painter, spectrum)
+            if self.now is None and self.static:
+                self.draw_idle(painter, spectrum)
+            if rows:
+                self.draw_timeline(painter, timeline, rows)
+            if lanes:
+                self.draw_lanes(painter, lane_block, lanes)
+            if (rows or lanes) and self.now is not None:
+                self.draw_now(painter, axis)
+
+        def still_picture():
+            picture = QPixmap(self.background())
+            artist = QPainter(picture)
+            artist.scale(self.devicePixelRatioF(), self.devicePixelRatioF())
+            artist.setRenderHint(QPainter.RenderHint.Antialiasing)
+            self.static = True
+            try:
+                everything(artist)
+            finally:
+                self.static = False
+                artist.end()
+            return picture
+
+        # Labels, legends, row backgrounds and header text change rarely: they are drawn into
+        # one picture and only redrawn when something they show changes.
+        key = (
+            width,
+            height,
+            self.devicePixelRatioF(),
+            self.mode,
+            tuple(rows),
+            tuple((lane.key, live) for lane, live in lanes),
+            self.state.board.method,
+            self.header_text(),
+            self.state.spectrum_range,
+            self.now is None,
+            self.state.window_s,
+            bool(self.info["activity_model"]),
+            len(self.display.values) if self.display.values is not None else 0,
+        )
+        still = self.cached("still", key, still_picture)
+        painter = QPainter(self)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+        painter.drawPixmap(self.rect(), still)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        everything(painter)
         if self.show_stats and self.paint_ms:
             painter.setFont(self.font(11))
             painter.setPen(DIM)
@@ -212,9 +261,48 @@ class Canvas(QWidget):
         # The delayed-context row only appears once such analysis has produced something.
         return row != "context" or any(mark.row == "context" for mark in self.state.markers)
 
-    def draw_header(self, painter, rect):
+    def header_text(self):
+        """(state name, colour, detail, tempo, note) exactly as the header shows them."""
         name, color = CONDITIONS[self.condition]
+        detail = self.info["source"]
+        if self.condition == "waiting":
+            detail = "No audio arriving" + (f"  ·  {detail}" if detail else "")
+        elif self.condition == "replay":
+            detail = "Recorded session, original timestamps" + (f"  ·  {detail}" if detail else "")
+        elif self.condition == "stopped" and self.state.detail:
+            detail = self.state.detail
+        tempo = note = ""
+        if self.show_beats:
+            latest = self.state.latest
+            locked = bool(latest is not None and latest.beat_locked and self.state.beat_tempo)
+            if locked and self.condition in ("live", "replay"):
+                tempo = f"{self.state.beat_tempo:.0f} BPM"
+                note = (
+                    "experimental beat tracker  ·  "
+                    f"score {round(self.state.beat_score, 1):.1f} (uncalibrated)"
+                )
+            elif self.info["beat_tracker"] is False:
+                note = "Beat tracker off  ·  it can be enabled in Settings"
+            elif self.condition in ("live", "replay"):
+                note = "Experimental beat tracker  ·  listening for a pulse"
+        return name, color, detail, tempo, note
+
+    def draw_header(self, painter, rect):
+        name, color, detail, tempo, note = self.header_text()
         middle = rect.center().y() + 4 * self.scale
+        if not self.static:
+            if tempo:  # the only moving part: a dashed ring that swells on each predicted beat
+                radius = (7 + 5 * self.pulse) * self.scale
+                painter.setPen(
+                    QPen(alpha(PREDICTED, 0.45 + 0.55 * self.pulse), 2, Qt.PenStyle.DashLine)
+                )
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawEllipse(
+                    QPointF(rect.right() - self.ring_offset, middle - 12 * self.scale),
+                    radius,
+                    radius,
+                )
+            return
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(color))
         painter.drawEllipse(QPointF(rect.left() + 6, middle - 4 * self.scale), 4.5, 4.5)
@@ -224,23 +312,9 @@ class Canvas(QWidget):
         offset = painter.fontMetrics().horizontalAdvance(name) + 34
         painter.setFont(self.font(13))
         painter.setPen(DIM)
-        detail = self.info["source"]
-        if self.condition == "waiting":
-            detail = "No audio arriving" + (f"  ·  {detail}" if detail else "")
-        elif self.condition == "replay":
-            detail = "Recorded session, original timestamps" + (f"  ·  {detail}" if detail else "")
-        elif self.condition == "stopped" and self.state.detail:
-            detail = self.state.detail
         painter.drawText(QPointF(rect.left() + offset, middle), detail)
-        if not self.show_beats:
-            return
-        right = rect.right()
-        latest = self.state.latest
-        locked = bool(latest is not None and latest.beat_locked and self.state.beat_tempo)
-        if locked and self.condition in ("live", "replay"):
+        if tempo:
             painter.setFont(self.font(11))
-            painter.setPen(DIM)
-            note = f"experimental beat tracker  ·  score {self.state.beat_score:.2f} (uncalibrated)"
             painter.drawText(
                 QRectF(rect.left(), middle + 2, rect.width(), 18 * self.scale),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop,
@@ -248,32 +322,18 @@ class Canvas(QWidget):
             )
             painter.setFont(self.font(26, QFont.Weight.DemiBold))
             painter.setPen(TEXT)
-            text = f"{self.state.beat_tempo:.0f} BPM"
             painter.drawText(
                 QRectF(rect.left(), rect.top(), rect.width(), middle - rect.top()),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom,
-                text,
+                tempo,
             )
-            reach = painter.fontMetrics().horizontalAdvance(text) + 26 * self.scale
-            radius = (7 + 5 * self.pulse) * self.scale
-            painter.setPen(
-                QPen(alpha(PREDICTED, 0.45 + 0.55 * self.pulse), 2, Qt.PenStyle.DashLine)
-            )
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawEllipse(QPointF(right - reach, middle - 12 * self.scale), radius, radius)
-        else:
+            self.ring_offset = painter.fontMetrics().horizontalAdvance(tempo) + 26 * self.scale
+        elif note:
             painter.setFont(self.font(12))
-            painter.setPen(DIM)
-            if self.info["beat_tracker"] is False:
-                text = "Beat tracker off  ·  it can be enabled in Settings"
-            elif self.condition in ("live", "replay"):
-                text = "Experimental beat tracker  ·  listening for a pulse"
-            else:
-                text = ""
             painter.drawText(
                 QRectF(rect.left(), middle - 16 * self.scale, rect.width(), 20 * self.scale),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                text,
+                note,
             )
 
     def colors(self, count):
@@ -281,52 +341,128 @@ class Canvas(QWidget):
             self._colors = [spectrum_color(i / max(1, count - 1)) for i in range(count)]
         return self._colors
 
+    def cached(self, name, key, build):
+        """Pictures that only change with the window size are drawn once and reused."""
+        held = self._cache.get(name)
+        if held is None or held[0] != key:
+            held = self._cache[name] = (key, build())
+        return held[1]
+
+    def glow_picture(self, size, colour):
+        """A soft elliptical glow, drawn once; each frame only sets how strongly it shows."""
+        ratio = self.devicePixelRatioF()
+        picture = QPixmap(round(size.width() * ratio), round(size.height() * ratio))
+        picture.fill(Qt.GlobalColor.transparent)
+        artist = QPainter(picture)
+        artist.scale(ratio * size.width() / 2, ratio * size.height() / 2)
+        glow = QRadialGradient(QPointF(1, 1), 1)
+        glow.setColorAt(0, QColor(colour))
+        glow.setColorAt(1, alpha(colour, 0))
+        artist.fillRect(QRectF(0, 0, 2, 2), glow)
+        artist.end()
+        return picture
+
     def draw_glow(self, painter, rect):
-        strength = 0.05 + 0.20 * self.intensity + 0.16 * self.flash
-        centre = QPointF(
-            rect.center().x(), rect.bottom() if self.mode == "bars" else rect.center().y()
-        )
-        glow = QRadialGradient(centre, rect.width() * 0.55)
-        glow.setColorAt(0, alpha(mix(SPECTRUM[1], PREDICTED, 0.5 * self.pulse), strength))
-        glow.setColorAt(1, alpha(SPECTRUM[0], 0))
-        painter.fillRect(self.rect(), glow)
+        centre_y = rect.bottom() if self.mode == "bars" else rect.center().y()
+        area = QRectF(0, centre_y - rect.height(), self.width(), rect.height() * 2)
+        key = (round(area.width()), round(area.height()), self.devicePixelRatioF())
+        for name, colour, strength in (
+            ("glow", SPECTRUM[1], 0.05 + 0.20 * self.intensity + 0.16 * self.flash),
+            ("beat glow", PREDICTED, 0.14 * self.pulse),
+        ):
+            if strength > 0.01:
+                picture = self.cached(
+                    name, key, lambda colour=colour: self.glow_picture(area.size(), colour)
+                )
+                painter.setOpacity(min(1.0, strength))
+                part = 0.5 if self.mode == "bars" else 1.0  # below the baseline is not needed
+                painter.drawPixmap(
+                    QRectF(area.left(), area.top(), area.width(), area.height() * part),
+                    picture,
+                    QRectF(0, 0, picture.width(), picture.height() * part),
+                )
+        painter.setOpacity(1.0)
+
+    def bar_pictures(self, count, slot, bar, reach):
+        """Every bar at full height, plain and brightened; frames copy the part they need."""
+        ratio = self.devicePixelRatioF()
+        pictures = []
+        for whiten in (0.12, 0.8):
+            picture = QPixmap(math.ceil(count * slot * ratio), math.ceil(reach * ratio))
+            picture.fill(Qt.GlobalColor.transparent)
+            artist = QPainter(picture)
+            artist.scale(ratio, ratio)
+            artist.setPen(Qt.PenStyle.NoPen)
+            for index, colour in enumerate(self.colors(count)):
+                fill = QLinearGradient(0, 0, 0, reach)
+                fill.setColorAt(0, mix(colour, "#ffffff", whiten))
+                fill.setColorAt(1, alpha(mix(colour, "#ffffff", whiten / 2), 0.45))
+                artist.fillRect(QRectF(index * slot + (slot - bar) / 2, 0, bar, reach), fill)
+            artist.end()
+            pictures.append(picture)
+        return pictures
 
     def draw_bars(self, painter, rect):
         values, peaks = self.display.values, self.display.peaks
         count = len(values) if values is not None else 48
+        ratio = self.devicePixelRatioF()
         mirror = rect.height() * 0.14
         base = rect.bottom() - mirror
         reach = base - rect.top() - 6
         meter = 22 * self.scale
         slot = (rect.width() - meter) / count
         bar = slot * 0.7
-        radius = min(bar / 2, 4 * self.scale)
-        painter.setPen(Qt.PenStyle.NoPen)
-        for index in range(count):
-            value = float(values[index]) if values is not None else 0.0
-            color = self.colors(count)[index]
-            x = rect.left() + index * slot + (slot - bar) / 2
-            tall = max(2.0, value * reach)
-            fill = QLinearGradient(0, base - tall, 0, base)
-            fill.setColorAt(0, mix(color, "#ffffff", min(0.75, 0.12 + 0.6 * self.flash * value)))
-            fill.setColorAt(1, alpha(color, 0.30))
-            painter.setBrush(fill)
-            painter.drawRoundedRect(QRectF(x, base - tall, bar, tall), radius, radius)
-            if peaks is not None and peaks[index] > 0.01:
-                painter.fillRect(
-                    QRectF(x, base - float(peaks[index]) * reach - 5, bar, 2), alpha(color, 0.85)
-                )
-            painter.fillRect(QRectF(x, base + 3, bar, min(mirror, tall * 0.22)), alpha(color, 0.09))
+        if self.static:
+            self.draw_frequencies(painter, rect, base + mirror * 0.55, slot, count)
+            painter.fillRect(
+                QRectF(rect.right() - 6 * self.scale, rect.top() + 6, 4 * self.scale, reach),
+                alpha(FAINT, 0.7),
+            )
+            return
+        plain, bright = self.cached(
+            "bars",
+            (count, round(slot, 3), round(reach), ratio),
+            lambda: self.bar_pictures(count, slot, bar, reach),
+        )
+        caps, mirrors = self.cached(
+            "bar colours",
+            count,
+            lambda: (
+                [alpha(c, 0.85) for c in self.colors(count)],
+                [alpha(c, 0.09) for c in self.colors(count)],
+            ),
+        )
+        heights = np.maximum(2.0, values * reach).tolist() if values is not None else [2.0] * count
+        tops = (peaks * reach).tolist() if peaks is not None else [0.0] * count
+        flashing = self.flash > 0.03
+        left = rect.left() + (slot - bar) / 2
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        for index, tall in enumerate(heights):
+            x = left + index * slot
+            target = QRectF(x, base - tall, bar, tall)
+            source = QRectF(
+                (index * slot + (slot - bar) / 2) * ratio,
+                (reach - tall) * ratio,
+                bar * ratio,
+                tall * ratio,
+            )
+            painter.drawPixmap(target, plain, source)
+            if flashing:
+                painter.setOpacity(min(1.0, self.flash * tall / reach))
+                painter.drawPixmap(target, bright, source)
+                painter.setOpacity(1.0)
+            if tops[index] > 2:
+                painter.fillRect(QRectF(x, base - tops[index] - 5, bar, 2), caps[index])
+            painter.fillRect(QRectF(x, base + 3, bar, min(mirror, tall * 0.22)), mirrors[index])
         # Baseline: brightens with onset strength, turns amber on a predicted beat.
         line = mix(SPECTRUM[1], PREDICTED, self.pulse)
         painter.fillRect(
             QRectF(rect.left(), base + 0.5, rect.width() - meter, 1.5),
             alpha(line, 0.25 + 0.5 * max(self.flash, self.pulse)),
         )
-        self.draw_frequencies(painter, rect, base + mirror * 0.55, slot, count)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         # Level meter: short-term level (filled) and its recent peak (tick).
         x = rect.right() - 6 * self.scale
-        painter.fillRect(QRectF(x, rect.top() + 6, 4 * self.scale, reach), alpha(FAINT, 0.7))
         painter.fillRect(
             QRectF(x, base - self.level * reach, 4 * self.scale, self.level * reach),
             alpha(TEXT, 0.75),
@@ -353,46 +489,93 @@ class Canvas(QWidget):
                 x = rect.left() + math.log(hertz / low) / math.log(high / low) * count * slot
                 painter.drawText(QPointF(x - 14, y), text)
 
+    def core_picture(self, size):
+        ratio = self.devicePixelRatioF()
+        picture = QPixmap(round(size * ratio), round(size * ratio))
+        picture.fill(Qt.GlobalColor.transparent)
+        artist = QPainter(picture)
+        artist.setRenderHint(QPainter.RenderHint.Antialiasing)
+        artist.scale(ratio, ratio)
+        core = QRadialGradient(QPointF(size / 2, size / 2), size / 2)
+        core.setColorAt(0, alpha(SPECTRUM[1], 0.6))
+        core.setColorAt(1, alpha(SPECTRUM[0], 0.05))
+        artist.setPen(Qt.PenStyle.NoPen)
+        artist.setBrush(core)
+        artist.drawEllipse(QRectF(1, 1, size - 2, size - 2))
+        artist.end()
+        return picture
+
     def draw_radial(self, painter, rect):
         values = self.display.values
         count = len(values) if values is not None else 48
         centre = rect.center()
+        cx, cy = centre.x(), centre.y()
         outer = min(rect.width(), rect.height()) * 0.54
         inner = outer * (0.27 + 0.07 * self.level + 0.03 * self.pulse)
         reach = outer - inner - 10
-        bar = math.pi * inner / count * 0.62
-        core = QRadialGradient(centre, inner)
-        core.setColorAt(
-            0, alpha(mix(SPECTRUM[1], "#ffffff", 0.5 * self.flash), 0.10 + 0.5 * self.intensity)
+        bar = max(2.0, math.pi * inner / count * 0.62)
+        # Core: one cached picture, resized as it breathes with the level.
+        size = round(outer * 0.8)
+        picture = self.cached(
+            "core", (size, self.devicePixelRatioF()), lambda: self.core_picture(size)
         )
-        core.setColorAt(1, alpha(SPECTRUM[0], 0.04))
-        painter.setPen(QPen(alpha(SPECTRUM[1], 0.35 + 0.4 * self.flash), 1.5))
-        painter.setBrush(core)
-        painter.drawEllipse(centre, inner - 6, inner - 6)
+        radius = inner - 6
+        painter.setOpacity(min(1.0, 0.25 + 0.75 * self.intensity + 0.3 * self.flash))
+        painter.drawPixmap(
+            QRectF(cx - radius, cy - radius, 2 * radius, 2 * radius),
+            picture,
+            QRectF(picture.rect()),
+        )
+        painter.setOpacity(1.0)
         painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(alpha(SPECTRUM[1], 0.35 + 0.4 * self.flash), 1))
+        painter.drawEllipse(centre, radius, radius)
         for age, strength, predicted in self.rings:
             progress = age / 0.7
-            radius = inner + (outer - inner) * progress
-            if predicted:
-                pen = QPen(alpha(PREDICTED, 0.8 * (1 - progress)), 2, Qt.PenStyle.DashLine)
-            else:
-                pen = QPen(alpha(TEXT, 0.5 * strength * (1 - progress)), 1.5)
-            painter.setPen(pen)
-            painter.drawEllipse(centre, radius, radius)
-        painter.setPen(Qt.PenStyle.NoPen)
-        for index in range(count):
-            value = float(values[index]) if values is not None else 0.0
-            color = spectrum_color(index / max(1, count - 1))
-            painter.setBrush(mix(color, "#ffffff", min(0.7, 0.5 * self.flash * value)))
-            angle = 180 * (index + 0.5) / count  # lows at the top, highs at the bottom
-            for side in (1, -1):
-                painter.save()
-                painter.translate(centre)
-                painter.rotate(-90 + side * angle)
-                painter.drawRoundedRect(
-                    QRectF(inner, -bar / 2, max(2.0, value * reach), bar), bar / 2, bar / 2
+            ring = inner + (outer - inner) * progress
+            if predicted:  # dashed, amber: drawn as separate short strokes
+                painter.setPen(QPen(alpha(PREDICTED, 0.8 * (1 - progress)), 1))
+                angles = self._dashes
+                painter.drawLines(
+                    [
+                        QLineF(cx + ring * c0, cy + ring * s0, cx + ring * c1, cy + ring * s1)
+                        for c0, s0, c1, s1 in angles
+                    ]
                 )
-                painter.restore()
+            else:
+                painter.setPen(QPen(alpha(TEXT, 0.5 * strength * (1 - progress)), 1))
+                painter.drawEllipse(centre, ring, ring)
+        # Bars: lows at the top, highs at the bottom, mirrored left and right.
+        cos, sin = self.cached("spokes", count, lambda: self.spokes(count))
+        lengths = values * reach if values is not None else np.zeros(count)
+        far = inner + np.maximum(2.0, np.concatenate((lengths, lengths[::-1])))
+        half = bar / 2
+        xs = np.empty((2 * count, 4))
+        ys = np.empty((2 * count, 4))
+        xs[:, 0], xs[:, 3] = inner * cos + half * sin, inner * cos - half * sin
+        xs[:, 1], xs[:, 2] = far * cos + half * sin, far * cos - half * sin
+        ys[:, 0], ys[:, 3] = inner * sin - half * cos, inner * sin + half * cos
+        ys[:, 1], ys[:, 2] = far * sin - half * cos, far * sin + half * cos
+        plain, bright = self.cached(
+            "spoke colours",
+            count,
+            lambda: tuple(
+                [mix(c, "#ffffff", whiten) for c in self.colors(count) + self.colors(count)[::-1]]
+                for whiten in (0.0, 0.45)
+            ),
+        )
+        colours = bright if self.flash > 0.35 else plain  # an onset briefly whitens the bars
+        xs, ys = xs + cx, ys + cy
+        painter.setPen(Qt.PenStyle.NoPen)
+        for index in range(2 * count):
+            painter.setBrush(colours[index])
+            painter.drawConvexPolygon(polygon(xs[index], ys[index]))
+
+    def spokes(self, count):
+        """Unit directions of the bars, going once round the circle from the top."""
+        right = np.pi * (np.arange(count) + 0.5) / count - np.pi / 2
+        angles = np.concatenate((right, np.pi - right[::-1]))
+        return np.cos(angles), np.sin(angles)
 
     def draw_idle(self, painter, rect):
         painter.setFont(self.font(20, QFont.Weight.DemiBold))
@@ -428,11 +611,13 @@ class Canvas(QWidget):
 
     def draw_now(self, painter, rect):
         _, _, x = self.axis(rect)
+        if not self.static:
+            painter.setPen(QPen(alpha(TEXT, 0.55), 1))
+            painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()))
+            return
         painter.fillRect(
             QRectF(x, rect.top(), rect.right() - x, rect.height()), alpha(PREDICTED, 0.035)
         )
-        painter.setPen(QPen(alpha(TEXT, 0.55), 1))
-        painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()))
         painter.setFont(self.font(10))
         painter.setPen(DIM)
         painter.drawText(QPointF(x - 26 * self.scale, rect.top() - 5), "now")
@@ -454,22 +639,27 @@ class Canvas(QWidget):
         )
 
     def draw_timeline(self, painter, rect, rows):
-        self.caption(painter, rect, "TIMELINE")
-        self.draw_legend(painter, rect)
+        if self.static:
+            self.caption(painter, rect, "TIMELINE")
+            self.draw_legend(painter, rect)
         head = 22 * self.scale
         gutter = 150 * self.scale
         area = QRectF(
             rect.left() + gutter, rect.top() + head, rect.width() - gutter, rect.height() - head
         )
         row_height = area.height() / len(rows)
-        painter.fillRect(area, alpha(FAINT, 0.28))
-        for index, (_key, title) in enumerate(rows):
-            band = QRectF(area.left(), area.top() + index * row_height, area.width(), row_height)
-            self.row_label(painter, QRectF(rect.left(), band.top(), gutter, row_height), title)
-            if index:
-                painter.fillRect(
-                    QRectF(band.left(), band.top(), band.width(), 1), alpha(FAINT, 0.9)
+        if self.static:
+            painter.fillRect(area, alpha(FAINT, 0.28))
+            for index, (_key, title) in enumerate(rows):
+                band = QRectF(
+                    area.left(), area.top() + index * row_height, area.width(), row_height
                 )
+                self.row_label(painter, QRectF(rect.left(), band.top(), gutter, row_height), title)
+                if index:
+                    painter.fillRect(
+                        QRectF(band.left(), band.top(), band.width(), 1), alpha(FAINT, 0.9)
+                    )
+            return
         if self.now is None:
             return
         to_x, start, _ = self.axis(area)
@@ -615,19 +805,20 @@ class Canvas(QWidget):
 
     def draw_lanes(self, painter, rect, lanes):
         method = self.state.board.method
-        self.caption(
-            painter,
-            rect,
-            "INSTRUMENT ACTIVITY"
-            + (f"   ·   {method}   ·   scores are uncalibrated" if method else ""),
-        )
+        if self.static:
+            self.caption(
+                painter,
+                rect,
+                "INSTRUMENT ACTIVITY"
+                + (f"   ·   {method}   ·   scores are uncalibrated" if method else ""),
+            )
         head = 22 * self.scale
         gutter = 150 * self.scale
         area = QRectF(
             rect.left() + gutter, rect.top() + head, rect.width() - gutter, rect.height() - head
         )
         lane_height = area.height() / len(lanes)
-        for index, (lane, live) in enumerate(lanes):
+        for index, (lane, live) in enumerate(lanes if self.static else ()):
             band = QRectF(
                 area.left(), area.top() + index * lane_height + 2, area.width(), lane_height - 4
             )
@@ -652,7 +843,7 @@ class Canvas(QWidget):
             else:
                 reason = "no detector for this instrument yet"
             painter.drawText(band.adjusted(12, 0, 0, 0), Qt.AlignmentFlag.AlignVCenter, reason)
-        if self.now is None or not any(live for _, live in lanes):
+        if self.static or self.now is None or not any(live for _, live in lanes):
             return
         history = self.state.board.history
         _, start, _ = self.axis(area)
