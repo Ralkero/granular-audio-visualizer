@@ -157,3 +157,7 @@ Result on 48 held-out songs by 10 artists the model never saw ([full table](eval
 This does not meet the bar for a lane named after an instrument, so nothing changes in what the application shows by default. The model fits songs it trained on far better than new artists, and changing its size did not help: the features, built for drums, bass and vocals, do not tell a guitar from other instruments in the same register. A better guitar detector needs different features (finer spectral detail over a longer window, or a small learned front end), which is a separate piece of work.
 
 Not done: nobody has watched the experimental weights in the application with sound; 32 songs with unequal file lengths are unused; no metal-specific test.
+
+### Follow-up the same day: finer features
+
+A second attempt used semitone-resolution spectra over about a second of history, guitar mixed over other artists' backing tracks during training, and a stricter "audibly present" target. Compared on folds split by artist, none of it produced a usable detector: guitar stays around AUC 0.75 to 0.85, clean electric guitar is at chance, and results depend more on which artists are held out than on the method. Details and the options that remain (a pretrained separation model or audio embedding in the delayed path, or more data): [evaluation/guitar_timbre_experiment.md](evaluation/guitar_timbre_experiment.md). The application is unchanged and the held-out songs were not read again.
