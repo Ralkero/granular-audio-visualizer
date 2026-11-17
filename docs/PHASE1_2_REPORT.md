@@ -285,15 +285,64 @@ How it works:
 
 Before the tracker can be turned on by default it needs a held-out beat set from other artists and tempos (RWC or Ballroom; neither is imported), and the off-beat failure needs work.
 
+## Milestone E2: instrument-activity estimator (drums, bass, vocals)
+
+The engine can now report, per analysis frame, whether drums, bass and vocals are sounding. This is the first output that can be scored against the stem-derived activity reference. It is **opt-in**: it needs a weights file, and without one the stream is unchanged.
+
+How it works (`gmv.activity`, method `activity_mlp_v1`):
+
+- **Features.** For each frame, 20 log-spaced bands from 40 Hz to 16 kHz are described by their share of the energy, how much they rose since the previous frame, how peaky (tonal) they are, and their stereo width, plus the level relative to the last few seconds. All are independent of playback volume. Causal averages over 0.25 s and 1.5 s and a measure of fluctuation are added.
+- **Model.** One hidden layer of 64 units, about 21,000 weights, plain NumPy. Output is one uncalibrated score per instrument, turned into on/off with fixed thresholds (on at 0.6, off at 0.4). Frames below the silence level are always inactive.
+- **Training.** `scripts/train_activity.py` fits it on the MUSDB18-HQ **train** split (81 tracks, 4.8 h) with the stem-derived activity as labels, weighting active and inactive time equally so that "always active" is not a solution. No hand labelling.
+- **Output.** Frame fields `instrument_scores`, `instruments_active` and `activity_method`.
+- **Cost.** Offline DSP p95 per frame rose from about 1.5 ms to about 1.7 ms (worst track 2.2 ms).
+
+### Result on the MUSDB18-HQ validation split (15 tracks by other artists, 77 minutes)
+
+These tracks were not trained on. Drums, bass and vocals play most of the time in this music, so an estimator that always says "active" already scores a high F1; that baseline and the false-positive rate (share of truly silent time reported as active) are shown beside the score.
+
+| Instrument | Precision | Recall | F1 | Always-active F1 | False-positive rate |
+|---|---:|---:|---:|---:|---:|
+| Drums | 0.963 | 0.934 | **0.948** | 0.872 | 0.122 |
+| Bass | 0.967 | 0.888 | **0.926** | 0.850 | 0.086 |
+| Vocals | 0.883 | 0.813 | **0.847** | 0.777 | 0.187 |
+
+- Ranking quality at frame level (AUC, 0.5 is chance): drums 0.96, bass 0.96, vocals 0.90.
+- Per track, median F1 is 0.97 (drums), 0.96 (bass), 0.86 (vocals). The worst tracks are poor: one track scores 0.00 for bass and one 0.40 for vocals, and on the worst tracks half or more of the silent time is reported as active.
+- Entrances are detected late: a median of roughly 0.2 s from the reference entrance.
+- "Other" instruments (guitars, keyboards and everything else in one stem) are not estimated.
+- Summary table: [evaluation/musdb18hq_validation_activity_v1.md](evaluation/musdb18hq_validation_activity_v1.md).
+
+### What this result does and does not show
+
+- **Lightweight analysis is enough for a useful first drums and bass signal; vocals are noticeably weaker.** Roughly one second in five without vocals is still reported as vocals. Whether a separation model is worth its cost should be judged mainly on vocals.
+- **The validation split was used to choose the model.** Four network sizes were compared on it (they scored alike) and one was kept. It is therefore a development result. **The MUSDB18-HQ test split (54 tracks, 3.76 h) has still not been read**; it is the place for a final number.
+- **The model overfits.** On the tracks it was trained on it scores AUC 0.99; on new tracks 0.90 to 0.96. Eighty-one tracks is little data. More stems (MoisesDB, MedleyDB) are the obvious improvement.
+- **The reference is stem energy, not a musical judgement.** Reverb tails and bleed count as activity.
+- **No per-genre figure.** Metal is not reported separately because MUSDB18-HQ genre tags are still not imported.
+- **Not tried on live capture.** Streaming services alter loudness and stereo image; the features ignore level but that is untested.
+- No kick, snare, cymbal or guitar activity: MUSDB18-HQ has no stems for them.
+
+### The weights file is not in the repository
+
+The weights are derived from MUSDB18-HQ audio, whose terms are academic and non-commercial. Publishing them is the owner's decision, so the file stays in the git-ignored `.model-cache/` directory. Anyone with the dataset can rebuild it:
+
+```powershell
+.venv\Scripts\python.exe scripts\train_activity.py --corpus corpus-data\corpus\manifest.json --dataset musdb18hq --cache <cache folder> --output .model-cache\activity_v1.npz
+.venv\Scripts\python.exe -m gmv.evaluation.run --detector candidate --activity-model .model-cache\activity_v1.npz --corpus corpus-data\corpus\manifest.json --corpus-split validation --dataset musdb18hq --output local-evidence\activity.json
+```
+
+Also in this milestone: corpus audio is now read into memory before decoding. On the dataset drive used here that cut the load time of one track from about a minute to about a second.
+
 ## Status of the phase
 
-Done: A, B, C, D1, D2, D3 (MDB Drums, MUSDB18-HQ train and validation), D4, E1 (beat tracker, development result only).
+Done: A, B, C, D1, D2, D3 (MDB Drums, MUSDB18-HQ train and validation), D4, E1 (beat tracker, development result only), E2 (drums, bass and vocals activity, validation result only).
 
 Outstanding:
 
 - More reference material: genre tags for MUSDB18-HQ, MoisesDB import (adapter unverified on real files), a rendered-multitrack tier, a held-out beat set, MedleyDB adapter.
-- Detection work from D4: a held-out check and off-beat fix for the beat tracker, onset recall with a precision reference, drum classes, instrument activity.
+- Detection work from D4: a held-out check and off-beat fix for the beat tracker, onset recall with a precision reference, drum classes; for instrument activity a final test-split evaluation, better vocals, and guitar and drum-part activity (needs MoisesDB).
 - Capture reliability (USB disconnect/reconnect, default-output switch on the native backend) and source-separation research: not started in this phase.
 - Final validation and report.
 
-**Real-music analysis is not validated.** What exists is a development measurement on 21.8 minutes of real music for drum attacks and beats (including an opt-in beat tracker at F1 0.69 on the data it was developed on), and stem-derived activity reference for 9.8 hours that the engine cannot yet be scored against. The MUSDB18-HQ test split (3.76 h) is reserved and untouched.
+**Real-music analysis is not validated.** What exists is a development measurement on 21.8 minutes of real music for drum attacks and beats (including an opt-in beat tracker at F1 0.69 on the data it was developed on), and an opt-in drums, bass and vocals activity estimator scored on 77 minutes of validation tracks (F1 0.95, 0.93, 0.85). The MUSDB18-HQ test split (3.76 h) is reserved and untouched.

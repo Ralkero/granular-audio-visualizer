@@ -71,3 +71,5 @@ The candidates are uncalibrated frequency-band ratios. Comparing them with instr
 - Do not retune the detector against the synthetic holdout.
 - Report per-class results. Do not report a single overall score.
 - Report measured numbers only, with the corpus version and content hash they came from.
+
+**Instrument activity.** Pass `--activity-model PATH` to score the activity estimator against `activity.*` layers. The table reports precision, recall and F1 by time, the F1 an always-active estimator would get on the same audio, and the false-positive rate (share of reference-silent time reported as active). Read F1 against the always-active figure: instruments that play most of the time make a high F1 cheap.
