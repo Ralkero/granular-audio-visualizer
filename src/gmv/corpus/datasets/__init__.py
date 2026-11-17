@@ -46,6 +46,9 @@ class Adapter:
     reference: str  # what reference information the dataset provides
     discover: object  # callable: root Path -> list[Track]
     split_map: dict = field(default_factory=dict)  # official split -> corpus split
+    # A dataset without official splits that is used for training needs its own held-out
+    # artists: one group in five then goes to test as well as one in five to validation.
+    holdout: bool = False
 
     def describe(self):
         return {
@@ -70,11 +73,11 @@ def group_id(dataset, key):
     return f"artist-{hashlib.sha256(key.encode('utf-8')).hexdigest()[:10]}"
 
 
-def read_sum(paths):
+def read_sum(paths, read=registry.read_audio):
     """Sum aligned stem files sample by sample; returns (audio, rate)."""
     total, rate = None, None
     for path in paths:
-        audio, file_rate = registry.read_audio(path)
+        audio, file_rate = read(path)
         if rate not in (None, file_rate):
             raise ValueError(f"Sample rates differ between stems: {path}")
         rate = file_rate
@@ -96,7 +99,13 @@ def read_sum(paths):
     return total, rate
 
 
-def render_mixture(manifest_path, adapter, track):
+def unique_files(track):
+    """Every stem file of a track once: a file can back several labels (a kick microphone
+    is both ``kick`` and ``drums``) and must not be summed twice."""
+    return sorted({path for paths in track.stems.values() for path in paths})
+
+
+def render_mixture(manifest_path, adapter, track, read=registry.read_audio):
     """Write the sum of all stems as 24-bit FLAC under the ignored local corpus directory."""
     target = (
         registry.local_dir(manifest_path)
@@ -106,7 +115,7 @@ def render_mixture(manifest_path, adapter, track):
     )
     if target.is_file():
         return target
-    audio, rate = read_sum([p for paths in track.stems.values() for p in paths])
+    audio, rate = read_sum(unique_files(track), read)
     peak = float(np.abs(audio).max()) if len(audio) else 0.0
     if peak > 1:
         audio = audio / peak  # A summed mix may exceed full scale; keep it unclipped.
@@ -137,6 +146,8 @@ def _assign_splits(adapter, tracks, existing):
         else:
             bucket = int(hashlib.sha256(f"gmv-split-1:{group}".encode()).hexdigest(), 16) % 5
             result[group] = "validation" if bucket == 0 else "train"
+            if adapter.holdout and bucket == 1:
+                result[group] = "test"
     return result
 
 
@@ -165,8 +176,15 @@ def import_dataset(manifest_path, adapter, root, *, limit=None, progress=print):
         if track.track_id in known:
             summary["already_registered"] += 1
             continue
+        loaded = {}  # each stem file is decoded once per track
+
+        def read(path, loaded=loaded):
+            if path not in loaded:
+                loaded[path] = registry.read_audio(path)
+            return loaded[path]
+
         try:
-            mixture = track.mixture or render_mixture(manifest_path, adapter, track)
+            mixture = track.mixture or render_mixture(manifest_path, adapter, track, read)
             duration, rate, channels = registry.probe(mixture)
             digest = registry.file_sha256(mixture)
             single = {label: files[0] for label, files in track.stems.items() if len(files) == 1}
@@ -191,7 +209,7 @@ def import_dataset(manifest_path, adapter, root, *, limit=None, progress=print):
             )
             written = []
             if track.stems:
-                audio = {label: read_sum(files) for label, files in track.stems.items()}
+                audio = {label: read_sum(files, read) for label, files in track.stems.items()}
                 written.append(stems.reference(recording, audio, uncertain=track.uncertain))
             written += [build(recording) for build in track.annotations]
         except Exception as exc:

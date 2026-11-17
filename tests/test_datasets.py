@@ -237,6 +237,9 @@ def test_moisesdb_import_renders_mix_maps_drum_mics_and_flags_bleed(tmp_path):
     }  # labels backed by a single file
     mix = registry.load_paths(manifest_path)["recordings"][recording.recording_id]
     assert mix.endswith(".flac") and "corpus-local" in mix
+    rendered, _ = registry.read_audio(mix)
+    parts = [sf.read(p, dtype="float32", always_2d=True)[0] for p in sorted(track.rglob("*.wav"))]
+    assert np.allclose(rendered, sum(parts), atol=1e-4)  # every file once, none twice
     reference = registry.annotations_for(manifest_path, recording.recording_id)[0]
     spans = {a.label: (round(a.start, 1), round(a.end, 1), a.certainty) for a in reference.activity}
     assert spans["kick"] == (0.0, 1.0, "certain")
@@ -246,3 +249,77 @@ def test_moisesdb_import_renders_mix_maps_drum_mics_and_flags_bleed(tmp_path):
     assert not reference.covers("activity.guitar_clean")
     assert not reference.covers("activity.snare")  # no snare microphone: not annotated
     assert validate_corpus(manifest_path) == ([], [])
+
+
+def fake_moises_track(root, name, artist, stems, shift=0):
+    """stems: {stemName: [(file id, trackType, has_bleed, gate)]}"""
+    data = {"artist": artist, "song": name, "genre": "rock", "stems": []}
+    for position, (stem, items) in enumerate(stems.items()):
+        entry = {"id": f"s{position}", "stemName": stem, "tracks": []}
+        for number, (identifier, kind, bleed, gate) in enumerate(items):
+            write(
+                root / name / stem / f"{identifier}.wav",
+                tone(frequency=100 * (position + 1) + 10 * number + shift, gate=gate),
+            )
+            entry["tracks"].append(
+                {"id": identifier, "extension": "wav", "trackType": kind, "has_bleed": bleed}
+            )
+        data["stems"].append(entry)
+    (root / name / "data.json").write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_moisesdb_holds_out_artists_and_trainer_handles_split_stems_and_bleed(
+    tmp_path, monkeypatch
+):
+    import importlib.util
+    from pathlib import Path
+
+    monkeypatch.setitem(globals(), "RATE", 44100)  # the activity bands need a real rate
+    root = tmp_path / "moisesdb"
+    for number in range(12):
+        fake_moises_track(
+            root,
+            f"song-{number:02d}",
+            f"Artist {number}",
+            {
+                "guitar": [
+                    ("g1", "distorted_electric_guitar", False, [(0, 1)]),
+                    ("g2", "clean_electric_guitar", True, [(2, 3)]),
+                ],
+                "bass": [("b1", "bass_guitar", False, [(0, 4)])],
+            },
+            shift=number,
+        )
+    manifest_path = tmp_path / "corpus" / "manifest.json"
+    summary = import_dataset(manifest_path, moisesdb.ADAPTER, root, progress=lambda *_: None)
+    assert summary["failed"] == [] and set(summary["recordings_per_split"]) == {
+        "train",
+        "validation",
+        "test",
+    }
+    recordings = registry.load_manifest(manifest_path).recordings
+    assert len({r.group_id for r in recordings}) == 12  # one artist, one split
+
+    spec = importlib.util.spec_from_file_location(
+        "train_activity_moises", Path(__file__).parents[1] / "scripts" / "train_activity.py"
+    )
+    trainer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(trainer)
+    trainer.configure(("guitar", "guitar_distorted", "guitar_clean"))
+    cache = tmp_path / "cache"
+    trainer.cache_features(manifest_path, "moisesdb", cache, progress=lambda *_: None, root=root)
+    assert not list(cache.glob("test-*"))  # held-out artists are never read by the trainer
+    train = next(r for r in recordings if r.split == "train")
+    base = np.load(cache / f"train-{train.recording_id}.npz")
+    times = np.arange(len(base["y"])) * float(base["hop"])
+
+    def at(array, second):
+        return array[np.abs(times - second).argmin()].tolist()
+
+    # 0.5 s: the distorted guitar alone. 2.5 s: only the track with bleed, so "guitar" and
+    # "clean" are unknown there, while "distorted" is known to be silent.
+    assert at(base["y"], 0.5) == [True, True, False] and at(base["k"], 0.5) == [True] * 3
+    assert at(base["y"], 2.5) == [False] * 3 and at(base["k"], 2.5) == [False, True, False]
+    removed = np.load(cache / f"train-{train.recording_id}.no_guitar.npz")
+    assert not removed["y"].any() and removed["k"].all()  # removed: known to be absent
+    assert removed["db"][np.abs(times - 0.5).argmin()] > -40  # the bass is still there

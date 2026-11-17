@@ -112,7 +112,9 @@ def corpus_main(args, parser):
     if not args.corpus_split:
         parser.error("--corpus requires --corpus-split")
     config = AnalysisConfig(
-        experimental_beat_phase=args.beat_phase, activity_model_path=args.activity_model
+        experimental_beat_phase=args.beat_phase,
+        activity_model_path=args.activity_model,
+        guitar_model_path=args.guitar_model,
     )
     try:
         result = evaluate_corpus(
@@ -152,6 +154,7 @@ def main(argv=None):
     parser.add_argument(
         "--activity-model", help="Corpus mode: weights file for the instrument-activity estimator"
     )
+    parser.add_argument("--guitar-model", help="Corpus mode: second weights file (guitar)")
     parser.add_argument(
         "--export-fixtures", help="Explicitly generate original synthetic WAVs and annotations"
     )

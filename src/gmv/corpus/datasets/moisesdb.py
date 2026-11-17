@@ -102,4 +102,5 @@ ADAPTER = Adapter(
     reference="240 multitracks. Stems incl. kick, snare, toms, cymbals, bass, vocals, guitar. "
     "No mixture file and no activity, onset or beat annotations.",
     discover=discover,
+    holdout=True,
 )

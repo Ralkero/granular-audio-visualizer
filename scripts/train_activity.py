@@ -16,6 +16,7 @@ import numpy as np
 
 from gmv.activity import FEATURE_VERSION, FrameFeatures, add_context
 from gmv.corpus import registry
+from gmv.corpus.datasets import adapters, read_sum
 from gmv.models import AnalysisConfig
 
 from gmv.corpus.schema import HIERARCHY  # noqa: E402
@@ -65,15 +66,26 @@ def frame_rows(audio, rate, config):
 
 
 def frame_labels(manifest_path, recording, times):
+    """(active, known) per frame and label. Activity measured on a stem that contains bleed
+    is uncertain: those frames are neither active nor inactive and are left out of training
+    and scoring for that label."""
     labels = np.zeros((len(times), len(LABELS)), bool)
+    unsure = np.zeros_like(labels)
     for annotation in registry.annotations_for(manifest_path, recording.recording_id):
         if not annotation.usable_as_reference:
             continue
         for span in annotation.activity:
-            if span.label in LABELS and span.certainty == "certain":
-                inside = (times >= span.start) & (times < span.end)
-                labels[inside, LABELS.index(span.label)] = True
-    return labels
+            # A certain sub-label (a clean guitar track without bleed) also makes its
+            # parent certain, even if another track of that instrument has bleed.
+            names = [span.label]
+            if span.certainty == "certain":
+                names += [p for p, children in HIERARCHY.items() if span.label in children]
+            for name in names:
+                if name in LABELS:
+                    inside = (times >= span.start) & (times < span.end)
+                    target = labels if span.certainty == "certain" else unsure
+                    target[inside, LABELS.index(name)] = True
+    return labels, ~unsure | labels
 
 
 def remix(stems, variant, seed):
@@ -93,14 +105,23 @@ def remix(stems, variant, seed):
     return audio.astype(np.float32), [name not in gone for name in LABELS]
 
 
-def cache_features(manifest_path, dataset, cache, augment=True, progress=print):
+def dataset_stems(track):
+    """Disjoint instrument groups of a dataset track, each summed from all of its files.
+    Needed where one instrument is spread over several files (MoisesDB)."""
+    top = {label: files for label, files in track.stems.items() if label not in CHILDREN}
+    return {label: read_sum(files) for label, files in top.items()}
+
+
+def cache_features(
+    manifest_path, dataset, cache, augment=True, progress=print, root=None, shard=(0, 1)
+):
     manifest = registry.load_manifest(manifest_path)
     paths = registry.load_paths(manifest_path)
     config = AnalysisConfig()
     cache.mkdir(parents=True, exist_ok=True)
-    for recording in manifest.recordings:
-        if recording.dataset != dataset or recording.split not in SPLITS:
-            continue
+    tracks = {t.track_id: t for t in adapters()[dataset].discover(Path(root))} if root else {}
+    chosen = [r for r in manifest.recordings if r.dataset == dataset and r.split in SPLITS]
+    for recording in chosen[shard[0] :: shard[1]]:
         target = cache / f"{recording.split}-{recording.recording_id}.npz"
         if not target.exists():
             path, reason = registry.resolve(recording, paths, verify_hash=False)
@@ -109,8 +130,8 @@ def cache_features(manifest_path, dataset, cache, augment=True, progress=print):
                 continue
             audio, rate = registry.read_audio(path)
             rows, level, times, hop = frame_rows(audio, rate, config)
-            labels = frame_labels(manifest_path, recording, times)
-            np.savez(target, x=rows, y=labels, db=level, hop=hop)
+            labels, known = frame_labels(manifest_path, recording, times)
+            np.savez(target, x=rows, y=labels, k=known, db=level, hop=hop)
             progress(f"cached {recording.split} {recording.recording_id}: {len(rows)} frames")
         todo = [
             v for v in VARIANTS if not (cache / f"train-{recording.recording_id}.{v}.npz").exists()
@@ -118,12 +139,20 @@ def cache_features(manifest_path, dataset, cache, augment=True, progress=print):
         # Only train tracks are remixed; validation stays the real mixes.
         if not augment or recording.split != "train" or not todo:
             continue
-        found, problems = registry.resolve_stems(recording, paths, verify_hash=False)
-        wanted = STEMS if STEMS else tuple(found)
-        if problems or not set(wanted) <= set(found):
-            progress(f"no remixes for {recording.recording_id}: stems incomplete")
-            continue
-        stems = {name: registry.read_audio(found[name]) for name in wanted}
+        if recording.dataset_track_id in tracks:
+            stems = dataset_stems(tracks[recording.dataset_track_id])
+            width = max(audio.shape[1] for audio, _ in stems.values())
+            stems = {
+                name: (np.repeat(audio, width, axis=1) if audio.shape[1] < width else audio, rate)
+                for name, (audio, rate) in stems.items()
+            }
+        else:
+            found, problems = registry.resolve_stems(recording, paths, verify_hash=False)
+            wanted = STEMS if STEMS else tuple(found)
+            if problems or not set(wanted) <= set(found):
+                progress(f"no remixes for {recording.recording_id}: stems incomplete")
+                continue
+            stems = {name: registry.read_audio(found[name]) for name in wanted}
         rate = next(iter(stems.values()))[1]
         length = min(len(audio) for audio, _ in stems.values())
         stems = {name: audio[:length] for name, (audio, _) in stems.items()}
@@ -131,9 +160,11 @@ def cache_features(manifest_path, dataset, cache, augment=True, progress=print):
             seed = int(recording.sha256[:8], 16)
             audio, present = remix(stems, variant, seed)
             rows, level, times, hop = frame_rows(audio, rate, config)
-            labels = frame_labels(manifest_path, recording, times) & np.array(present)
+            labels, known = frame_labels(manifest_path, recording, times)
+            # A removed instrument is known to be absent, whatever its stem contained.
+            labels, known = labels & np.array(present), known | ~np.array(present)
             name = f"train-{recording.recording_id}.{variant}.npz"
-            np.savez(cache / name, x=rows, y=labels, db=level, hop=hop)
+            np.savez(cache / name, x=rows, y=labels, k=known, db=level, hop=hop)
         progress(f"remixed {recording.recording_id}: {len(todo)} variants")
 
 
@@ -141,7 +172,7 @@ def load(cache, split, silence_dbfs, fraction=1.0, seed=0):
     """Frames above the silence level. ``fraction`` keeps a random share of each file:
     neighbouring frames are nearly identical, and the remixes multiply the data."""
     rng = np.random.default_rng(seed)
-    xs, ys = [], []
+    xs, ys, ks = [], [], []
     for file in sorted(cache.glob(f"{split}-*.npz")):
         data = np.load(file)
         keep = data["db"] >= silence_dbfs
@@ -149,7 +180,9 @@ def load(cache, split, silence_dbfs, fraction=1.0, seed=0):
             keep &= rng.random(len(keep)) < fraction
         xs.append(add_context(data["x"], float(data["hop"]))[keep].astype(np.float32))
         ys.append(data["y"][keep][:, : len(LABELS)])
-    return np.concatenate(xs), np.concatenate(ys).astype(np.float32)
+        ks.append(data["k"][keep] if "k" in data else np.ones_like(ys[-1]))
+    known = np.concatenate(ks).astype(np.float32)
+    return np.concatenate(xs), np.concatenate(ys).astype(np.float32), known
 
 
 def auc(score, truth):
@@ -161,9 +194,13 @@ def auc(score, truth):
     return float((ranks[truth > 0].sum() - positive * (positive + 1) / 2) / (positive * negative))
 
 
-def report(name, scores, truth, progress=print):
+def report(name, scores, truth, known, progress=print):
     for k, label in enumerate(LABELS):
-        predicted, actual = scores[:, k] >= 0.5, truth[:, k] > 0
+        use = known[:, k] > 0
+        predicted, actual = scores[use, k] >= 0.5, truth[use, k] > 0
+        if not actual.any() or actual.all():
+            progress(f"{name} {label:7s} not scorable: reference is all one class")
+            continue
         tp, fp = (predicted & actual).sum(), (predicted & ~actual).sum()
         fn, tn = (~predicted & actual).sum(), (~predicted & ~actual).sum()
         share = actual.mean()
@@ -171,7 +208,7 @@ def report(name, scores, truth, progress=print):
             f"{name} {label:7s} active {share:.2f} | precision {tp / (tp + fp):.3f} "
             f"recall {tp / (tp + fn):.3f} F1 {2 * tp / (2 * tp + fp + fn):.3f} "
             f"(always-active F1 {2 * share / (1 + share):.3f}) | "
-            f"false-positive rate {fp / (fp + tn):.3f} AUC {auc(scores[:, k], actual):.3f}"
+            f"false-positive rate {fp / (fp + tn):.3f} AUC {auc(scores[use, k], actual):.3f}"
         )
 
 
@@ -187,8 +224,8 @@ def train(
     progress=print,
 ):
     silence = AnalysisConfig().silence_dbfs
-    x, y = load(cache, "train", silence, fraction, seed)
-    vx, vy = load(cache, "validation", silence)
+    x, y, known = load(cache, "train", silence, fraction, seed)
+    vx, vy, vknown = load(cache, "validation", silence)
     progress(f"train frames {len(x)}, validation frames {len(vx)}")
     mean, scale = x.mean(0), x.std(0) + 1e-6
     x, vx = (x - mean) / scale, (vx - mean) / scale
@@ -201,7 +238,7 @@ def train(
     ]
     first = [np.zeros_like(p) for p in params]
     second = [np.zeros_like(p) for p in params]
-    share = y.mean(0)
+    share = (y * known).sum(0) / known.sum(0)
     # Active and inactive frames carry equal total weight, so "always active" is not a solution.
     weight_on, weight_off = 0.5 / share, 0.5 / (1 - share)
 
@@ -216,7 +253,7 @@ def train(
             index = order[begin : begin + 1024]
             batch, target = x[index], y[index]
             hidden_out, scores = forward(batch)
-            weight = target * weight_on + (1 - target) * weight_off
+            weight = (target * weight_on + (1 - target) * weight_off) * known[index]
             error = (scores - target) * weight / len(index)
             back = (error @ params[2].T) * (hidden_out > 0)
             gradients = [
@@ -234,8 +271,8 @@ def train(
                 params[k] -= (rate * update).astype(np.float32)
         if epoch == epochs - 3:
             rate = 3e-4
-        report(f"epoch {epoch} validation", forward(vx)[1], vy, progress)
-    report("train", forward(x)[1], y, progress)
+        report(f"epoch {epoch} validation", forward(vx)[1], vy, vknown, progress)
+    report("train", forward(x)[1], y, known, progress)
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     np.savez(
         output,
@@ -262,14 +299,33 @@ def main():
     parser.add_argument(
         "--labels",
         help="Comma-separated instrument labels to learn (default drums,bass,vocals). "
-        "For guitar on MoisesDB: guitar,guitar_distorted,guitar_clean",
+        "For guitar on MoisesDB: guitar,guitar_distorted,guitar_clean,guitar_acoustic",
     )
     parser.add_argument("--name", default="activity_mlp_v2", help="Name stored in the weights")
+    parser.add_argument(
+        "--dataset-root",
+        help="Dataset folder: remixes are built from the dataset files themselves. Needed "
+        "where an instrument is spread over several files (MoisesDB)",
+    )
+    parser.add_argument("--shard", default="0/1", help="i/n: cache only every n-th recording")
+    parser.add_argument("--cache-only", action="store_true")
+    parser.add_argument("--hidden", type=int, default=128)
+    parser.add_argument("--epochs", type=int, default=4)
+    parser.add_argument("--decay", type=float, default=1e-2)
     args = parser.parse_args()
     if args.labels:
         configure(tuple(label.strip() for label in args.labels.split(",")))
-    cache_features(Path(args.corpus), args.dataset, args.cache)
-    train(args.cache, args.output, name=args.name)
+    shard = tuple(int(part) for part in args.shard.split("/"))
+    cache_features(Path(args.corpus), args.dataset, args.cache, root=args.dataset_root, shard=shard)
+    if not args.cache_only:
+        train(
+            args.cache,
+            args.output,
+            hidden=args.hidden,
+            epochs=args.epochs,
+            decay=args.decay,
+            name=args.name,
+        )
 
 
 if __name__ == "__main__":
