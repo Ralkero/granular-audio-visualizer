@@ -344,13 +344,13 @@ def test_window_draws_both_modes_and_every_state(window):
     assert window.canvas.condition == "live" and window.canvas.now == pytest.approx(2.98, abs=0.1)
     bars = window.grab().toImage()
     assert len(colours(bars)) > len(colours(idle)) + 20
-    window.mode.setCurrentIndex(1)
+    window.set_mode("radial")
     window.tick()
     radial = window.grab().toImage()
     assert window.canvas.mode == "radial" and radial != bars
     window.set_shown("drums", False)
     window.set_shown("onsets", False)
-    window.beats.setChecked(False)
+    window.set_beats(False)
     window.tick()
     assert window.grab().toImage() != radial
     bus.publish(
@@ -444,33 +444,3 @@ def test_live_engine_feeds_the_window_and_the_session_replays_with_original_time
     replayed = [mark.time for mark in window.state.markers if mark.kind == "onset"]
     assert replayed == pytest.approx(live_onsets)  # audio timestamps, not replay arrival times
 
-
-def test_control_center_opens_the_visualizer_and_passes_each_session_to_it(
-    app, tmp_path, monkeypatch
-):
-    from gmv import ui
-
-    monkeypatch.setattr(ui.ControlCenter, "refresh_sources", lambda self: None)
-    monkeypatch.setattr(ui, "ROOT", tmp_path)
-    center = ui.ControlCenter()
-    assert center.activity_model.text() == ""  # no weights file is assumed to exist
-    center.open_visualizer()
-    view = center.visualizer
-    view.timer.stop()
-    assert view.bus is None and view.canvas.condition == "idle"
-    center.source_type.setCurrentIndex(3)
-    center.file_path.setText(str(write_clicks(tmp_path / "clicks.wav", seconds=2)))
-    center.logging.setChecked(False)
-    center.activity_model.setText(str(tmp_path / "missing.npz"))
-    center.start_analysis()
-    assert center.engine is None and "Unable to start" in center.status_label.text()
-    center.activity_model.setText("")
-    center.start_analysis()
-    assert view.bus is center.engine.bus and view.subscription is not center.subscription
-    assert view.canvas.info["beat_tracker"] is False and view.canvas.info["activity_model"] is None
-    center.stop_analysis()
-    assert center.engine.done.wait(15)
-    view.tick()
-    center.poll()
-    center.close()
-    assert view.subscription is None

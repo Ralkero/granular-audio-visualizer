@@ -21,6 +21,8 @@ class AnalysisConfig(FrozenModel):
     experimental_beat_phase: bool = False
     # Weights file for the instrument-activity estimator; no file, no activity output.
     activity_model_path: str | None = None
+    # Weights file for the guitar tracker; no file, no guitar output.
+    guitar_model_path: str | None = None
     # Log-spaced display spectrum carried on every feature frame; 0 turns it off.
     spectrum_bands: int = Field(default=48, ge=0, le=96)
     debug_audio_seconds: int = Field(default=0, ge=0, le=60)

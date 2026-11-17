@@ -17,7 +17,7 @@ def main(argv=None):
     commands.add_parser("devices")
     commands.add_parser("ui")
     visualizer = commands.add_parser(
-        "visualizer", help="Open the visualizer with the control center, or on a recorded session"
+        "visualizer", help="Open the application, optionally replaying a recorded session"
     )
     visualizer.add_argument("--replay", metavar="SESSION", help="Session folder or messages.jsonl")
     visualizer.add_argument("--speed", type=float, default=1)
@@ -44,18 +44,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command == "corpus":
         return corpus_cli.run(args)
-    if args.command == "ui":
-        from .ui import main as ui_main
+    if args.command in ("ui", "visualizer"):
+        from .app.window import main as app_main
 
-        return ui_main()
-    if args.command == "visualizer":
-        if not args.replay:
-            from .ui import main as ui_main
-
-            return ui_main(visualizer=True)
-        from .visualizer.window import replay_main
-
-        return replay_main(args.replay, args.speed)
+        return app_main(getattr(args, "replay", None), getattr(args, "speed", 1.0))
     if args.command == "devices":
         print(json.dumps(list_output_devices(), indent=2))
         return

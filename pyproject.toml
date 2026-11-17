@@ -22,7 +22,8 @@ evaluation = ["mir_eval==0.8.2"]
 gmv = "gmv.cli:main"
 
 [project.gui-scripts]
-gmv-control = "gmv.ui:main"
+gmv-control = "gmv.app.window:main"
+gmv-visualizer = "gmv.app.window:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

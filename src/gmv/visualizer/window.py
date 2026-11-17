@@ -13,7 +13,6 @@ from time import perf_counter
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import (
-    QAction,
     QColor,
     QFont,
     QLinearGradient,
@@ -24,14 +23,6 @@ from PySide6.QtGui import (
     QRadialGradient,
 )
 from PySide6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QHBoxLayout,
-    QLabel,
-    QMenu,
-    QPushButton,
-    QSlider,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -52,25 +43,6 @@ CONDITIONS = {
 }
 AHEAD = 0.08  # share of the time axis kept to the right of "now" for predictions
 QUEUE = 2048
-STYLE = """
-QWidget#bar { background: #0b0d14; border-top: 1px solid #1c2030; }
-QLabel, QCheckBox { color: #8089a0; font-size: 12px; }
-QCheckBox::indicator { width: 14px; height: 14px; }
-QPushButton, QToolButton, QComboBox {
-    color: #e8ebf4; background: #161a26; border: 1px solid #262b3a;
-    border-radius: 6px; padding: 5px 12px; font-size: 12px;
-}
-QPushButton:hover, QToolButton:hover, QComboBox:hover { border-color: #3b4460; }
-QToolButton::menu-indicator { image: none; }
-QComboBox QAbstractItemView, QMenu {
-    color: #e8ebf4; background: #161a26; border: 1px solid #262b3a;
-    selection-background-color: #262b3a;
-}
-QSlider::groove:horizontal { height: 4px; background: #262b3a; border-radius: 2px; }
-QSlider::handle:horizontal {
-    width: 12px; margin: -5px 0; border-radius: 6px; background: #22d3ee;
-}
-"""
 
 
 def mix(a, b, t):
@@ -293,7 +265,7 @@ class Canvas(QWidget):
             painter.setFont(self.font(12))
             painter.setPen(DIM)
             if self.info["beat_tracker"] is False:
-                text = "Beat tracker off  ·  enable it in the Control Center before starting"
+                text = "Beat tracker off  ·  it can be enabled in Settings"
             elif self.condition in ("live", "replay"):
                 text = "Experimental beat tracker  ·  listening for a pulse"
             else:
@@ -429,14 +401,16 @@ class Canvas(QWidget):
         painter.drawText(
             rect.adjusted(0, 0, 0, -rect.height() * 0.2),
             Qt.AlignmentFlag.AlignCenter,
-            "Analysis stopped" if stopped else "Waiting for audio analysis",
+            "Stopped" if stopped else "Ready",
         )
         painter.setFont(self.font(13))
         painter.setPen(DIM)
         painter.drawText(
             rect.adjusted(0, 56 * self.scale, 0, -rect.height() * 0.2),
             Qt.AlignmentFlag.AlignCenter,
-            "Choose a source in the Control Center and press Start analysis",
+            "Analysis stopped. Press Start to begin again"
+            if stopped
+            else "Press Start to visualize what is playing on this PC",
         )
 
     # -- time axis ---------------------------------------------------------------------------
@@ -671,7 +645,7 @@ class Canvas(QWidget):
             painter.setPen(alpha(DIM, 0.8))
             if lane.key in ("drums", "bass", "vocals") and not method:
                 reason = (
-                    "no detector output  ·  choose an activity weights file in the Control Center"
+                    "no detector output  ·  choose a weights file in Settings"
                     if not self.info["activity_model"]
                     else "no detector output yet"
                 )
@@ -713,108 +687,68 @@ class Canvas(QWidget):
 
 
 class VisualizerWindow(QWidget):
-    """Top-level window. ``attach`` it to any EventBus: a running engine or a replay."""
+    """The visualizer surface. ``attach`` it to any EventBus: a running engine or a replay.
+
+    It is the main view of the application and also works on its own as a window.
+    """
 
     def __init__(self, parent=None):
-        super().__init__(parent, Qt.WindowType.Window)
+        super().__init__(parent)
         self.setWindowTitle("Granular Music Visualizer")
         self.resize(1440, 900)
         self.setObjectName("visualizer")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
-        self.setStyleSheet("QWidget#visualizer { background: #05060a; }" + STYLE)
+        self.setStyleSheet("QWidget#visualizer { background: #05060a; }")
         self.state = VisualState()
         self.canvas = Canvas(self.state)
         self.bus = self.subscription = None
         self.dropped = 0
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.canvas, 1)
-        layout.addWidget(self.build_bar())
+        layout.addWidget(self.canvas)
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.timer.timeout.connect(self.tick)
         self.last_tick = perf_counter()
         self.timer.start(16)
 
-    def build_bar(self):
-        bar = QWidget(objectName="bar")
-        row = QHBoxLayout(bar)
-        row.setContentsMargins(20, 9, 20, 9)
-        row.setSpacing(14)
-        self.mode = QComboBox()
-        self.mode.addItem("Spectrum bars", "bars")
-        self.mode.addItem("Radial", "radial")
-        self.mode.currentIndexChanged.connect(self.apply)
-        self.lanes = QToolButton(text="Lanes  ▾")
-        self.lanes.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        menu = QMenu(self.lanes)
-        menu.aboutToShow.connect(self.fill_lane_menu)
-        self.lanes.setMenu(menu)
-        self.beats = QCheckBox("Beats (experimental)")
-        self.beats.setChecked(True)
-        self.beats.toggled.connect(self.apply)
-        self.smoothing, self.gain = (
-            QSlider(Qt.Orientation.Horizontal),
-            QSlider(Qt.Orientation.Horizontal),
-        )
-        for slider, low, high, value in ((self.smoothing, 5, 60, 22), (self.gain, -12, 18, 0)):
-            slider.setRange(low, high)
-            slider.setValue(value)
-            slider.setFixedWidth(120)
-            slider.valueChanged.connect(self.apply)
-        reset = QPushButton("Reset")
-        reset.setToolTip("Clear the timeline and lane history")
-        reset.clicked.connect(self.state.reset)
-        self.fullscreen = QPushButton("Full screen")
-        self.fullscreen.clicked.connect(self.toggle_fullscreen)
-        row.addWidget(self.mode)
-        row.addWidget(self.lanes)
-        row.addWidget(self.beats)
-        row.addStretch(1)
-        row.addWidget(QLabel("Smoothing"))
-        row.addWidget(self.smoothing)
-        row.addWidget(QLabel("Intensity"))
-        row.addWidget(self.gain)
-        row.addWidget(reset)
-        row.addWidget(self.fullscreen)
-        return bar
+    # -- display options -----------------------------------------------------------------------
 
-    def apply(self):
-        self.canvas.mode = self.mode.currentData()
-        self.canvas.show_beats = self.beats.isChecked()
-        self.canvas.display.release_s = self.smoothing.value() / 100
-        self.canvas.display.gain_db = float(self.gain.value())
+    def set_mode(self, mode):
+        self.canvas.mode = mode
         self.canvas.update()
 
-    def fill_lane_menu(self):
-        menu = self.lanes.menu()
-        menu.clear()
-        entries = [(key, title) for key, title in ROWS]
-        entries += [(lane.key, lane.title) for lane, _ in self.state.board.lanes()]
-        for position, (key, title) in enumerate(entries):
-            if position == len(ROWS):
-                menu.addSeparator()
-            action = QAction(title, menu, checkable=True)
-            action.setChecked(key not in self.canvas.hidden)
-            action.toggled.connect(lambda shown, key=key: self.set_shown(key, shown))
-            menu.addAction(action)
+    def set_beats(self, shown):
+        self.canvas.show_beats = bool(shown)
+        self.canvas.update()
+
+    def set_smoothing(self, seconds):
+        self.canvas.display.release_s = seconds
+
+    def set_gain(self, decibels):
+        self.canvas.display.gain_db = decibels
+
+    def set_window(self, seconds):
+        """Length of the timeline and lanes."""
+        self.state.window_s = float(seconds)
+        self.canvas.update()
 
     def set_shown(self, key, shown):
         (self.canvas.hidden.discard if shown else self.canvas.hidden.add)(key)
         self.canvas.update()
 
     def toggle_fullscreen(self):
-        if self.isFullScreen():
-            self.showNormal()
+        top = self.window()
+        if top.isFullScreen():
+            top.showNormal()
         else:
-            self.showFullScreen()
+            top.showFullScreen()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_F11:
             self.toggle_fullscreen()
-        elif event.key() == Qt.Key.Key_Escape and self.isFullScreen():
-            self.showNormal()
+        elif event.key() == Qt.Key.Key_Escape and self.window().isFullScreen():
+            self.window().showNormal()
         elif event.key() == Qt.Key.Key_D:
             self.canvas.show_stats = not self.canvas.show_stats
         else:
@@ -866,29 +800,3 @@ class VisualizerWindow(QWidget):
         if not self.timer.isActive():
             self.timer.start(16)
         super().showEvent(event)
-
-
-def replay_main(path, speed=1.0):
-    """Open only the visualizer, on a recorded session."""
-    import sys
-
-    from PySide6.QtWidgets import QApplication
-
-    from .replay import ReplaySession
-
-    session = ReplaySession(path, speed)
-    app = QApplication.instance() or QApplication(sys.argv)
-    app.setStyle("Fusion")
-    window = VisualizerWindow()
-    window.attach(
-        session.bus,
-        source=session.title,
-        beat_tracker=session.configuration.get("experimental_beat_phase"),
-        activity_model=session.configuration.get("activity_model_path"),
-    )
-    window.show()
-    session.start()
-    try:
-        return app.exec()
-    finally:
-        session.stop()

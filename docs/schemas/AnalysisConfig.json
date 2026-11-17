@@ -75,6 +75,18 @@
       "default": null,
       "title": "Activity Model Path"
     },
+    "guitar_model_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Guitar Model Path"
+    },
     "spectrum_bands": {
       "default": 48,
       "maximum": 96,
