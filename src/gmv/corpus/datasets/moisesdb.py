@@ -39,6 +39,13 @@ DRUM_TRACK_LABEL = {
     "hihat": "hi_hat",
 }
 
+# Guitar tracks by how they sound. Anything else in the guitar stem only counts as "guitar".
+GUITAR_TRACK_LABEL = {
+    "distorted_electric_guitar": "guitar_distorted",
+    "clean_electric_guitar": "guitar_clean",
+    "acoustic_guitar": "guitar_acoustic",
+}
+
 
 def discover(root):
     tracks = []
@@ -63,6 +70,8 @@ def discover(root):
                 labels = [label]
                 if name == "drums" and slug(item.get("trackType", "")) in DRUM_TRACK_LABEL:
                     labels.append(DRUM_TRACK_LABEL[slug(item["trackType"])])
+                if name == "guitar" and slug(item.get("trackType", "")) in GUITAR_TRACK_LABEL:
+                    labels.append(GUITAR_TRACK_LABEL[slug(item["trackType"])])
                 for target in labels:
                     stems.setdefault(target, []).append(path)
                     if item.get("has_bleed"):

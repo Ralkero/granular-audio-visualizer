@@ -228,7 +228,13 @@ def test_moisesdb_import_renders_mix_maps_drum_mics_and_flags_bleed(tmp_path):
     assert summary["imported"] == 1 and summary["failed"] == []
     recording = registry.load_manifest(manifest_path).recordings[0]
     assert recording.dataset_track_id == "1111-aaaa" and "genre_rock" in recording.tags
-    assert set(recording.stems) == {"kick", "bass", "guitar", "other_harmonic"}  # single files
+    assert set(recording.stems) == {
+        "kick",
+        "bass",
+        "guitar",
+        "guitar_distorted",
+        "other_harmonic",
+    }  # labels backed by a single file
     mix = registry.load_paths(manifest_path)["recordings"][recording.recording_id]
     assert mix.endswith(".flac") and "corpus-local" in mix
     reference = registry.annotations_for(manifest_path, recording.recording_id)[0]
@@ -236,5 +242,7 @@ def test_moisesdb_import_renders_mix_maps_drum_mics_and_flags_bleed(tmp_path):
     assert spans["kick"] == (0.0, 1.0, "certain")
     assert spans["drums"] == (0.0, 2.0, "uncertain")  # overheads carry bleed
     assert spans["guitar"] == (2.0, 4.0, "certain") and spans["other_harmonic"][0] == 3.0
+    assert spans["guitar_distorted"] == (2.0, 4.0, "certain")  # known from the track type
+    assert not reference.covers("activity.guitar_clean")
     assert not reference.covers("activity.snare")  # no snare microphone: not annotated
     assert validate_corpus(manifest_path) == ([], [])

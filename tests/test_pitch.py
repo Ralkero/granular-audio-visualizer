@@ -171,3 +171,26 @@ def test_note_lane_is_drawn_only_when_candidates_are_published():
     assert view.grab().toImage() != hidden
     view.close()
     app.processEvents()
+
+
+def test_trainer_can_learn_guitar_labels_and_remixes_without_each_instrument():
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "train_activity", Path(__file__).parents[1] / "scripts" / "train_activity.py"
+    )
+    trainer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(trainer)
+    trainer.configure(("guitar", "guitar_distorted", "vocals"))
+    assert set(trainer.VARIANTS) == {"no_guitar", "no_vocals", "random"}  # sub-labels follow guitar
+    stems = {
+        name: np.full((100, 2), value, np.float32)
+        for name, value in (("guitar", 1.0), ("vocals", 2.0), ("drums", 4.0), ("piano", 8.0))
+    }
+    audio, present = trainer.remix(stems, "no_guitar", seed=1)
+    assert audio[0, 0] == 14.0 and present == [False, False, True]  # distorted guitar goes too
+    audio, present = trainer.remix(stems, "no_vocals", seed=1)
+    assert audio[0, 0] == 13.0 and present == [True, True, False]
+    with pytest.raises(ValueError, match="Unknown instrument labels"):
+        trainer.configure(("guitar", "theremin"))

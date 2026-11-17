@@ -50,6 +50,9 @@ Label = Literal[
     "toms",
     "bass",
     "guitar",
+    "guitar_distorted",
+    "guitar_clean",
+    "guitar_acoustic",
     "rhythm_guitar",
     "lead_guitar",
     "vocals",
@@ -65,7 +68,13 @@ LABELS = Label.__args__
 # A parent is active whenever any child is; used only for explicit roll-up reporting.
 HIERARCHY = {
     "drums": ("kick", "snare", "cymbals", "hi_hat", "toms"),
-    "guitar": ("rhythm_guitar", "lead_guitar"),
+    "guitar": (
+        "guitar_distorted",
+        "guitar_clean",
+        "guitar_acoustic",
+        "rhythm_guitar",
+        "lead_guitar",
+    ),
     "vocals": ("vocals_clean", "vocals_harsh"),
 }
 EVENT_LAYERS = ("onset", "beat", "downbeat", "tempo", "sections")

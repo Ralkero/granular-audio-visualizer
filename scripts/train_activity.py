@@ -18,7 +18,11 @@ from gmv.activity import FEATURE_VERSION, FrameFeatures, add_context
 from gmv.corpus import registry
 from gmv.models import AnalysisConfig
 
+from gmv.corpus.schema import HIERARCHY  # noqa: E402
+from gmv.corpus.schema import LABELS as ALL_LABELS  # noqa: E402
+
 LABELS = ("drums", "bass", "vocals")
+CHILDREN = {child for children in HIERARCHY.values() for child in children}
 SPLITS = ("train", "validation")
 
 
@@ -27,6 +31,18 @@ STEMS = ("drums", "bass", "vocals", "other")
 # which is the most direct counter-example for its detector. A bass-less remix is left out:
 # on validation it lowered bass recall on real mixes (AUC 0.94 against 0.96 without it).
 VARIANTS = {"no_vocals": ("vocals",), "no_drums": ("drums",), "random": ()}
+
+
+def configure(labels):
+    """Learn another set of labels. Remixes then use every stem a recording has, and drop
+    one learned instrument at a time so the model sees the same music without it."""
+    global LABELS, STEMS, VARIANTS
+    unknown = set(labels) - set(ALL_LABELS)
+    if unknown:
+        raise ValueError(f"Unknown instrument labels: {sorted(unknown)}")
+    LABELS, STEMS = tuple(labels), ()
+    VARIANTS = {f"no_{label}": (label,) for label in labels if label not in CHILDREN}
+    VARIANTS["random"] = ()
 
 
 def frame_rows(audio, rate, config):
@@ -63,15 +79,18 @@ def frame_labels(manifest_path, recording, times):
 def remix(stems, variant, seed):
     """Return (audio, labels still present) for one remix of the stems."""
     rng = np.random.default_rng(seed)
+    names = sorted(stems)
     removed = set(VARIANTS[variant])
-    gains = dict.fromkeys(STEMS, 1.0)
+    gains = dict.fromkeys(names, 1.0)
     if variant == "random":
-        gains = {name: 10 ** (rng.uniform(-9, 6) / 20) for name in STEMS}
-        removed = {name for name in STEMS if rng.random() < 0.15}
-        if len(removed) == len(STEMS):
-            removed.discard("other")
-    audio = sum(gains[name] * stems[name] for name in STEMS if name not in removed)
-    return audio.astype(np.float32), [name not in removed for name in LABELS]
+        gains = {name: 10 ** (rng.uniform(-9, 6) / 20) for name in names}
+        removed = {name for name in names if rng.random() < 0.15}
+        if len(removed) == len(names):
+            removed.discard(names[-1])
+    audio = sum(gains[name] * stems[name] for name in names if name not in removed)
+    # A label is gone when its own stem is, or (for a sub-label) when its parent's stem is.
+    gone = removed | {c for p in removed for c in HIERARCHY.get(p, ())}
+    return audio.astype(np.float32), [name not in gone for name in LABELS]
 
 
 def cache_features(manifest_path, dataset, cache, augment=True, progress=print):
@@ -100,11 +119,12 @@ def cache_features(manifest_path, dataset, cache, augment=True, progress=print):
         if not augment or recording.split != "train" or not todo:
             continue
         found, problems = registry.resolve_stems(recording, paths, verify_hash=False)
-        if problems or set(found) != set(STEMS):
+        wanted = STEMS if STEMS else tuple(found)
+        if problems or not set(wanted) <= set(found):
             progress(f"no remixes for {recording.recording_id}: stems incomplete")
             continue
-        stems = {name: registry.read_audio(found[name]) for name in STEMS}
-        rate = stems["drums"][1]
+        stems = {name: registry.read_audio(found[name]) for name in wanted}
+        rate = next(iter(stems.values()))[1]
         length = min(len(audio) for audio, _ in stems.values())
         stems = {name: audio[:length] for name, (audio, _) in stems.items()}
         for variant in todo:
@@ -239,9 +259,17 @@ def main():
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--cache", required=True, type=Path)
     parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--labels",
+        help="Comma-separated instrument labels to learn (default drums,bass,vocals). "
+        "For guitar on MoisesDB: guitar,guitar_distorted,guitar_clean",
+    )
+    parser.add_argument("--name", default="activity_mlp_v2", help="Name stored in the weights")
     args = parser.parse_args()
+    if args.labels:
+        configure(tuple(label.strip() for label in args.labels.split(",")))
     cache_features(Path(args.corpus), args.dataset, args.cache)
-    train(args.cache, args.output)
+    train(args.cache, args.output, name=args.name)
 
 
 if __name__ == "__main__":

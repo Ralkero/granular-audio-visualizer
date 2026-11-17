@@ -46,6 +46,7 @@ def main():
         experimental_beat_phase=True,
         activity_model_path=args.activity_model,
         guitar_model_path=args.guitar_model,
+        pitch_tracking=True,
     )
     engine = Engine(source, config, logging=False)
     width, height = map(int, args.size.split("x"))
