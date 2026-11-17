@@ -112,7 +112,7 @@ class ControlCenter(QMainWindow):
         )
         self.advanced = QCheckBox("Delayed harmonic/percussive analysis — experimental, CPU only")
         self.beat_phase = QCheckBox(
-            "Experimental beat phase — conservative, low recall; off by default"
+            "Experimental beat tracker — predicts beats ahead; not yet validated, off by default"
         )
         self.advanced.setToolTip(
             "Two-second delayed spectral HPSS; does not identify individual instruments"

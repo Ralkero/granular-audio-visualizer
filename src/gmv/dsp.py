@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import numpy as np
 
+from .beat import BeatTracker
 from .models import AnalysisConfig, FeatureFrame, MusicalEvent
 
 
@@ -94,7 +95,8 @@ class Analyzer:
         self.phase = None
         self.phase_period = None
         self.beat_locked = False
-        self.last_prediction = -1e6
+        self.beats = BeatTracker(self.hop) if config.experimental_beat_phase else None
+        self.previous_log = None
 
     def estimate_tempo(self, timestamp):
         if timestamp - self.last_tempo < 1 or len(self.flux_history) * self.hop < 4:
@@ -191,7 +193,7 @@ class Analyzer:
         events = []
         group = None
 
-        def emit(kind, confidence, value=None, event_time=None, measurements=()):
+        def emit(kind, confidence, value=None, event_time=None, measurements=(), method=None):
             event = MusicalEvent(
                 session_id=self.session_id,
                 source=self.source,
@@ -203,7 +205,7 @@ class Analyzer:
                 confidence=confidence,
                 group_id=group,
                 related_event_ids=tuple(e.event_id for e in events[:1]),
-                method="mixed_audio_attack_v3",
+                method=method or "mixed_audio_attack_v3",
                 segment=block.segment,
                 evidence_monotonic=capture_mono
                 + (timestamp if event_time is None else event_time)
@@ -295,30 +297,30 @@ class Analyzer:
         self.attack_peak = np.where(
             open_mask, np.maximum(self.attack_peak, band_values), self.attack_peak
         )
-        # Circular concentration of recent attacks estimates beat phase separately from tempo.
-        self.beat_locked = False
-        if (
-            self.config.experimental_beat_phase
-            and self.tempo is not None
-            and self.tempo_confidence >= 0.45
-            and timestamp - self.last_onset < 1.25
-        ):
-            period = 60 / self.tempo
-            recent_onsets = np.asarray([t for t in self.onsets if t > timestamp - 4])
-            if len(recent_onsets) >= 6:
-                vector = np.mean(np.exp(2j * np.pi * recent_onsets / period))
-                if abs(vector) > 0.72:
-                    self.phase = float(np.angle(vector) % (2 * np.pi) * period / (2 * np.pi))
-                    self.phase_period = period
-                    self.beat_locked = True
-                    future = self.phase + (np.floor((end - self.phase) / period) + 1) * period
-                    if future - self.last_prediction > period * 0.5:
-                        emit(
-                            "beat_prediction",
-                            min(0.7, self.tempo_confidence * abs(vector)),
-                            event_time=float(future),
-                        )
-                        self.last_prediction = future
+        # Beat tracking runs on its own onset-strength signal: the rise in log magnitude,
+        # averaged inside each band so that the many high-frequency bins do not outvote the
+        # few bass bins.
+        if self.beats is not None:
+            log_magnitude = np.log1p(magnitude)
+            rise = 0.0
+            if self.previous_log is not None and not is_quiet:
+                delta = np.maximum(log_magnitude - self.previous_log, 0)
+                rise = float(sum(delta[m].mean() for m in self.masks if m.any()))
+            self.previous_log = log_magnitude
+            ahead = self.beats.step(rise)
+            # A pulse needs attacks: a sustained tone can look periodic but has none.
+            attacks = sum(t > timestamp - 4 for t in self.onsets)
+            self.beat_locked = self.beats.locked and attacks >= 4
+            if ahead is not None and self.beat_locked:
+                self.phase = float(timestamp + ahead * self.hop)
+                self.phase_period = self.beats.period * self.hop
+                emit(
+                    "beat_prediction",
+                    min(0.7, self.beats.confidence),
+                    event_time=self.phase,
+                    measurements=(("tempo_bpm", float(self.beats.tempo_bpm)),),
+                    method="causal_beat_tracker_v1",
+                )
         if not self.beat_locked:
             self.phase = self.phase_period = None
         if not is_quiet and db - self.previous_db > 6:
@@ -377,7 +379,7 @@ class Analyzer:
             attack_energy_ratio=attack_ratio,
             beat_locked=self.beat_locked,
             beat_phase=float((timestamp - self.phase) % self.phase_period / self.phase_period)
-            if self.beat_locked
+            if self.beat_locked and self.phase is not None
             else None,
         )
         return frame, events

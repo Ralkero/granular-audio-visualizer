@@ -145,7 +145,7 @@ def main(argv=None):
     parser.add_argument("--output", required=True)
     parser.add_argument("--import-manifest")
     parser.add_argument(
-        "--beat-phase", action="store_true", help="Evaluate the opt-in phase prototype"
+        "--beat-phase", action="store_true", help="Enable the opt-in causal beat tracker"
     )
     parser.add_argument(
         "--export-fixtures", help="Explicitly generate original synthetic WAVs and annotations"
