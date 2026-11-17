@@ -328,21 +328,62 @@ These tracks were not trained on. Drums, bass and vocals play most of the time i
 The weights are derived from MUSDB18-HQ audio, whose terms are academic and non-commercial. Publishing them is the owner's decision, so the file stays in the git-ignored `.model-cache/` directory. Anyone with the dataset can rebuild it:
 
 ```powershell
-.venv\Scripts\python.exe scripts\train_activity.py --corpus corpus-data\corpus\manifest.json --dataset musdb18hq --cache <cache folder> --output .model-cache\activity_v1.npz
-.venv\Scripts\python.exe -m gmv.evaluation.run --detector candidate --activity-model .model-cache\activity_v1.npz --corpus corpus-data\corpus\manifest.json --corpus-split validation --dataset musdb18hq --output local-evidence\activity.json
+.venv\Scripts\python.exe scripts\train_activity.py --corpus corpus-data\corpus\manifest.json --dataset musdb18hq --cache <cache folder> --output .model-cache\activity_v2.npz
+.venv\Scripts\python.exe -m gmv.evaluation.run --detector candidate --activity-model .model-cache\activity_v2.npz --corpus corpus-data\corpus\manifest.json --corpus-split validation --dataset musdb18hq --output local-evidence\activity.json
 ```
 
 Also in this milestone: corpus audio is now read into memory before decoding. On the dataset drive used here that cut the load time of one track from about a minute to about a second.
 
+## Milestone E3: better vocal activity
+
+E2 left vocals as the weakest instrument: 19% of vocal-free time was reported as vocals. Three changes were tried, measured on the MUSDB18-HQ validation split, and kept. The model is now `activity_mlp_v2` on feature version 2; weights trained for version 1 no longer load.
+
+1. **Stem remixes as training data.** Each train track is also rendered from its stems without vocals, without drums, and once with random stem levels (a stem dropped now and then). The same music without the vocal is the most direct counter-example for a vocal detector. Labels still come from the stems; nothing is hand labelled. Only train tracks are remixed; validation and test stay real mixes.
+2. **Two feature groups aimed at vocals.** The spectrum both channels share (lead vocals are mixed to the centre), and how far the spectral pattern slides along log frequency from one frame to the next (sung notes glide and wobble; fretted and keyed notes mostly do not).
+3. **A larger hidden layer** (128 units, about 71,000 weights), which the fivefold larger training set supports.
+
+### What each change did (validation, frame level, fixed 0.5 threshold)
+
+| Setup | Vocals AUC | Vocals false-positive rate | Vocals recall |
+|---|---:|---:|---:|
+| E2 features, real mixes only | 0.901 | 0.20 | 0.83 |
+| E2 features + remixes | 0.906 | 0.13 | 0.78 |
+| New features, real mixes only | 0.908 | 0.19 | 0.86 |
+| New features + remixes | 0.917 | 0.14 | 0.84 |
+| New features + remixes, 128 units (kept, after the bass fix below) | 0.926 | 0.14 | 0.86 |
+
+A 256-unit layer did no better. **A bass-less remix was tried and removed:** with it, bass on real mixes got worse (AUC 0.94 against 0.96, recall 0.80 against 0.89).
+
+### Result through the full pipeline (validation, 15 tracks, 77 minutes)
+
+| Instrument | Precision | Recall | F1 | Always-active F1 | False-positive rate | E2 F1 | E2 false-positive rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Drums | 0.975 | 0.898 | 0.935 | 0.872 | 0.078 | 0.948 | 0.122 |
+| Bass | 0.968 | 0.886 | 0.925 | 0.850 | 0.084 | 0.926 | 0.086 |
+| Vocals | 0.917 | 0.860 | **0.887** | 0.777 | **0.136** | 0.847 | 0.187 |
+
+- **Vocals improved on every measure**: F1 0.85 to 0.89, false-positive rate 0.19 to 0.14, recall 0.81 to 0.86. The worst track rose from F1 0.40 to 0.76, and the worst per-track false-positive rate fell from 0.61 to 0.33.
+- **Drums traded recall for fewer false positives**: false-positive rate 0.12 to 0.08, recall 0.93 to 0.90, F1 0.95 to 0.94. One track fell to F1 0.25 (0.77 before). This is a cost of the change, not an improvement.
+- **Bass is unchanged**, and one track still scores 0.00.
+- Entrances are still about 0.2 to 0.3 s late.
+- Cost: offline DSP p95 about 2.2 ms per frame (about 1.7 ms in E2), from the larger network.
+- Summary table: [evaluation/musdb18hq_validation_activity_v2.md](evaluation/musdb18hq_validation_activity_v2.md).
+
+### Limits
+
+- **Still a development result, more so than E2.** Roughly ten setups were compared on the validation split in this milestone, so its numbers are optimistic. The test split (54 tracks) has still not been read.
+- 14% of vocal-free time is still reported as vocals. A separation model may do better; that has not been measured.
+- The remaining E2 limits stand: stem-energy reference, no per-genre figure, not tried on live capture, no guitar or drum-part activity, weights kept out of the repository.
+
 ## Status of the phase
 
-Done: A, B, C, D1, D2, D3 (MDB Drums, MUSDB18-HQ train and validation), D4, E1 (beat tracker, development result only), E2 (drums, bass and vocals activity, validation result only).
+Done: A, B, C, D1, D2, D3 (MDB Drums, MUSDB18-HQ train and validation), D4, E1 (beat tracker, development result only), E2 and E3 (drums, bass and vocals activity, validation results only).
 
 Outstanding:
 
 - More reference material: genre tags for MUSDB18-HQ, MoisesDB import (adapter unverified on real files), a rendered-multitrack tier, a held-out beat set, MedleyDB adapter.
-- Detection work from D4: a held-out check and off-beat fix for the beat tracker, onset recall with a precision reference, drum classes; for instrument activity a final test-split evaluation, better vocals, and guitar and drum-part activity (needs MoisesDB).
+- Detection work from D4: a held-out check and off-beat fix for the beat tracker, onset recall with a precision reference, drum classes; for instrument activity a final test-split evaluation, the drums recall lost in E3, a comparison with a separation model for vocals, and guitar and drum-part activity (needs MoisesDB).
 - Capture reliability (USB disconnect/reconnect, default-output switch on the native backend) and source-separation research: not started in this phase.
 - Final validation and report.
 
-**Real-music analysis is not validated.** What exists is a development measurement on 21.8 minutes of real music for drum attacks and beats (including an opt-in beat tracker at F1 0.69 on the data it was developed on), and an opt-in drums, bass and vocals activity estimator scored on 77 minutes of validation tracks (F1 0.95, 0.93, 0.85). The MUSDB18-HQ test split (3.76 h) is reserved and untouched.
+**Real-music analysis is not validated.** What exists is a development measurement on 21.8 minutes of real music for drum attacks and beats (including an opt-in beat tracker at F1 0.69 on the data it was developed on), and an opt-in drums, bass and vocals activity estimator scored on 77 minutes of validation tracks (F1 0.94, 0.93, 0.89). The MUSDB18-HQ test split (3.76 h) is reserved and untouched.

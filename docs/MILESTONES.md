@@ -33,5 +33,6 @@ See [PHASE1_2_REPORT.md](PHASE1_2_REPORT.md).
 | D4 — next detection improvements | Done: priorities are beat tracking, onset recall with a precision reference, drum classes, instrument activity |
 | E1 — beat and tempo tracker | Opt-in causal tracker: beat F1 0.69 on MDB Drums (was 0.016), beats announced about 250 ms ahead. Development result only; needs a held-out beat set and an off-beat fix before it is on by default |
 | E2 — instrument activity | Opt-in drums, bass and vocals estimator trained from stems with no hand labelling. MUSDB18-HQ validation F1 0.95 / 0.93 / 0.85 against always-active baselines of 0.87 / 0.85 / 0.78. Test split still unread; weights kept local |
+| E3 — better vocal activity | Stem remixes as training data plus centre-channel and pitch-movement features. Validation: vocals F1 0.85 to 0.89, false-positive rate 0.19 to 0.14; drums lost some recall (F1 0.95 to 0.94); bass unchanged. Test split still unread |
 | Separation research and capture device checks | Not started; physical device tests still unrun |
 | Final validation and report | Not started |
