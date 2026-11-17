@@ -375,15 +375,41 @@ A 256-unit layer did no better. **A bass-less remix was tried and removed:** wit
 - 14% of vocal-free time is still reported as vocals. A separation model may do better; that has not been measured.
 - The remaining E2 limits stand: stem-energy reference, no per-genre figure, not tried on live capture, no guitar or drum-part activity, weights kept out of the repository.
 
+## Final held-out evaluation of the activity estimator (MUSDB18-HQ test split)
+
+The owner asked for the final run. The E3 model (`activity_mlp_v2`, code at commit `46b8370`) was scored **once** on the 54 test tracks (225.7 minutes), which nothing in this project had read before: not training, not model selection, not any earlier evaluation. Nothing was changed after seeing the result. **This split is now used; any later model scored on it is no longer a clean held-out result.**
+
+| Instrument | Precision | Recall | F1 | Always-active F1 | False-positive rate | Validation F1 | Validation false-positive rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Drums | 0.973 | 0.920 | **0.946** | 0.910 | 0.127 | 0.935 | 0.078 |
+| Bass | 0.927 | 0.917 | **0.922** | 0.861 | 0.223 | 0.925 | 0.084 |
+| Vocals | 0.858 | 0.777 | **0.815** | 0.754 | 0.197 | 0.887 | 0.136 |
+
+Summary table: [evaluation/musdb18hq_test_activity_v2.md](evaluation/musdb18hq_test_activity_v2.md).
+
+What the held-out numbers say:
+
+- **The validation figures were optimistic, as warned.** Vocals drop from F1 0.89 to 0.82 and the vocal false-positive rate returns to 0.20: one second in five without vocals is reported as vocals. The E3 vocal gain measured on validation is therefore not confirmed at that size on new music. (E2 was never scored on the test split, so E3 cannot be compared with E2 here.)
+- **Bass false positives are much higher than on validation**: 22% of bass-free time is reported as bass, against 8%. F1 hides this because bass plays 80% of the time.
+- **Drums hold up**: F1 0.95, false-positive rate 0.13, no track below F1 0.70.
+- **All three still beat always-active**, by 0.04 (drums), 0.06 (bass) and 0.06 (vocals) in F1. The margins are small. As a "which instruments are playing" signal this is usable for drums, marginal for bass and vocals.
+- Per track: median F1 0.96 (drums), 0.94 (bass), 0.84 (vocals). Four tracks score below 0.5 for vocals (worst 0.25) and one track scores 0.00 for bass. On the worst tracks 64% to 86% of the silent time is reported as active.
+- Entrances are detected a median of 0.12 to 0.24 s from the reference.
+- Offline DSP p95 was at most 1.7 ms per frame.
+
+The same run also gives held-out figures for the band-ratio candidates firing with their instrument silent: bass-transient 2.7% of 28,008 events, snare-like 10.1% of 16,648, high-frequency 6.2% of 4,110. These match train and validation.
+
+Still not shown: metal separately (no genre tags imported), live capture, guitars or individual drum parts.
+
 ## Status of the phase
 
-Done: A, B, C, D1, D2, D3 (MDB Drums, MUSDB18-HQ train and validation), D4, E1 (beat tracker, development result only), E2 and E3 (drums, bass and vocals activity, validation results only).
+Done: A, B, C, D1, D2, D3 (MDB Drums, MUSDB18-HQ train and validation), D4, E1 (beat tracker, development result only), E2 and E3 (drums, bass and vocals activity), and the final held-out evaluation of the E3 model.
 
 Outstanding:
 
 - More reference material: genre tags for MUSDB18-HQ, MoisesDB import (adapter unverified on real files), a rendered-multitrack tier, a held-out beat set, MedleyDB adapter.
-- Detection work from D4: a held-out check and off-beat fix for the beat tracker, onset recall with a precision reference, drum classes; for instrument activity a final test-split evaluation, the drums recall lost in E3, a comparison with a separation model for vocals, and guitar and drum-part activity (needs MoisesDB).
+- Detection work from D4: a held-out check and off-beat fix for the beat tracker, onset recall with a precision reference, drum classes; for instrument activity fewer vocal and bass false positives (a comparison with a separation model is the obvious next measurement; a new held-out set will be needed, since the MUSDB18-HQ test split is now used), and guitar and drum-part activity (needs MoisesDB).
 - Capture reliability (USB disconnect/reconnect, default-output switch on the native backend) and source-separation research: not started in this phase.
 - Final validation and report.
 
-**Real-music analysis is not validated.** What exists is a development measurement on 21.8 minutes of real music for drum attacks and beats (including an opt-in beat tracker at F1 0.69 on the data it was developed on), and an opt-in drums, bass and vocals activity estimator scored on 77 minutes of validation tracks (F1 0.94, 0.93, 0.89). The MUSDB18-HQ test split (3.76 h) is reserved and untouched.
+**Real-music analysis is validated only for instrument activity on MUSDB18-HQ, and the result is modest.** What exists is a development measurement on 21.8 minutes of real music for drum attacks and beats (including an opt-in beat tracker at F1 0.69 on the data it was developed on), and an opt-in drums, bass and vocals activity estimator with a final held-out result on 54 unseen tracks (F1 0.95, 0.92, 0.82 against always-active 0.91, 0.86, 0.75). The MUSDB18-HQ test split (3.76 h) is reserved and untouched.
