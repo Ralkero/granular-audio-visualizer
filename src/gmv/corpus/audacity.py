@@ -36,6 +36,12 @@ from .schema import (
 TOOL = "audacity_labels"
 
 
+# Layers whose labels are single moments. A region there is a mistake (which end was
+# meant?), not something to guess at.
+POINT_LAYERS = ("onset", "beat", "downbeat", "tempo")
+POINT_TOLERANCE_S = 0.001
+
+
 def read_labels(path):
     rows = []
     for number, line in enumerate(Path(path).read_text(encoding="utf-8-sig").splitlines(), 1):
@@ -82,6 +88,12 @@ def import_folder(folder, recording, annotator_id, *, uncertainty_seconds=0.02, 
             text, certainty = _split_text(raw)
             if end > recording.duration_s + 0.05:
                 raise ValueError(f"{path.name}: label at {end:.3f}s is past the recording end")
+            point_layer = layer in POINT_LAYERS or layer.startswith("hits.")
+            if point_layer and end - start > POINT_TOLERANCE_S:
+                raise ValueError(
+                    f"{path.name}: {layer} labels mark single moments, but the label at "
+                    f"{start:.3f}s is a region ending at {end:.3f}s"
+                )
             if layer in ("onset", "beat", "downbeat"):
                 events.append(MixEvent(time=start, kind=layer, certainty=certainty))
             elif layer == "tempo":

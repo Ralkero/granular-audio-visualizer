@@ -23,6 +23,7 @@ from .corpus import CLASSES
 from .detect import run_detector
 from .metrics import (
     aggregate,
+    attack_recall,
     beat_score,
     drop_uncertain,
     interval_score,
@@ -140,12 +141,17 @@ def evaluate_recording(
         result["onsets"] = NOT_ANNOTATED
 
     if annotation.covers("beat"):
-        certain, _ = split([e for e in annotation.events if e.kind == "beat"])
+        certain, unsure = split([e for e in annotation.events if e.kind == "beat"])
         result["beats"] = {
             "reference_kind": kind_of("beat"),
             "reference_count": len(certain),
-            "observed": beat_score(certain, [e.timestamp for e in predicted(*OBSERVED_BEATS)]),
-            "predicted": beat_score(certain, [e.timestamp for e in predicted("beat_prediction")]),
+            "abstained_references": len(unsure),
+            "observed": beat_score(
+                certain, [e.timestamp for e in predicted(*OBSERVED_BEATS)], uncertain=unsure
+            ),
+            "predicted": beat_score(
+                certain, [e.timestamp for e in predicted("beat_prediction")], uncertain=unsure
+            ),
         }
     else:
         result["beats"] = NOT_ANNOTATED
@@ -181,16 +187,7 @@ def evaluate_recording(
         for label in hit_layers
     }
     onset_times = np.sort([e.timestamp for e in predicted("onset")])
-
-    def found_as_onset(times):
-        if not len(onset_times) or not times:
-            return 0
-        index = np.clip(np.searchsorted(onset_times, times), 0, len(onset_times) - 1)
-        nearest = np.minimum(
-            np.abs(onset_times[index] - times),
-            np.abs(onset_times[np.maximum(index - 1, 0)] - times),
-        )
-        return int((nearest <= 0.05).sum())
+    recalls = {label: attack_recall(certain, onset_times) for label, (certain, _) in hits.items()}
 
     result["instrument_events"] = {
         label: {
@@ -201,10 +198,12 @@ def evaluate_recording(
             # Every annotated attack is an acoustic onset in the mix, so recall of the
             # full-mix onset detector on these attacks is valid. Precision is not: other
             # instruments' onsets are real but unannotated here.
-            "detected_as_full_mix_onset_50ms": found_as_onset(certain),
-            "full_mix_onset_recall_50ms": found_as_onset(certain) / len(certain)
-            if certain
-            else None,
+            # One detected onset answers at most one attack of this instrument.
+            "detected_as_full_mix_onset_50ms": recalls[label]["matched"],
+            "full_mix_onset_recall_50ms": recalls[label]["recall"],
+            "attacks_sharing_an_onset": recalls[label]["shared_onsets"],
+            "timing_bias_ms": recalls[label]["timing_bias_ms"],
+            "median_absolute_error_ms": recalls[label]["median_absolute_error_ms"],
         }
         for label, (certain, uncertain) in hits.items()
     }
@@ -237,7 +236,9 @@ def evaluate_recording(
     if activity_predictions is None and any(getattr(f, "activity_method", None) for f in frames):
         stamps = [f.timestamp for f in frames]
         step = stamps[1] - stamps[0] if len(stamps) > 1 else 0.02
-        labels = [name for name, _ in next(f for f in frames if f.activity_method).instrument_scores]
+        labels = [
+            name for name, _ in next(f for f in frames if f.activity_method).instrument_scores
+        ]
         activity_predictions = {
             label: activity_intervals(stamps, [label in f.instruments_active for f in frames], step)
             for label in labels
@@ -411,6 +412,7 @@ def evaluate_corpus(
         "instrument_activity": _activity_summary(results),
         "candidates_vs_activity": _refuted_summary(results),
         "onset_recall_on_instrument_attacks": _attack_recall_summary(results),
+        "beat_tracking": _beat_summary(results),
         "reference_kinds_by_layer": _reference_summary(results),
         "evaluated_seconds": sum(r["annotation"]["covered_seconds"] for r in results),
     }
@@ -443,6 +445,30 @@ def _reference_summary(results):
     return dict(sorted(summary.items()))
 
 
+def _beat_summary(results):
+    """Per-recording beat outcomes that an overall F-measure hides."""
+    rows = [r["beats"]["predicted"] for r in results if "predicted" in r["beats"]]
+    rows = [row for row in rows if row["tp"] + row["fp"] + row["fn"]]
+    if not rows:
+        return None
+    covered = [r["reference_beats_with_tracking_fraction"] for r in rows]
+    covered = [value for value in covered if value is not None]
+    return {
+        "recordings": len(rows),
+        "locked_on_the_beat": sum(r["phase_lock"] == "on_beat" for r in rows),
+        "locked_on_the_off_beat": sum(r["phase_lock"] == "off_beat" for r in rows),
+        "no_usable_predictions": sum(r["phase_lock"] is None for r in rows),
+        "tempo_correct": sum(bool(r["tempo_correct"]) for r in rows),
+        "tempo_half_or_double": sum(
+            r["metrical_level"] in ("half_time", "double_time") for r in rows
+        ),
+        "median_reference_beats_with_tracking_fraction": float(np.median(covered))
+        if covered
+        else None,
+        "predictions_ignored_at_uncertain_beats": sum(r["ignored_predictions"] for r in rows),
+    }
+
+
 def _attack_recall_summary(results):
     summary = {}
     for result in results:
@@ -460,6 +486,7 @@ def _attack_recall_summary(results):
             "reference_count": row["reference_count"],
             "detected_as_full_mix_onset_50ms": row["detected"],
             "recall": row["detected"] / row["reference_count"] if row["reference_count"] else None,
+            "matching": "one detected onset per attack",
             "reference_kinds": sorted(row["kinds"]),
         }
         for label, row in sorted(summary.items())
@@ -511,7 +538,9 @@ def _activity_summary(results):
                 row["scored_recordings"] += 1
                 for key in ("tp_seconds", "fp_seconds", "fn_seconds"):
                     row[key] += entry[key]
-                row["inactive_seconds"] += entry["scored_seconds"] - entry["reference_active_seconds"]
+                row["inactive_seconds"] += (
+                    entry["scored_seconds"] - entry["reference_active_seconds"]
+                )
     for row in summary.values():
         row["reference_kinds"] = sorted(row["reference_kinds"])
         tp, fp, fn = row["tp_seconds"], row["fp_seconds"], row["fn_seconds"]
@@ -521,7 +550,9 @@ def _activity_summary(results):
                 precision=tp / (tp + fp) if tp + fp else 0,
                 recall=tp / (tp + fn) if tp + fn else 0,
                 f1=2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else 0,
-                false_positive_rate=fp / row["inactive_seconds"] if row["inactive_seconds"] else None,
+                false_positive_rate=fp / row["inactive_seconds"]
+                if row["inactive_seconds"]
+                else None,
                 # What an estimator that always says "active" would score on the same audio.
                 always_active_f1=2 * (tp + fn) / (2 * (tp + fn) + row["inactive_seconds"])
                 if tp + fn
@@ -608,12 +639,34 @@ def render_markdown(report):
                 f"{entry['status'].replace('_', ' ')} | {score} |"
             )
         lines.append("")
+    beat = summary.get("beat_tracking")
+    if beat:
+        lines += [
+            "## Beat tracking by recording",
+            "",
+            f"- Recordings with beat predictions scored: {beat['recordings']}",
+            f"- Locked on the beat: {beat['locked_on_the_beat']}; "
+            f"locked on the off-beat: {beat['locked_on_the_off_beat']}; "
+            f"no usable predictions: {beat['no_usable_predictions']}",
+            f"- Tempo correct (within 4%): {beat['tempo_correct']}; "
+            f"half or double time: {beat['tempo_half_or_double']}",
+            "- Median share of reference beats with any tracking nearby: "
+            + (
+                "—"
+                if beat["median_reference_beats_with_tracking_fraction"] is None
+                else f"{beat['median_reference_beats_with_tracking_fraction']:.2f}"
+            ),
+            f"- Predictions set aside at uncertain reference beats: "
+            f"{beat['predictions_ignored_at_uncertain_beats']}",
+            "",
+        ]
     if summary["onset_recall_on_instrument_attacks"]:
         lines += [
             "## Full-mix onset detector: recall on annotated instrument attacks (±50 ms)",
             "",
-            "Recall only. Precision cannot be measured where other instruments' onsets are "
-            "not annotated.",
+            "Recall only, matched one to one: a detected onset answers at most one attack of "
+            "an instrument. Precision cannot be measured where other instruments' onsets are "
+            "not annotated, so unmatched detections are not counted as errors.",
             "",
             "| Instrument attacks | Recordings | Annotated | Detected | Recall | Reference |",
             "|---|---:|---:|---:|---:|---|",
