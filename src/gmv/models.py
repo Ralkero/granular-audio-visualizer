@@ -23,6 +23,8 @@ class AnalysisConfig(FrozenModel):
     activity_model_path: str | None = None
     # Weights file for the guitar tracker; no file, no guitar output.
     guitar_model_path: str | None = None
+    # Multi-pitch note candidates in the guitar register (E2 to E6); off by default.
+    pitch_tracking: bool = False
     # Log-spaced display spectrum carried on every feature frame; 0 turns it off.
     spectrum_bands: int = Field(default=48, ge=0, le=96)
     debug_audio_seconds: int = Field(default=0, ge=0, le=60)
@@ -104,6 +106,11 @@ class FeatureFrame(Message):
     spectrum_db: tuple[float, ...] = ()
     spectrum_low_hz: float | None = None
     spectrum_high_hz: float | None = None
+    # Note candidates sounding at pitch_time: (MIDI note number, uncalibrated score).
+    # They say which pitches are present, not which instrument plays them.
+    pitch_candidates: tuple[tuple[float, float], ...] = ()
+    pitch_time: float | None = None
+    pitch_method: str | None = None
 
 
 class MusicalEvent(Message):

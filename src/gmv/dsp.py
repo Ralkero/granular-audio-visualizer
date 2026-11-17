@@ -6,7 +6,9 @@ from uuid import uuid4
 
 import numpy as np
 
-from .activity import ActivityEstimator, ActivityModel
+from .activity import ActivityBank, ActivityModel
+from .pitch import METHOD as PITCH_METHOD
+from .pitch import PitchTracker, midi_to_hz
 from .beat import BeatTracker
 from .models import AnalysisConfig, FeatureFrame, MusicalEvent
 
@@ -106,11 +108,14 @@ class Analyzer:
         self.spectrum_hi = np.searchsorted(self.freq, edges[1:])
         self.spectrum_centres = np.sqrt(edges[:-1] * edges[1:])
         self.spectrum_bins = self.spectrum_hi - self.spectrum_lo
+        weights = [p for p in (config.activity_model_path, config.guitar_model_path) if p]
         self.activity = (
-            ActivityEstimator(ActivityModel(config.activity_model_path), rate, self.size, self.hop)
-            if config.activity_model_path
+            ActivityBank([ActivityModel(p) for p in weights], rate, self.size, self.hop)
+            if weights
             else None
         )
+        self.hop_samples = round(rate * config.hop_ms / 1000)
+        self.pitch = PitchTracker(rate, self.hop) if config.pitch_tracking else None
 
     def estimate_tempo(self, timestamp):
         if timestamp - self.last_tempo < 1 or len(self.flux_history) * self.hop < 4:
@@ -210,7 +215,7 @@ class Analyzer:
         instrument_scores, instruments_active = (), ()
         if self.activity is not None:
             scores, active = self.activity.step(spectrum, is_quiet)
-            labels = self.activity.model.labels
+            labels = self.activity.labels
             instrument_scores = tuple((n, float(s)) for n, s in zip(labels, scores, strict=True))
             instruments_active = tuple(n for n, on in zip(labels, active, strict=True) if on)
         self.flux_history.append(strength)
@@ -266,7 +271,9 @@ class Analyzer:
         triggered = []
         for index, flux_i in enumerate(band_flux):
             gap = timestamp - self.last_band_onset[index]
-            strong_repeat = self.attack_peak[index] > 0 and bands[index] >= 0.4 * self.attack_peak[index]
+            strong_repeat = (
+                self.attack_peak[index] > 0 and bands[index] >= 0.4 * self.attack_peak[index]
+            )
             if (
                 is_quiet
                 or flux_i < 0.3
@@ -282,11 +289,17 @@ class Analyzer:
         self.previous_band_energy = band_values
         # Adjacent bands belong to one attack. A band at least two slots away can
         # be a separate event inside the 45 ms grouping window.
-        separated = bool(triggered and self.last_trigger_bands) and min(
-            abs(index - previous) for index in triggered for previous in self.last_trigger_bands
-        ) >= 2
+        separated = (
+            bool(triggered and self.last_trigger_bands)
+            and min(
+                abs(index - previous) for index in triggered for previous in self.last_trigger_bands
+            )
+            >= 2
+        )
         self.level_peak *= float(np.exp(-self.hop / 0.3))
-        loud_enough = max((bands[index] for index in triggered), default=0.0) >= 0.05 * self.level_peak
+        loud_enough = (
+            max((bands[index] for index in triggered), default=0.0) >= 0.05 * self.level_peak
+        )
         self.level_peak = max(self.level_peak, max(bands))
         # Tiny high-band leakage after a real attack must not become its own onset.
         if (
@@ -355,6 +368,31 @@ class Analyzer:
                 )
         if not self.beat_locked:
             self.phase = self.phase_period = None
+        # Note candidates come from a longer window, so they describe a slightly earlier
+        # moment than this frame; they carry that time themselves.
+        pitch_candidates, pitch_time = (), None
+        if self.pitch is not None:
+            notes = self.pitch.step(audio[-self.hop_samples :].mean(axis=1))
+            pitch_time = max(0.0, end - self.pitch.lag_s)
+            if is_quiet:
+                notes = []
+            pitch_candidates = tuple(
+                (float(note.midi), min(1.0, float(note.score)))
+                for note in sorted(notes, key=lambda n: n.midi)
+            )
+            for note in notes:
+                if note.attack:
+                    emit(
+                        "note_attack_candidate",
+                        min(0.9, float(note.score)),
+                        float(note.score),
+                        event_time=max(0.0, pitch_time - note.attack_back * self.hop),
+                        measurements=(
+                            ("midi", float(note.midi)),
+                            ("frequency_hz", float(midi_to_hz(note.midi))),
+                        ),
+                        method=PITCH_METHOD,
+                    )
         if not is_quiet and db - self.previous_db > 6:
             emit("energy_rise", 0.65)
         if (
@@ -411,7 +449,10 @@ class Analyzer:
             attack_energy_ratio=attack_ratio,
             instrument_scores=instrument_scores,
             instruments_active=instruments_active,
-            activity_method=self.activity.model.name if self.activity else None,
+            activity_method=self.activity.name if self.activity else None,
+            pitch_candidates=pitch_candidates,
+            pitch_time=pitch_time,
+            pitch_method=PITCH_METHOD if self.pitch is not None else None,
             spectrum_db=spectrum_db,
             spectrum_low_hz=self.spectrum_range[0] if spectrum_db else None,
             spectrum_high_hz=self.spectrum_range[1] if spectrum_db else None,

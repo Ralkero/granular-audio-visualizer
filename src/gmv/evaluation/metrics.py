@@ -137,21 +137,30 @@ def _nearest_distance(times, reference):
     return np.minimum(left, np.abs(times - reference[np.clip(index, 0, last)]))
 
 
-def attack_recall(reference, onsets, tolerance=0.05):
+def attack_recall(reference, onsets, tolerance=0.05, simultaneous=0.02):
     """Recall of full-mix onsets on one instrument's annotated attacks, matched one to one.
 
     A detected onset can account for at most one attack, so two quick hits answered by a
-    single onset count as one found and one missed. Only recall is meaningful: onsets of
+    single onset count as one found and one missed. Attacks closer together than
+    ``simultaneous`` are one acoustic event (a kick and a hi-hat struck together, when the
+    label covers the whole kit) and are counted once. Only recall is meaningful: onsets of
     instruments that are not annotated are real, so unmatched detections are not errors.
     """
-    reference, onsets = np.sort(reference), np.sort(onsets)
-    matches = mir_eval.util.match_events(reference, onsets, window=tolerance)
-    errors = np.asarray([onsets[p] - reference[r] for r, p in matches]) * 1000
-    loose = int((_nearest_distance(reference, onsets) <= tolerance).sum()) if len(onsets) else 0
+    annotated = np.sort(np.asarray(reference, dtype=float))
+    onsets = np.sort(np.asarray(onsets, dtype=float))
+    distinct = (
+        annotated[np.concatenate(([True], np.diff(annotated) > simultaneous))]
+        if len(annotated)
+        else annotated
+    )
+    matches = mir_eval.util.match_events(distinct, onsets, window=tolerance)
+    errors = np.asarray([onsets[p] - distinct[r] for r, p in matches]) * 1000
+    loose = int((_nearest_distance(distinct, onsets) <= tolerance).sum()) if len(onsets) else 0
     return {
-        "reference_count": len(reference),
+        "reference_count": len(annotated),
+        "distinct_attacks": len(distinct),
         "matched": len(matches),
-        "recall": len(matches) / len(reference) if len(reference) else None,
+        "recall": len(matches) / len(distinct) if len(distinct) else None,
         "shared_onsets": loose - len(matches),  # attacks that only a shared onset would cover
         "timing_bias_ms": float(np.mean(errors)) if len(errors) else None,
         "median_absolute_error_ms": float(np.median(np.abs(errors))) if len(errors) else None,

@@ -99,6 +99,9 @@ class Canvas(QWidget):
             for a, b in zip(edges[0::2].tolist(), edges[1::2].tolist(), strict=False)
         ]
         self.lane_strip, self.level_strip, self.mark_strip = Strip(), Strip(), Strip()
+        self.note_strip = Strip()
+        self._notes_until, self._attack_count, self._new_attacks = 0.0, 0, 0
+        self._attack_seen = False
         self.setMinimumSize(720, 480)
 
     # -- animation -------------------------------------------------------------------------
@@ -173,14 +176,16 @@ class Canvas(QWidget):
         rows = [row for row in ROWS if row[0] not in self.hidden and self.row_in_use(row[0])]
         lanes = [item for item in self.state.board.lanes() if item[0].key not in self.hidden]
         body = height - header - margin
-        timeline_h = round(min(body * 0.24, (30 * len(rows) + 26) * self.scale)) if rows else 0
-        lanes_h = round(min(body * 0.30, (30 * len(lanes) + 26) * self.scale)) if lanes else 0
+        timeline_h = round(min(body * 0.20, (26 * len(rows) + 26) * self.scale)) if rows else 0
+        lanes_h = round(min(body * 0.26, (26 * len(lanes) + 26) * self.scale)) if lanes else 0
+        notes = self.state.pitch_method is not None and "notes" not in self.hidden
+        notes_h = round(min(body * 0.14, 110 * self.scale)) if notes else 0
         gap = round(18 * self.scale)
         spectrum = QRectF(
             margin,
             header,
             width - 2 * margin,
-            body - timeline_h - lanes_h - gap * (bool(rows) + bool(lanes)),
+            body - timeline_h - lanes_h - notes_h - gap * (bool(rows) + bool(lanes) + notes),
         )
         gutter = round(150 * self.scale)
         top = spectrum.bottom() + gap
@@ -188,7 +193,11 @@ class Canvas(QWidget):
         lane_block = QRectF(
             margin, top + (timeline_h + gap) * bool(rows), width - 2 * margin, lanes_h
         )
-        axis = QRectF(margin + gutter, top, width - 2 * margin - gutter, lane_block.bottom() - top)
+        note_block = QRectF(
+            margin, lane_block.top() + (lanes_h + gap) * bool(lanes), width - 2 * margin, notes_h
+        )
+        bottom = note_block.bottom() if notes else lane_block.bottom()
+        axis = QRectF(margin + gutter, top, width - 2 * margin - gutter, bottom - top)
 
         def everything(painter):
             self.draw_header(painter, QRectF(margin, 0, width - 2 * margin, header))
@@ -205,7 +214,9 @@ class Canvas(QWidget):
                 self.draw_timeline(painter, timeline, rows)
             if lanes:
                 self.draw_lanes(painter, lane_block, lanes)
-            if (rows or lanes) and self.now is not None:
+            if notes:
+                self.draw_notes(painter, note_block)
+            if (rows or lanes or notes) and self.now is not None:
                 self.draw_now(painter, axis)
 
         def still_picture():
@@ -230,6 +241,7 @@ class Canvas(QWidget):
             self.mode,
             tuple(rows),
             tuple((lane.key, live) for lane, live in lanes),
+            notes,
             self.state.board.method,
             self.header_text(),
             self.state.spectrum_range,
@@ -803,6 +815,79 @@ class Canvas(QWidget):
                 painter.drawRect(QRectF(x - 6, y - 4, 12, 8))
             x += advance
 
+    def draw_notes(self, painter, rect):
+        """Piano-roll of note candidates: height is pitch, strength is the score.
+
+        Hollow-looking, thin marks: these are candidates. They are tinted with the guitar
+        colour only while a guitar detector judges guitar to be playing; otherwise they are
+        neutral, because the tracker cannot tell which instrument a note belongs to.
+        """
+        head = 22 * self.scale
+        gutter = 150 * self.scale
+        area = QRectF(
+            rect.left() + gutter, rect.top() + head, rect.width() - gutter, rect.height() - head
+        )
+        guitar_known = "guitar" in self.state.board.history
+        if self.static:
+            self.caption(
+                painter,
+                rect,
+                "NOTES   ·   pitch candidates E2–E6   ·   "
+                + (
+                    "amber while the guitar detector is active"
+                    if guitar_known
+                    else "any pitched instrument, not attributed to guitar"
+                ),
+            )
+            painter.fillRect(area, alpha(FAINT, 0.28))
+            painter.setFont(self.font(10))
+            painter.setPen(alpha(DIM, 0.8))
+            for midi, name in ((40, "E2"), (52, "E3"), (64, "E4"), (76, "E5"), (88, "E6")):
+                y = area.bottom() - (midi - 39) / 50 * area.height()
+                painter.drawText(
+                    QRectF(rect.left(), y - 8, gutter - 10, 16),
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                    name,
+                )
+                painter.fillRect(QRectF(area.left(), y, area.width(), 1), alpha(FAINT, 0.7))
+            return
+        if self.now is None:
+            return
+        state = self.state
+        _, start, _ = self.axis(area)
+        per_second = area.width() / (state.window_s * (1 + AHEAD))
+        step = area.height() / 50
+        tall = max(3.0, step * 1.5)
+        wide = max(2.0, per_second * 0.02 + 0.5)
+        neutral, guitar = QColor("#9aa6c4"), QColor("#f5c451")
+        attacks = list(state.note_attacks)
+
+        def draw(artist, at, since, height):
+            first = start if since is None else self._notes_until
+            rows = state.notes.since(first)
+            artist.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+            for time, midi, score, by_guitar in rows.tolist():
+                y = height - (midi - 39) * step
+                colour = guitar if by_guitar else neutral
+                artist.fillRect(
+                    QRectF(at(time), y - tall / 2, wide, tall), alpha(colour, 0.45 + 0.55 * score)
+                )
+            fresh = attacks if since is None else attacks[len(attacks) - self._new_attacks :]
+            for time, midi, _score in fresh if (since is None or self._new_attacks) else ():
+                y = height - (midi - 39) * step
+                artist.fillRect(QRectF(at(time) - 1, y - tall, 2, 2 * tall), TEXT)
+            if len(rows):
+                self._notes_until = float(rows[-1, 0]) + 1e-6
+
+        if self._attack_count > len(attacks):
+            self._attack_count = 0
+        self._new_attacks = len(attacks) - self._attack_count if self._attack_seen else 0
+        key = (state.generation, guitar_known)
+        if self.note_strip.key is None or self.note_strip.key[0] != key:
+            self._notes_until = start
+        self.note_strip.paint(painter, area, start, per_second, key, state.note_serial, draw)
+        self._attack_count, self._attack_seen = len(attacks), True
+
     def draw_lanes(self, painter, rect, lanes):
         method = self.state.board.method
         if self.static:
@@ -840,6 +925,8 @@ class Canvas(QWidget):
                     if not self.info["activity_model"]
                     else "no detector output yet"
                 )
+            elif lane.key == "guitar":
+                reason = "no detector output  ·  no guitar weights chosen in Settings"
             else:
                 reason = "no detector for this instrument yet"
             painter.drawText(band.adjusted(12, 0, 0, 0), Qt.AlignmentFlag.AlignVCenter, reason)

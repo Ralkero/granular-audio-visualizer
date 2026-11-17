@@ -200,6 +200,34 @@ class ActivityEstimator:
         return scores, self.active
 
 
+class ActivityBank:
+    """Several models on one set of features: each detector adds its own labels.
+
+    A detector is a weights file. Loading another one (guitar next to drums, bass and vocals)
+    costs one small matrix product per frame; the features are computed once.
+    """
+
+    def __init__(self, models, rate, size, hop):
+        self.models = list(models)
+        self.features = FrameFeatures(rate, size, hop)
+        self.context = Context(hop)
+        self.labels = tuple(label for model in self.models for label in model.labels)
+        if len(set(self.labels)) != len(self.labels):
+            raise ValueError("Two activity models publish the same instrument label")
+        self.on = np.concatenate([model.on for model in self.models])
+        self.off = np.concatenate([model.off for model in self.models])
+        self.active = np.zeros(len(self.labels), dtype=bool)
+        self.name = "+".join(model.name for model in self.models)
+
+    def step(self, spectrum, quiet):
+        features = self.context.step(self.features.step(spectrum))
+        scores = np.concatenate([model.scores(features) for model in self.models])
+        if quiet:
+            scores = np.zeros_like(scores)
+        self.active = np.where(self.active, scores >= self.off, scores >= self.on)
+        return scores, self.active
+
+
 def intervals(times, active, hop):
     """Turn per-frame booleans into (start, end) spans."""
     spans, start = [], None

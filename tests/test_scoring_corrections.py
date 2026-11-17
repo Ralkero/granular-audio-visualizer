@@ -14,6 +14,7 @@ from gmv.evaluation.metrics import attack_recall, beat_score, tempo_span_score
 def test_one_detected_onset_cannot_answer_two_attacks():
     # A flam: two snare hits 30 ms apart, and the detector reports one onset between them.
     result = attack_recall([1.000, 1.030, 2.000], onsets=[1.015, 2.004])
+    assert result["distinct_attacks"] == 3
     assert result["matched"] == 2 and result["recall"] == pytest.approx(2 / 3)
     assert result["shared_onsets"] == 1  # what nearest-onset counting used to give away
     assert result["median_absolute_error_ms"] == pytest.approx(9.5)
@@ -22,6 +23,13 @@ def test_one_detected_onset_cannot_answer_two_attacks():
     empty = attack_recall([], onsets=[1.0])
     assert empty["recall"] is None and empty["matched"] == 0
     assert attack_recall([1.0], onsets=[])["recall"] == 0
+
+
+def test_simultaneous_hits_of_a_whole_kit_are_one_acoustic_event():
+    # Kick and hi-hat struck together, then a lone snare: three labels, two events to find.
+    result = attack_recall([1.000, 1.004, 1.500], onsets=[1.002, 1.501])
+    assert result["reference_count"] == 3 and result["distinct_attacks"] == 2
+    assert result["matched"] == 2 and result["recall"] == 1
 
 
 def test_beat_estimates_at_uncertain_beats_earn_neither_credit_nor_blame():

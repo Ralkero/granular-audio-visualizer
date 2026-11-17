@@ -87,6 +87,11 @@
       "default": null,
       "title": "Guitar Model Path"
     },
+    "pitch_tracking": {
+      "default": false,
+      "title": "Pitch Tracking",
+      "type": "boolean"
+    },
     "spectrum_bands": {
       "default": 48,
       "maximum": 96,

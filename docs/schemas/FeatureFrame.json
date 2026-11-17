@@ -340,6 +340,48 @@
       ],
       "default": null,
       "title": "Spectrum High Hz"
+    },
+    "pitch_candidates": {
+      "default": [],
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "type": "array"
+      },
+      "title": "Pitch Candidates",
+      "type": "array"
+    },
+    "pitch_time": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pitch Time"
+    },
+    "pitch_method": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pitch Method"
     }
   },
   "required": [

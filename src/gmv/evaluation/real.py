@@ -200,6 +200,7 @@ def evaluate_recording(
             # instruments' onsets are real but unannotated here.
             # One detected onset answers at most one attack of this instrument.
             "detected_as_full_mix_onset_50ms": recalls[label]["matched"],
+            "distinct_attacks": recalls[label]["distinct_attacks"],
             "full_mix_onset_recall_50ms": recalls[label]["recall"],
             "attacks_sharing_an_onset": recalls[label]["shared_onsets"],
             "timing_bias_ms": recalls[label]["timing_bias_ms"],
@@ -474,19 +475,28 @@ def _attack_recall_summary(results):
     for result in results:
         for label, entry in result["instrument_events"].items():
             row = summary.setdefault(
-                label, {"recordings": 0, "reference_count": 0, "detected": 0, "kinds": set()}
+                label,
+                {
+                    "recordings": 0,
+                    "reference_count": 0,
+                    "distinct": 0,
+                    "detected": 0,
+                    "kinds": set(),
+                },
             )
             row["recordings"] += 1
             row["reference_count"] += entry["reference_count"]
             row["detected"] += entry["detected_as_full_mix_onset_50ms"]
+            row["distinct"] += entry["distinct_attacks"]
             row["kinds"].add(entry["reference_kind"])
     return {
         label: {
             "recordings": row["recordings"],
             "reference_count": row["reference_count"],
             "detected_as_full_mix_onset_50ms": row["detected"],
-            "recall": row["detected"] / row["reference_count"] if row["reference_count"] else None,
-            "matching": "one detected onset per attack",
+            "distinct_attacks": row["distinct"],
+            "recall": row["detected"] / row["distinct"] if row["distinct"] else None,
+            "matching": "one detected onset per attack; attacks within 20 ms count once",
             "reference_kinds": sorted(row["kinds"]),
         }
         for label, row in sorted(summary.items())
@@ -668,13 +678,14 @@ def render_markdown(report):
             "an instrument. Precision cannot be measured where other instruments' onsets are "
             "not annotated, so unmatched detections are not counted as errors.",
             "",
-            "| Instrument attacks | Recordings | Annotated | Detected | Recall | Reference |",
-            "|---|---:|---:|---:|---:|---|",
+            "| Instrument attacks | Recordings | Annotated | Distinct (20 ms) | Detected | Recall | Reference |",
+            "|---|---:|---:|---:|---:|---:|---|",
         ]
         for label, entry in summary["onset_recall_on_instrument_attacks"].items():
             recall = entry["recall"]
             lines.append(
                 f"| {label} | {entry['recordings']} | {entry['reference_count']} | "
+                f"{entry['distinct_attacks']} | "
                 f"{entry['detected_as_full_mix_onset_50ms']} | "
                 f"{'—' if recall is None else f'{recall:.3f}'} | "
                 f"{', '.join(entry['reference_kinds'])} |"

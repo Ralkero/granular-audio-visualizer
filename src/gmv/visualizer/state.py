@@ -28,6 +28,7 @@ EVENTS = {
     "intensity_change": ("changes", "Intensity change"),
     "spectral_change": ("changes", "Spectral change"),
     "silence_started": ("state", "Silence"),
+    "note_attack_candidate": ("notes", "Note attack"),
     "audio_resumed": ("state", "Audio resumed"),
 }
 REGIONS = {
@@ -99,6 +100,11 @@ class VisualState:
         self.spectrum = None
         self.spectrum_range = None
         self.beats = deque(maxlen=64)  # predicted beat times not yet reached
+        # Note candidates: (time, MIDI note, score, guitar judged active at that time).
+        self.notes = Track(4 * self.capacity, 4)
+        self.note_attacks = deque(maxlen=512)  # (time, MIDI note, score)
+        self.note_serial = 0  # grows with every note sample or attack received
+        self.pitch_method = None
         self.beat_tempo, self.beat_score = None, 0.0
         self.replayed = False
         self.segment = None
@@ -136,6 +142,12 @@ class VisualState:
         elif isinstance(message, MusicalEvent):
             self.replayed = message.replayed
             mark = marker(message)
+            if mark.row == "notes":  # drawn in the note lane, not on the timeline
+                midi = dict(message.measurements).get("midi")
+                if midi is not None:
+                    self.note_attacks.append((mark.time, midi, message.intensity))
+                    self.note_serial += 1
+                return
             self.markers.append(mark)
             self.marked += 1
             self._pending.append(mark)
@@ -175,6 +187,13 @@ class VisualState:
         else:  # sessions recorded before the display spectrum existed: seven broad bands
             self.spectrum = 10 * np.log10(np.maximum(frame.band_energy, 1e-12))
             self.spectrum_range = None
+        if frame.pitch_method:
+            self.pitch_method = frame.pitch_method
+            guitar = float("guitar" in frame.instruments_active)
+            when = frame.pitch_time if frame.pitch_time is not None else frame.timestamp
+            for midi, score in frame.pitch_candidates:
+                self.notes.append(when, midi, score, guitar)
+            self.note_serial += 1
         if frame.activity_method:
             self.board.update(
                 frame.timestamp,

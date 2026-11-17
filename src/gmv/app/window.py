@@ -172,16 +172,24 @@ class SettingsDrawer(QFrame):
         browse_activity.clicked.connect(lambda: self.choose_weights(self.activity_model))
         browse_guitar.clicked.connect(lambda: self.choose_weights(self.guitar_model))
         self.beat_tracker = QCheckBox("Beat tracker (experimental, not validated)")
+        self.pitch = QCheckBox("Note candidates (experimental; any pitched instrument)")
+        self.pitch.setChecked(True)
+        self.pitch.setToolTip(
+            "Pitches found in the guitar register. They are not attributed to an instrument "
+            "unless a guitar detector is loaded and active."
+        )
         self.capabilities = QLabel(objectName="value")
         self.capabilities.setWordWrap(True)
         self.form.addRow("Instruments", row(self.activity_model, browse_activity))
         self.form.addRow("Guitar", row(self.guitar_model, browse_guitar))
         self.form.addRow(self.beat_tracker)
+        self.form.addRow(self.pitch)
         self.form.addRow(self.capabilities)
         for signal in (
             self.activity_model.textChanged,
             self.guitar_model.textChanged,
             self.beat_tracker.toggled,
+            self.pitch.toggled,
         ):
             signal.connect(self.engine_changed)
             signal.connect(self.show_capabilities)
@@ -307,6 +315,12 @@ class SettingsDrawer(QFrame):
                     state(self.guitar_model.text(), "Guitar"),
                     "Beats: "
                     + ("experimental tracker on" if self.beat_tracker.isChecked() else "off"),
+                    "Notes: "
+                    + (
+                        "candidates on, not attributed to an instrument"
+                        if self.pitch.isChecked()
+                        else "off"
+                    ),
                 )
             )
         )
@@ -329,6 +343,7 @@ class SettingsDrawer(QFrame):
         menu = self.lanes.menu()
         menu.clear()
         entries = list(ROWS) + [(lane.key, lane.title) for lane, _ in self.view.state.board.lanes()]
+        entries.append(("notes", "Note candidates"))
         for position, (key, title) in enumerate(entries):
             if position == len(ROWS):
                 menu.addSeparator()
@@ -364,6 +379,7 @@ class SettingsDrawer(QFrame):
             activity_model=self.activity_model.text().strip(),
             guitar_model=self.guitar_model.text().strip(),
             beat_tracker=self.beat_tracker.isChecked(),
+            pitch_tracking=self.pitch.isChecked(),
             logging=self.logging.isChecked(),
             delayed_analysis=self.delayed.isChecked(),
             debug_audio_seconds=self.debug_audio.value(),

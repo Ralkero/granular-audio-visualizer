@@ -34,6 +34,7 @@ class Settings:
     activity_model: str = ""
     guitar_model: str = ""
     beat_tracker: bool = False
+    pitch_tracking: bool = True
     logging: bool = True
     # Advanced
     delayed_analysis: bool = False
@@ -85,6 +86,7 @@ def analysis_config(settings):
         experimental_beat_phase=settings.beat_tracker,
         activity_model_path=settings.activity_model or None,
         guitar_model_path=settings.guitar_model or None,
+        pitch_tracking=settings.pitch_tracking,
         debug_audio_seconds=settings.debug_audio_seconds,
     )
 

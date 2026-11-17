@@ -443,4 +443,3 @@ def test_live_engine_feeds_the_window_and_the_session_replays_with_original_time
     assert window.state.replayed and window.canvas.condition == "stopped"
     replayed = [mark.time for mark in window.state.markers if mark.kind == "onset"]
     assert replayed == pytest.approx(live_onsets)  # audio timestamps, not replay arrival times
-
