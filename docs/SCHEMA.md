@@ -56,3 +56,9 @@ The JSON schema files in `docs/schemas/` are generated from the models (`python 
 `beat_prediction` events (opt-in beat tracker, method `causal_beat_tracker_v1`) have a timestamp in the future of the audio analysed so far and a `tempo_bpm` measurement. `beat_observed` is a detected onset within 50 ms of a predicted beat. Frame fields `beat_locked` and `beat_phase` follow the same tracker.
 
 Feature frames carry `instrument_scores` (label and uncalibrated score pairs), `instruments_active` (labels currently judged to be sounding) and `activity_method`. They are empty unless `activity_model_path` in the analysis configuration points to a weights file. The scores are not probabilities and not a separation.
+
+## Display spectrum (Phase 2A)
+
+Feature frames carry `spectrum_db`: band power in dB (same mean-square units as `band_energy`, floor -120, one decimal), low to high frequency, in `spectrum_bands` log-spaced bands (default 48, at most 96, 0 turns it off) between `spectrum_low_hz` (30) and `spectrum_high_hz` (18000, or Nyquist if lower). It is read off the same FFT as every other feature; no second transform runs. A band narrower than one FFT bin (the lowest few at the default window) takes the power interpolated at its centre, so neighbouring low bands are not independent measurements. The field is for display; detection does not use it.
+
+These are additive optional fields inside schema 1.1, like the beat and activity fields before them. Sessions logged earlier have no `spectrum_db`; they still load and replay, and the visualizer falls back to the seven `band_energy` values. As with every 1.1 addition, a strict reader built from an older copy of the models rejects the new fields.

@@ -1,10 +1,21 @@
-# Granular Music Visualizer — Phase One
+# Granular Music Visualizer
 
-A Windows 11 desktop control center for **live audio capture, CPU analysis, timestamped events and session logging**. No visualization renderer is included.
+A Windows 11 desktop application that **captures live PC audio, analyses it on the CPU and visualizes the result**: a control center for sources, diagnostics and session logs, and a visualizer window that draws what the analysis publishes. The visualizer is a first prototype (Phase 2A); the analysis underneath it is still being improved.
 
 ## Launch
 
-On this development machine, double-click **Launch Control Center.cmd**. Select **Default system output**, leave debug recording off, and click **Start analysis**. Play audio normally. **Stop analysis** finalizes the local session package.
+Double-click **Launch Visualizer.cmd** to open the control center and the visualizer together, choose a source, click **Start analysis** and play music. The visualizer can also be opened at any time with **Open visualizer** in the control center.
+
+What the visualizer shows:
+
+- **Spectrum** (bars or radial) with level, onset flashes and, when the beat tracker is on, a pulse on each predicted beat.
+- **Timeline** of the last 15 seconds, placed by audio timestamp. Solid marks are observed, hollow marks are heuristic candidates, amber dashed marks are predictions (drawn ahead of "now"), dotted boxes are delayed analysis.
+- **Instrument lanes** for drums, bass and vocals when an activity weights file is chosen in the control center (**Instrument activity → Choose weights…**). The weights are a local file and are not in this repository; without them the lanes say that there is no detector output. Guitar and other instruments have no detector yet and say so.
+- Controls: layout, which lanes to show, beats on/off, smoothing, intensity, reset, full screen (F11). Press D for drawing time and dropped-message counts.
+
+The beat tracker is experimental and off by default; tick it in the control center before starting. A recorded session can be watched again with **Replay session in visualizer…** or `gmv visualizer --replay sessions\SESSION`; replay uses the logged messages and their original timestamps, not audio. Results and limits: [Phase 2A report](docs/PHASE2A_REPORT.md).
+
+The control center alone: double-click **Launch Control Center.cmd**. Select **Default system output**, leave debug recording off, and click **Start analysis**. Play audio normally. **Stop analysis** finalizes the local session package.
 
 Sources:
 - **Default system output:** follows the Windows multimedia output; attempts recovery when output devices change.
@@ -27,6 +38,8 @@ Install Python 3.14 and `uv`, then run `./Setup.ps1`. Dependency versions are pi
 .venv\Scripts\python.exe -m gmv.cli file "C:\path\track.flac"
 .venv\Scripts\python.exe -m gmv.cli file "C:\path\track.flac" --realtime
 .venv\Scripts\python.exe -m gmv.cli replay "sessions\SESSION\messages.jsonl" --speed 2
+.venv\Scripts\python.exe -m gmv.cli visualizer
+.venv\Scripts\python.exe -m gmv.cli visualizer --replay "sessions\SESSION"
 .venv\Scripts\python.exe scripts\benchmark.py
 ```
 

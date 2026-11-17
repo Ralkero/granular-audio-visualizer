@@ -12,7 +12,7 @@ from .sources.windows import list_output_devices
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Granular Music Visualizer — Phase One")
+    parser = argparse.ArgumentParser(description="Granular Music Visualizer")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("devices")
     commands.add_parser("ui")
