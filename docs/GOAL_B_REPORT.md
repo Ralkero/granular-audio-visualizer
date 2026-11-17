@@ -4,8 +4,8 @@ Asked for: guitar tracking, the visualizer as the single application window, and
 
 ## What is not done
 
-- **There is no guitar activity detector yet.** Detecting "a guitar is playing in this mix" needs real mixes with a separate guitar stem, and none are on this machine: MUSDB18-HQ has no guitar stem and MoisesDB needs the owner's access form. The training path for MoisesDB is prepared but has not been run, and the guitar lane says "no detector output". Nothing in the application claims guitar activity.
-- **Clean versus distorted guitar** is therefore also not available. The labels exist end to end (dataset adapter, trainer, lanes) and are empty.
+- **There is no usable guitar activity detector.** A first one was trained on MoisesDB after this report was first written (see the update at the end) and scored on held-out artists: it is too unreliable to show under the instrument's name, so it is not loaded by default and the guitar lane still says "no detector output".
+- **Clean versus distorted guitar** is not available for the same reason.
 - **No person has watched the application with sound.** Part 5 of the request (listening tests on varied music) was not carried out: it needs a listener. Everything below is measurement or inspection of saved frames. A checklist for that session is at the end.
 - **Guitar inside a full mix is unmeasured.** Pitch tracking was scored on solo acoustic guitar only.
 
@@ -30,8 +30,8 @@ Not exercised here: specific-device and per-application capture through the new 
 
 | Capability | State |
 |---|---|
-| Guitar activity (is a guitar playing) | Not available. Pipeline ready: MoisesDB adapter labels, configurable trainer, second weights file in the engine, lanes. Needs MoisesDB |
-| Clean / distorted / acoustic | Not available; same dependency |
+| Guitar activity (is a guitar playing) | Trained and measured, not good enough: held-out AUC 0.85, misses 28% of guitar time. Experimental weights only, not loaded by default |
+| Clean / distorted / acoustic | Trained and measured, not good enough: each fires 18% to 25% of the time in songs without that kind of guitar |
 | Note candidates, several at once | Implemented (`gmv.pitch`), opt-in, on by default in the application |
 | Attack versus sustain | Implemented per note: a note is reported after it persists three frames, its attack is back-dated to when it began, and a later attack is reported only when the note's own harmonics get clearly louder again |
 | Register | E2 to E6, shown as a piano-roll lane |
@@ -49,7 +49,7 @@ Known limits of the method: at most four notes; chord notes are often missed; a 
 | GuitarSet (downloaded with approval, CC BY 4.0, 0.66 GB) | Pitch and note tracking reference | Players 00–03 development, 04–05 held out |
 | MDB Drums | Corrected attack recall and beat scoring | Development only (all one artist group) |
 | MUSDB18-HQ | Unchanged; no guitar stem | — |
-| MoisesDB | Planned for guitar activity | Not on this machine |
+| MoisesDB (obtained by the owner, CC BY-NC-SA 4.0) | Guitar activity training and scoring | By artist: 147 train, 13 validation, 48 held-out songs; 32 songs left out |
 
 No model output was used as reference anywhere.
 
@@ -118,7 +118,7 @@ Timing rules kept: marks and notes are placed by audio timestamp; note candidate
 
 | Check | Result |
 |---|---|
-| `pytest -q` | 156 passed (106 before Phase 2A, 125 after) |
+| `pytest -q` | 157 passed (106 before Phase 2A, 125 after) |
 | `ruff check .` | clean |
 | Schema files | regenerated, match the models |
 | Synthetic onset regression | unchanged: development 565 found / 0 false / 0 missed; holdout 577 / 0 / 5 |
@@ -127,7 +127,7 @@ Timing rules kept: marks and notes are placed by audio timestamp; note candidate
 ## 9. Manual setup
 
 - **Drums / bass / vocals weights**: `.model-cache/activity_v2.npz` on this machine is picked up automatically; elsewhere choose a file in Settings or train one with `scripts/train_activity.py`.
-- **Guitar weights**: none exist. After MoisesDB is downloaded: `gmv corpus import-dataset moisesdb FOLDER`, then `python scripts/train_activity.py --corpus corpus-data/corpus/manifest.json --dataset moisesdb --cache CACHE --output .model-cache/guitar_v1.npz --labels guitar,guitar_distorted,guitar_clean --name guitar_mlp_v1`. The adapter and that label set have only been tested on a stand-in folder, so expect fixes when the real files arrive.
+- **Guitar weights**: `.model-cache/guitar_experimental_v1.npz` on this machine, experimental and not loaded by default. It can be chosen under Settings, Analysis, Guitar to look at its behaviour; the commands that produced it are in [evaluation/moisesdb_guitar_v1.md](evaluation/moisesdb_guitar_v1.md).
 - **GuitarSet** for re-running the pitch evaluation: Zenodo record 3371780, `annotation.zip` and `audio_mono-mic.zip`.
 
 ## Listening checklist (for the first session with sound)
@@ -140,3 +140,20 @@ Play each kind of material and note whether the picture matches what is heard: d
 4. Does the beat pulse sit on the beat, or between beats?
 5. Is the default smoothing sluggish or jittery?
 6. Is Settings easy to reach and use while music plays?
+
+## Update, 2026-11-17: guitar detector trained on MoisesDB
+
+The owner obtained MoisesDB. Running the prepared path on the real files needed four fixes: a held-out artist split (the dataset ships none), rendered mixes that counted some files twice, remixes for instruments spread over several files, and leaving out time where the only active guitar file is flagged as containing bleed.
+
+Result on 48 held-out songs by 10 artists the model never saw ([full table](evaluation/moisesdb_guitar_v1.md)):
+
+| Label | Precision | Recall | False-positive rate | AUC | Lane lit in songs without it |
+|---|---:|---:|---:|---:|---:|
+| guitar | 0.960 | 0.719 | 0.167 | 0.854 | 37% (1 song only) |
+| distorted | 0.648 | 0.773 | 0.241 | 0.837 | 25% |
+| clean | 0.644 | 0.590 | 0.216 | 0.758 | 24% |
+| acoustic | 0.511 | 0.740 | 0.195 | 0.834 | 18% |
+
+This does not meet the bar for a lane named after an instrument, so nothing changes in what the application shows by default. The model fits songs it trained on far better than new artists, and changing its size did not help: the features, built for drums, bass and vocals, do not tell a guitar from other instruments in the same register. A better guitar detector needs different features (finer spectral detail over a longer window, or a small learned front end), which is a separate piece of work.
+
+Not done: nobody has watched the experimental weights in the application with sound; 32 songs with unequal file lengths are unused; no metal-specific test.

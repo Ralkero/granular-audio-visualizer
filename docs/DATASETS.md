@@ -92,3 +92,10 @@ Each import hashes and registers every track, registers its stems, assigns the a
 - **MoisesDB** is the reference planned for guitar activity: real mixes with separate guitar stems whose track type says clean electric, distorted electric or acoustic, plus real non-guitar harmonic stems (piano, keys, strings, wind) as counter-examples. It needs the owner's access form; it is not on this machine. The adapter maps those track types to `guitar_clean`, `guitar_distorted` and `guitar_acoustic`, tested on a stand-in folder only.
 - **MedleyDB** would add annotated activations for guitars; access request, no adapter.
 - Not used: mixing solo guitar into MUSDB backing tracks. MUSDB's "other" stem contains guitars and keyboards together, so such data has no trustworthy non-guitar harmonic examples and the detector would learn "harmonic instrument", not "guitar".
+
+## MoisesDB on the real files (2026-11-17)
+
+- `moisesdb` has now been run against the real archive (v0.1, 240 songs, layout as documented). 208 songs imported; 32 are rejected because their stem files differ in length by more than 0.5 s.
+- No official split: one artist in five is held out as test, one in five is validation (147 / 13 / 48 songs).
+- 50 guitar files and 125 vocal files carry the dataset's bleed flag. Labels backed by a flagged file are uncertain; the trainer and the frame scorer leave that time out.
+- Result of the first guitar detector: [evaluation/moisesdb_guitar_v1.md](evaluation/moisesdb_guitar_v1.md).

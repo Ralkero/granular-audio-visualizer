@@ -22,7 +22,7 @@ What the picture shows:
 - **Spectrum** with level, onset flashes and, with the beat tracker on, a pulse on each predicted beat.
 - **Timeline**, placed by audio timestamp. Solid marks are observed, hollow marks are heuristic candidates, amber dashed marks are predictions, dotted boxes are delayed analysis.
 - **Instrument lanes** for drums, bass and vocals when their weights file is chosen. Weights are local files and are not in this repository.
-- **Guitar lane**: shows a detector's output once guitar weights exist. None have been trained yet (the training data, MoisesDB, has to be obtained first); until then the lane says so.
+- **Guitar lane**: shows a detector's output when guitar weights are chosen in Settings. A first detector was trained on MoisesDB and is not reliable enough to load by default ([results](docs/evaluation/moisesdb_guitar_v1.md)); without weights the lane says so.
 - **Notes lane**: pitch candidates between E2 and E6, as a piano roll. They show which pitches are present, not which instrument plays them; they turn amber only while a guitar detector reports guitar. Reliable for single-note playing, weak on chords (see the [Goal B report](docs/GOAL_B_REPORT.md)).
 
 A recorded session replays with `gmv visualizer --replay sessions\SESSION` or from Settings; replay uses logged messages and their original timestamps, not audio.
