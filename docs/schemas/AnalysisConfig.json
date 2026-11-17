@@ -75,6 +75,13 @@
       "default": null,
       "title": "Activity Model Path"
     },
+    "spectrum_bands": {
+      "default": 48,
+      "maximum": 96,
+      "minimum": 0,
+      "title": "Spectrum Bands",
+      "type": "integer"
+    },
     "debug_audio_seconds": {
       "default": 0,
       "maximum": 60,

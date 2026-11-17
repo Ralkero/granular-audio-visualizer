@@ -308,6 +308,38 @@
       ],
       "default": null,
       "title": "Activity Method"
+    },
+    "spectrum_db": {
+      "default": [],
+      "items": {
+        "type": "number"
+      },
+      "title": "Spectrum Db",
+      "type": "array"
+    },
+    "spectrum_low_hz": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Spectrum Low Hz"
+    },
+    "spectrum_high_hz": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Spectrum High Hz"
     }
   },
   "required": [

@@ -98,6 +98,14 @@ class Analyzer:
         self.beat_locked = False
         self.beats = BeatTracker(self.hop) if config.experimental_beat_phase else None
         self.previous_log = None
+        # Display spectrum: log-spaced bands read off the same FFT. A band narrower than one
+        # FFT bin (the lowest ones) takes the power interpolated at its centre instead.
+        self.spectrum_range = (30.0, min(18000.0, rate / 2))
+        edges = np.geomspace(*self.spectrum_range, config.spectrum_bands + 1)
+        self.spectrum_lo = np.searchsorted(self.freq, edges[:-1])
+        self.spectrum_hi = np.searchsorted(self.freq, edges[1:])
+        self.spectrum_centres = np.sqrt(edges[:-1] * edges[1:])
+        self.spectrum_bins = self.spectrum_hi - self.spectrum_lo
         self.activity = (
             ActivityEstimator(ActivityModel(config.activity_model_path), rate, self.size, self.hop)
             if config.activity_model_path
@@ -152,6 +160,18 @@ class Analyzer:
         # One-sided power, Hann power compensation -> mean-square units.
         energy_scale = 2 / (self.size * float(np.square(self.window).sum()))
         bands = tuple(float(power[m].sum() * energy_scale) for m in self.masks)
+        spectrum_db = ()
+        if self.config.spectrum_bands:
+            cumulative = np.concatenate(([0.0], np.cumsum(power)))
+            summed = cumulative[self.spectrum_hi] - cumulative[self.spectrum_lo]
+            band_power = np.where(
+                self.spectrum_bins > 0,
+                summed,
+                np.interp(self.spectrum_centres, self.freq, power),
+            )
+            spectrum_db = tuple(
+                np.round(10 * np.log10(np.maximum(band_power * energy_scale, 1e-12)), 1).tolist()
+            )
         contrast = tuple(
             float(
                 10
@@ -392,6 +412,9 @@ class Analyzer:
             instrument_scores=instrument_scores,
             instruments_active=instruments_active,
             activity_method=self.activity.model.name if self.activity else None,
+            spectrum_db=spectrum_db,
+            spectrum_low_hz=self.spectrum_range[0] if spectrum_db else None,
+            spectrum_high_hz=self.spectrum_range[1] if spectrum_db else None,
             beat_locked=self.beat_locked,
             beat_phase=float((timestamp - self.phase) % self.phase_period / self.phase_period)
             if self.beat_locked and self.phase is not None
