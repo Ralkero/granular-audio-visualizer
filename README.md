@@ -4,24 +4,34 @@ A Windows 11 desktop application that **captures live PC audio, analyses it on t
 
 ## Launch
 
-Double-click **Launch Visualizer.cmd** to open the control center and the visualizer together, choose a source, click **Start analysis** and play music. The visualizer can also be opened at any time with **Open visualizer** in the control center.
+Double-click **Launch Visualizer.cmd**. One window opens: the visualizer. Press **Start** to visualize what is playing on this PC, **Stop** to end the session.
 
-What the visualizer shows:
+**Settings** (top right) slides a drawer over the right edge without stopping anything:
 
-- **Spectrum** (bars or radial) with level, onset flashes and, when the beat tracker is on, a pulse on each predicted beat.
-- **Timeline** of the last 15 seconds, placed by audio timestamp. Solid marks are observed, hollow marks are heuristic candidates, amber dashed marks are predictions (drawn ahead of "now"), dotted boxes are delayed analysis.
-- **Instrument lanes** for drums, bass and vocals when an activity weights file is chosen in the control center (**Instrument activity → Choose weights…**). The weights are a local file and are not in this repository; without them the lanes say that there is no detector output. Guitar and other instruments have no detector yet and say so.
-- Controls: layout, which lanes to show, beats on/off, smoothing, intensity, reset, full screen (F11). Press D for drawing time and dropped-message counts.
+- **Audio source**: default system output, a specific output device, one application and its child processes, or an audio file.
+- **Analysis**: weights for drums / bass / vocals and for guitar, the experimental beat tracker, and note candidates. A summary line says what is available with the current choices.
+- **Visualizer**: bars or radial layout, which lanes and timeline rows to show, smoothing, intensity, timeline length, reset, full screen (F11).
+- **Sessions**: analysis logging (never audio), open or export the last session, replay a recorded one.
+- **Diagnostics**: capture state, audio format, DSP time, latency estimate, drops, CPU and memory, drawing time.
+- **Advanced**: window and hop, band edges, delayed harmonic/percussive analysis, debug recording.
 
-The beat tracker is experimental and off by default; tick it in the control center before starting. A recorded session can be watched again with **Replay session in visualizer…** or `gmv visualizer --replay sessions\SESSION`; replay uses the logged messages and their original timestamps, not audio. Results and limits: [Phase 2A report](docs/PHASE2A_REPORT.md).
+Display settings apply immediately. Source and analysis settings changed while running show **Apply changes**, which restarts the analysis; the application itself never needs restarting. Choices are remembered between runs.
 
-The control center alone: double-click **Launch Control Center.cmd**. Select **Default system output**, leave debug recording off, and click **Start analysis**. Play audio normally. **Stop analysis** finalizes the local session package.
+What the picture shows:
+
+- **Spectrum** with level, onset flashes and, with the beat tracker on, a pulse on each predicted beat.
+- **Timeline**, placed by audio timestamp. Solid marks are observed, hollow marks are heuristic candidates, amber dashed marks are predictions, dotted boxes are delayed analysis.
+- **Instrument lanes** for drums, bass and vocals when their weights file is chosen. Weights are local files and are not in this repository.
+- **Guitar lane**: shows a detector's output once guitar weights exist. None have been trained yet (the training data, MoisesDB, has to be obtained first); until then the lane says so.
+- **Notes lane**: pitch candidates between E2 and E6, as a piano roll. They show which pitches are present, not which instrument plays them; they turn amber only while a guitar detector reports guitar. Reliable for single-note playing, weak on chords (see the [Goal B report](docs/GOAL_B_REPORT.md)).
+
+A recorded session replays with `gmv visualizer --replay sessions\SESSION` or from Settings; replay uses logged messages and their original timestamps, not audio.
 
 Sources:
 - **Default system output:** follows the Windows multimedia output; attempts recovery when output devices change.
 - **Specific output device:** chooses a WASAPI loopback device. Duplicate device names are rejected rather than guessed.
 - **Application / process tree:** refresh sources, select the app, then start. Captures its process and children across endpoints. If unavailable, the error explains how to select system output. It never silently switches to capturing all apps.
-- **Audio file:** uses the same DSP engine, paced for the control center. CLI file analysis can run faster than real time.
+- **Audio file:** uses the same DSP engine, paced at playback speed in the application. CLI file analysis can run faster than real time.
 
 Logging is enabled by default. Audio recording is disabled. The optional debug setting explicitly enables **at most 60 seconds** of float WAV recording with a timeline sidecar. Exports omit debug audio. Advanced analysis is also off by default; enabling it runs a delayed spectral harmonic/percussive estimate, **not vocals/drums/bass stem separation**.
 

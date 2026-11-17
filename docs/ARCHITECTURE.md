@@ -32,3 +32,28 @@ The visualizer (`gmv.visualizer`) is one more subscriber. It has no audio path, 
 - **Drawing cost.** Scrolling histories are kept in pixmaps anchored to audio time (`gmv.visualizer.strip`): each refresh draws only what arrived since the last one and copies the visible part. Without this, redrawing 15 seconds of lanes took 17 ms per frame; with it, 0.3 ms.
 - **Display spectrum.** Feature frames carry `spectrum_db`, 48 log-spaced bands from 30 Hz to 18 kHz read off the analyzer's existing FFT (see SCHEMA.md). The seven `band_energy` values were too coarse for a spectrum display.
 - **Replay.** `gmv.visualizer.replay.ReplaySession` publishes a recorded session's messages on a private bus through the existing `session.replay`, marked `replayed`. No audio is read or written.
+
+## One application (Goal B)
+
+`gmv.app.window.MainWindow` is the only window: a top bar (status, Start/Stop, Settings), the visualizer view and a settings drawer that slides over the right edge. The former control center is gone; `gmv ui`, `gmv visualizer`, `gmv-control` and `python -m gmv.ui` all open this window.
+
+- `gmv.app.controller.SessionController` has no widgets. It turns a `Settings` value into an audio source and an `AnalysisConfig`, owns the engine and any replay, exports logs and reports diagnostics. The window polls it four times a second.
+- The window attaches the visualizer's own subscription before the engine starts. Display settings act on the view at once; engine settings changed while running are applied by an explicit restart (`Apply changes`).
+- Closing the window detaches the view, stops the replay and the engine and waits for the engine's threads.
+- Headless use is unchanged: `gmv capture`, `gmv file`, `gmv replay` and the evaluation tools do not import the application.
+
+## Drawing cost (Goal B)
+
+Software painting shares Python's interpreter lock with the DSP thread, so every millisecond of painting can delay analysis. The paint path now only draws what moves:
+
+- everything that changes rarely (background, labels, legends, row backgrounds, header text) is one cached picture, redrawn only when what it shows changes;
+- bars and glow are copied from cached textures; scrolling histories are cached strips;
+- no wide antialiased strokes, per-frame gradients or per-frame text remain (each of those was measured at several milliseconds).
+
+`scripts/benchmark_visualizer.py` measures a real on-screen window beside a running engine. A file source wakes on the same Windows timer tick as the display, which makes analysis and painting collide far more often than live capture does; live capture is the representative case.
+
+## Detectors and note candidates (Goal B)
+
+- **Activity detectors are weights files.** `ActivityBank` runs any number of them on one set of features; each publishes its own labels in `instrument_scores`. `guitar_model_path` is a second weights file (labels such as `guitar`, `guitar_distorted`, `guitar_clean`); a new label gets a lane without renderer changes.
+- **Note candidates** (`gmv.pitch`, opt-in `pitch_tracking`): up to four simultaneous notes between E2 and E6 from an 85 ms window, by matching spectral peaks to harmonic series, rejecting overtones of accepted notes, requiring a note to persist for three frames, and reporting a new attack when a sounding note's own harmonics get clearly louder again. They are published with the audio time they describe (`pitch_time`, about 20 ms earlier than the frame) and as `note_attack_candidate` events, always as candidates.
+- **Attribution.** The pitch tracker cannot tell which instrument plays a note. The visualizer draws notes neutral, and amber only for frames in which a guitar detector reported guitar. Without guitar weights nothing is attributed to guitar.

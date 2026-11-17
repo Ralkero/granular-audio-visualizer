@@ -11,6 +11,7 @@ Researched 2026-11-15 from primary sources (dataset pages, Zenodo records, offic
 | **MDB Drums** | 23 real full mixes | 1 speed-metal excerpt, punk, grunge | mix, drum-only, drum multitracks | no (derivable from drum stem) | **yes: kick, snare, hi-hat, toms, cymbals (6 and 21 classes, 7,994 onsets)** | **yes** | CC BY-NC-SA 4.0 | public git repository | ~2 GB |
 | **MUSDB18-HQ** | 150 / ~10 h | **12 Heavy Metal** (8 train, 4 test), 17 Rock, 72 Pop/Rock | mix + drums, bass, vocals, other | no | no | no | mixed; academic / non-commercial ("educational purposes") | Zenodo record, open | 22.7 GB |
 | **MoisesDB** | 240 / 14.4 h | "mostly rock and pop"; metal count not published | **kick, snare, toms, cymbals, overheads, distorted / clean guitar, bass, vocals**; no mixture file | no (the loader computes it from stem energy) | no | no | CC BY-NC-SA 4.0, research only | download form on music.ai, submitted by a person | not published |
+| **GuitarSet** | 360 excerpts / 3 h, six players | none (solo acoustic guitar, five styles) | none: solo guitar only | derivable from notes | **yes: every note, per string, from a hexaphonic pickup** | yes | CC BY 4.0 | Zenodo record 3371780, open | 0.66 GB (annotations and microphone audio) |
 | **MedleyDB 1 + 2** | 122 + 74 / 7.3 h (v1) | 31 Rock, 1 speed-metal excerpt | mix, stems, raw tracks | **yes: activation confidence and source-ID files** | no | no | CC BY-NC-SA 4.0 | Zenodo access request | not published |
 | ENST-Drums | 3 drummers, ~3.75 h | rock kit | 8 microphone channels | no | yes | no | CC BY-NC-ND 4.0 | Zenodo, open | 9.6 GB |
 | IDMT-SMT-Drums | 104 drum loops, 2.2 h | none | kick/snare/hi-hat (subset) | no | yes | no | CC BY-NC-ND 4.0 | Zenodo, open | 0.3 GB |
@@ -84,3 +85,10 @@ Each import hashes and registers every track, registers its stems, assigns the a
 
 - Accepting each dataset's terms and starting its download (MDB Drums and MUSDB18-HQ are direct downloads; MoisesDB needs its web form; MedleyDB needs an approved request).
 - Nothing else. No labelling is required.
+
+## Guitar (Goal B)
+
+- **GuitarSet** (downloaded 2026-11-17 with the owner's approval to `E:\datasets\GuitarSet`, checksums verified) is the reference for pitch and note tracking: real guitar with every note annotated. It is solo acoustic guitar, so it cannot teach or test "is there a guitar in this mix", and it has no distortion. Players 00 to 03 are used for development, 04 and 05 are held out.
+- **MoisesDB** is the reference planned for guitar activity: real mixes with separate guitar stems whose track type says clean electric, distorted electric or acoustic, plus real non-guitar harmonic stems (piano, keys, strings, wind) as counter-examples. It needs the owner's access form; it is not on this machine. The adapter maps those track types to `guitar_clean`, `guitar_distorted` and `guitar_acoustic`, tested on a stand-in folder only.
+- **MedleyDB** would add annotated activations for guitars; access request, no adapter.
+- Not used: mixing solo guitar into MUSDB backing tracks. MUSDB's "other" stem contains guitars and keyboards together, so such data has no trustworthy non-guitar harmonic examples and the detector would learn "harmonic instrument", not "guitar".

@@ -62,3 +62,14 @@ Feature frames carry `instrument_scores` (label and uncalibrated score pairs), `
 Feature frames carry `spectrum_db`: band power in dB (same mean-square units as `band_energy`, floor -120, one decimal), low to high frequency, in `spectrum_bands` log-spaced bands (default 48, at most 96, 0 turns it off) between `spectrum_low_hz` (30) and `spectrum_high_hz` (18000, or Nyquist if lower). It is read off the same FFT as every other feature; no second transform runs. A band narrower than one FFT bin (the lowest few at the default window) takes the power interpolated at its centre, so neighbouring low bands are not independent measurements. The field is for display; detection does not use it.
 
 These are additive optional fields inside schema 1.1, like the beat and activity fields before them. Sessions logged earlier have no `spectrum_db`; they still load and replay, and the visualizer falls back to the seven `band_energy` values. As with every 1.1 addition, a strict reader built from an older copy of the models rejects the new fields.
+
+## Note candidates and guitar weights (Goal B)
+
+Additive, optional fields inside schema 1.1:
+
+- `AnalysisConfig.pitch_tracking` (default false) turns on note candidates; `AnalysisConfig.guitar_model_path` loads a second activity weights file.
+- `FeatureFrame.pitch_candidates`: pairs of MIDI note number and uncalibrated score (0 to 1) for notes sounding at `pitch_time`; at most four, between E2 (40) and E6 (88). `pitch_method` names the tracker (`harmonic_salience_v1`) and is null when tracking is off. `pitch_time` is earlier than the frame timestamp because the pitch window is longer.
+- `note_attack_candidate` events: `evidence_kind` candidate, timestamp back-dated to when the note began, measurements `midi` and `frequency_hz`.
+- With two weights files, `instrument_scores` holds the labels of both and `activity_method` joins their names with `+`.
+
+None of these identify an instrument by themselves: pitch candidates describe the mix, and only a detector's label in `instrument_scores` says an instrument is playing.
