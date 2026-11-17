@@ -24,7 +24,8 @@ FLOOR_DBFS, RELATIVE_DB = -60.0, -40.0
 JOIN_GAP_S, MIN_LENGTH_S = 0.2, 0.05
 
 
-def activity_intervals(audio, rate):
+def levels(audio, rate):
+    """Short-term level in dBFS, one value per hop, and the hop in samples."""
     power = np.mean(np.asarray(audio, dtype=np.float64) ** 2, axis=1)
     hop, window = max(1, round(rate * HOP_S)), max(1, round(rate * WINDOW_S))
     cumulative = np.concatenate(([0.0], np.cumsum(power)))
@@ -32,18 +33,26 @@ def activity_intervals(audio, rate):
     rms = np.sqrt(
         (cumulative[np.minimum(starts + window, len(power))] - cumulative[starts]) / window
     )
-    level = 20 * np.log10(np.maximum(rms, 1e-12))
-    threshold = max(FLOOR_DBFS, float(level.max()) + RELATIVE_DB)
+    return 20 * np.log10(np.maximum(rms, 1e-12)), hop
+
+
+def mask_intervals(mask, hop_s, duration):
+    """Intervals where ``mask`` (one value per hop) is set, centred on the level windows."""
     spans = [
         (start + WINDOW_S / 2 - HOP_S / 2, end + WINDOW_S / 2 - HOP_S / 2)
-        for start, end in from_mask(level > threshold, hop / rate)
+        for start, end in from_mask(mask, hop_s)
     ]
-    duration = len(power) / rate
     return [
         (max(0.0, s), min(duration, e))
         for s, e in merge(spans, JOIN_GAP_S)
         if e - s >= MIN_LENGTH_S
     ]
+
+
+def activity_intervals(audio, rate):
+    level, hop = levels(audio, rate)
+    threshold = max(FLOOR_DBFS, float(level.max()) + RELATIVE_DB)
+    return mask_intervals(level > threshold, hop / rate, len(audio) / rate)
 
 
 def reference(recording, stems, uncertain=()):

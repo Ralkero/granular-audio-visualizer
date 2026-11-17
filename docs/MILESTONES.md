@@ -35,5 +35,6 @@ See [PHASE1_2_REPORT.md](PHASE1_2_REPORT.md).
 | E2 — instrument activity | Opt-in drums, bass and vocals estimator trained from stems with no hand labelling. MUSDB18-HQ validation F1 0.95 / 0.93 / 0.85 against always-active baselines of 0.87 / 0.85 / 0.78. Test split unread at that point; weights kept local |
 | E3 — better vocal activity | Stem remixes as training data plus centre-channel and pitch-movement features. Validation: vocals F1 0.85 to 0.89, false-positive rate 0.19 to 0.14; drums lost some recall (F1 0.95 to 0.94); bass unchanged. Test split unread at that point |
 | Final held-out activity evaluation | E3 model scored once on the 54 unread MUSDB18-HQ test tracks: F1 0.95 (drums), 0.92 (bass), 0.82 (vocals) against always-active 0.91 / 0.86 / 0.75; false-positive rates 0.13 / 0.22 / 0.20. Lower than validation for bass and vocals. The test split is now used |
-| Separation research and capture device checks | Not started; physical device tests still unrun |
+| Separation model comparison | HTDemucs on the 50 test tracks it had not seen: recall 0.98 / 0.97 / 0.95 (drums, bass, vocals) against 0.92 / 0.91 / 0.79 for the lightweight estimator; false-positive rate 0.08 / 0.13 / 0.20 against 0.12 / 0.23 / 0.21 at the margin chosen on validation. Needs 8 CPU threads and answers 1.4 to 3.4 s late, so it is not a live path |
+| Capture device checks | Not started; physical device tests still unrun |
 | Final validation and report | Not started |

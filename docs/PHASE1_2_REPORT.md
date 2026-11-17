@@ -401,15 +401,84 @@ The same run also gives held-out figures for the band-ratio candidates firing wi
 
 Still not shown: metal separately (no genre tags imported), live capture, guitars or individual drum parts.
 
+## Separation model comparison (HTDemucs)
+
+The held-out run left bass and vocals marginal. This measures whether a source-separation model does better, and what it costs. The model is HTDemucs (`htdemucs/955717e8`, Demucs 4.1.0, CPU), already installed for the Phase 1.1 experiment; nothing was downloaded. Scripts: `experiments/separation/activity_worker.py` and `score_activity.py`.
+
+Method:
+
+- Each mixture is separated and only the short-term level of each estimated stem is kept. No separated audio is written. A stem counts as playing while its level is above a margin; the reference is the same stem-derived activity used for the lightweight estimator.
+- **Whole file**: the usual offline separation, with seconds of audio on both sides of every sample. Not possible live.
+- **Live-style**: every 2 s the latest 7.8 s (the model's segment) is separated and only the newest 2 s kept, so nothing is separated with more than 2 s of later audio. The margin is measured from the loudest level of that stem so far.
+- The margin was chosen per instrument on the validation split and applied unchanged to the test split.
+- **Which tracks count.** HTDemucs was trained on the dataset's train folder (plus 800 undisclosed songs) and evaluated by its authors on the test folder. Four of this project's 54 test tracks come from the train folder (their artists also appear in the test folder), so the comparison uses the **50 tracks the separator had not seen** (207.8 minutes). The lightweight figures below are the final-run results restricted to the same 50 tracks.
+
+### Result (50 test tracks, margin chosen on validation)
+
+| Instrument | Method | Precision | Recall | F1 | False-positive rate | Worst track F1 |
+|---|---|---:|---:|---:|---:|---:|
+| Drums | Lightweight estimator | 0.974 | 0.918 | 0.945 | 0.124 | 0.70 |
+| Drums | Separation, whole file | 0.978 | 0.977 | 0.977 | 0.113 | 0.83 |
+| Drums | Separation, live-style | 0.984 | 0.977 | **0.981** | **0.078** | 0.88 |
+| Bass | Lightweight estimator | 0.921 | 0.912 | 0.916 | 0.234 | 0.00 |
+| Bass | Separation, whole file | 0.941 | 0.970 | 0.956 | 0.180 | 0.63 |
+| Bass | Separation, live-style | 0.956 | 0.971 | **0.963** | **0.134** | 0.62 |
+| Vocals | Lightweight estimator | 0.858 | 0.786 | 0.820 | 0.212 | 0.25 |
+| Vocals | Separation, whole file | 0.876 | 0.954 | 0.913 | 0.220 | 0.38 |
+| Vocals | Separation, live-style | 0.885 | 0.955 | **0.918** | 0.203 | 0.45 |
+
+Always-active F1 on these tracks: 0.910 (drums), 0.856 (bass), 0.765 (vocals). Machine-readable results stay local; summary: [evaluation/musdb18hq_test_separation_activity.md](evaluation/musdb18hq_test_separation_activity.md).
+
+- **Separation finds much more of the playing time.** Recall rises from 0.92 to 0.98 (drums), 0.91 to 0.97 (bass) and 0.79 to 0.95 (vocals). The bass track the lightweight estimator missed entirely (F1 0.00) scores 0.63.
+- **At the chosen margin it does not fix vocal false positives.** One second in five without vocals is still reported as vocals (0.20 to 0.22, against 0.21). Bass false positives fall from 0.23 to 0.13 to 0.18; drums from 0.12 to 0.08 in the live-style pass.
+- **The margin was chosen on tracks the separator already knew, and that made it too generous.** On validation the same margins gave false-positive rates of 0.01 (drums, bass) and 0.04 (vocals); on unseen tracks the separator leaves more residue in each stem.
+- **The live-style pass is not worse than whole-file separation.** Two seconds of later audio are enough for this purpose.
+- Entrances are placed a median of 0 to 53 ms from the reference (lightweight: 123 to 243 ms), before counting the processing delay below.
+- Vocals still fail on a few tracks: 2 to 3 of 50 score below F1 0.5, the same count as the lightweight estimator.
+
+### How much the margin matters (looked at after the fact; not a result)
+
+Whole-file separation on the same 50 tracks, at other margins:
+
+| Margin below the stem's own peak | Drums recall / false-positive rate | Bass | Vocals |
+|---|---:|---:|---:|
+| 25 dB | 0.84 / 0.01 | 0.93 / 0.07 | 0.87 / 0.04 |
+| 30 dB | 0.92 / 0.02 | 0.95 / 0.11 | 0.89 / 0.05 |
+| 35 dB | 0.95 / 0.05 | 0.96 / 0.14 | 0.92 / 0.10 |
+| 40 dB (chosen for drums, bass) | 0.98 / 0.11 | 0.97 / 0.18 | 0.94 / 0.14 |
+| 45 dB (chosen for vocals) | 0.99 / 0.18 | 0.97 / 0.20 | 0.95 / 0.22 |
+| Lightweight estimator, for comparison | 0.92 / 0.12 | 0.91 / 0.23 | 0.79 / 0.21 |
+
+At every margin from 25 to 40 dB separation has both higher recall and fewer false positives than the lightweight estimator for vocals and bass, and from 30 dB for drums. A 30 dB margin would give vocals 0.05 false positives at 0.89 recall. **These rows were read off the test tracks, so they are an indication, not a measurement**; confirming them needs a margin chosen on music the separator has not seen and a fresh held-out set. Bass false positives stay near 0.1 even at tight margins.
+
+### Cost (Ryzen 9 5950X, CPU only, nothing else running)
+
+| Threads | Whole file | One live-style pass (2 s of new audio) | Keeps up? |
+|---:|---:|---:|---|
+| 4 | 0.41 s per second of audio | 2.33 s | No, falls behind |
+| 8 | 0.25 s per second of audio | 1.41 s | Yes, at 70% load on 8 threads |
+
+- With 8 threads, a result covers audio that is between **1.4 and 3.4 s old** when it arrives. A shorter step lowers the delay only if each pass still finishes inside the step, and one pass takes 1.4 s.
+- About 2.5 GB of memory per worker was observed during the run (whole tracks held in memory).
+- The lightweight estimator costs about 2 ms per 20 ms frame on one thread and reports within one frame.
+- Upstream states that the licence of these weights is unresolved. They stay out of the repository and cannot be bundled.
+
+### What this means
+
+- A separation model is the better instrument-activity detector, clearly for recall and for bass, and probably for vocal false positives with a tighter margin (not yet confirmed).
+- It cannot drive visuals that must move with the music on CPU: its answer is seconds late and it occupies half of this processor. The lightweight estimator stays the live path.
+- Uses that fit: a delayed context layer (which instruments are in this passage), or a source of training labels for the lightweight estimator on music that has no stems. Such labels are model predictions; they may train a model but never serve as reference.
+- The MUSDB18-HQ test split has now been read a second time. Nothing was tuned on it, but the margin table above was seen, so later separation results on it are not clean either.
+
 ## Status of the phase
 
-Done: A, B, C, D1, D2, D3 (MDB Drums, MUSDB18-HQ train and validation), D4, E1 (beat tracker, development result only), E2 and E3 (drums, bass and vocals activity), and the final held-out evaluation of the E3 model.
+Done: A, B, C, D1, D2, D3 (MDB Drums, MUSDB18-HQ train and validation), D4, E1 (beat tracker, development result only), E2 and E3 (drums, bass and vocals activity), the final held-out evaluation of the E3 model, and a comparison with a separation model (HTDemucs).
 
 Outstanding:
 
 - More reference material: genre tags for MUSDB18-HQ, MoisesDB import (adapter unverified on real files), a rendered-multitrack tier, a held-out beat set, MedleyDB adapter.
-- Detection work from D4: a held-out check and off-beat fix for the beat tracker, onset recall with a precision reference, drum classes; for instrument activity fewer vocal and bass false positives (a comparison with a separation model is the obvious next measurement; a new held-out set will be needed, since the MUSDB18-HQ test split is now used), and guitar and drum-part activity (needs MoisesDB).
-- Capture reliability (USB disconnect/reconnect, default-output switch on the native backend) and source-separation research: not started in this phase.
+- Detection work from D4: a held-out check and off-beat fix for the beat tracker, onset recall with a precision reference, drum classes; for instrument activity fewer vocal and bass false positives (separation does better on recall and bass; its vocal false positives need a tighter margin confirmed on a new held-out set, since the MUSDB18-HQ test split is used), and guitar and drum-part activity (needs MoisesDB).
+- Capture reliability (USB disconnect/reconnect, default-output switch on the native backend): not started in this phase. Separation was measured for instrument activity only; it is too slow and too late for the live path on CPU.
 - Final validation and report.
 
 **Real-music analysis is validated only for instrument activity on MUSDB18-HQ, and the result is modest.** What exists is a development measurement on 21.8 minutes of real music for drum attacks and beats (including an opt-in beat tracker at F1 0.69 on the data it was developed on), and an opt-in drums, bass and vocals activity estimator with a final held-out result on 54 unseen tracks (F1 0.95, 0.92, 0.82 against always-active 0.91, 0.86, 0.75). The MUSDB18-HQ test split (3.76 h) has now been used for that one final run.
