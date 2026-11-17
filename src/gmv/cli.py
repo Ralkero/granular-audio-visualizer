@@ -16,6 +16,11 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("devices")
     commands.add_parser("ui")
+    visualizer = commands.add_parser(
+        "visualizer", help="Open the visualizer with the control center, or on a recorded session"
+    )
+    visualizer.add_argument("--replay", metavar="SESSION", help="Session folder or messages.jsonl")
+    visualizer.add_argument("--speed", type=float, default=1)
     capture = commands.add_parser("capture")
     capture.add_argument("--device")
     capture.add_argument(
@@ -43,6 +48,14 @@ def main(argv=None):
         from .ui import main as ui_main
 
         return ui_main()
+    if args.command == "visualizer":
+        if not args.replay:
+            from .ui import main as ui_main
+
+            return ui_main(visualizer=True)
+        from .visualizer.window import replay_main
+
+        return replay_main(args.replay, args.speed)
     if args.command == "devices":
         print(json.dumps(list_output_devices(), indent=2))
         return

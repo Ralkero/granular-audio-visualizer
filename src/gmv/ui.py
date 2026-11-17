@@ -1,5 +1,6 @@
-"""Phase One diagnostic control center; no artistic renderer."""
+"""Control center: source selection, diagnostics and session logs. Opens the visualizer."""
 
+import os
 import sys
 import zipfile
 from pathlib import Path
@@ -28,6 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .activity import ActivityModel
 from .engine import Engine
 from .models import AnalysisConfig, FeatureFrame, MusicalEvent
 from .sources.file import FileAudioSource
@@ -58,9 +60,10 @@ class Discovery(QObject):
 class ControlCenter(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Granular Music Visualizer — Phase One Control Center")
+        self.setWindowTitle("Granular Music Visualizer — Control Center")
         self.resize(1000, 900)
         self.engine, self.subscription = None, None
+        self.visualizer, self.replaying = None, None
         self.session_path = None
         self.closing = False
         self.discovery = Discovery()
@@ -117,6 +120,19 @@ class ControlCenter(QMainWindow):
         self.advanced.setToolTip(
             "Two-second delayed spectral HPSS; does not identify individual instruments"
         )
+        self.activity_model = QLineEdit()
+        self.activity_model.setPlaceholderText(
+            "Optional weights file (.npz) for drums / bass / vocals activity — none selected"
+        )
+        self.activity_model.setToolTip(
+            "Local file only; it is not part of the repository. Without it the instrument "
+            "lanes show no detector output."
+        )
+        default_model = os.environ.get("GMV_ACTIVITY_MODEL") or ROOT / ".model-cache/activity_v2.npz"
+        if Path(default_model).is_file():
+            self.activity_model.setText(str(default_model))
+        self.browse_model = QPushButton("Choose weights…")
+        self.browse_model.clicked.connect(self.choose_model)
         form.addRow("Source", self.source_type)
         form.addRow("Output device", self.devices)
         form.addRow("Application", self.apps)
@@ -127,6 +143,7 @@ class ControlCenter(QMainWindow):
         form.addRow("Optional debug recording", self.debug_audio)
         form.addRow(self.advanced)
         form.addRow(self.beat_phase)
+        form.addRow("Instrument activity", self._row(self.activity_model, self.browse_model))
         layout.addWidget(setup)
         self.source_note = QLabel()
         self.source_note.setWordWrap(True)
@@ -152,7 +169,21 @@ class ControlCenter(QMainWindow):
         self.export_button.clicked.connect(self.export_session)
         self.open_button.setEnabled(False)
         self.export_button.setEnabled(False)
-        for button in (self.start_button, self.stop_button, self.open_button, self.export_button):
+        self.visualizer_button = QPushButton("Open visualizer")
+        self.visualizer_button.setToolTip(
+            "Works before or during analysis; follows each new session"
+        )
+        self.visualizer_button.clicked.connect(self.open_visualizer)
+        self.replay_button = QPushButton("Replay session in visualizer…")
+        self.replay_button.clicked.connect(self.replay_session)
+        for button in (
+            self.start_button,
+            self.stop_button,
+            self.visualizer_button,
+            self.replay_button,
+            self.open_button,
+            self.export_button,
+        ):
             controls.addWidget(button)
         layout.addLayout(controls)
         self.status_label = QLabel("Ready")
@@ -243,16 +274,79 @@ class ControlCenter(QMainWindow):
         if path:
             self.file_path.setText(path)
 
+    def choose_model(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Choose activity weights", str(ROOT / ".model-cache"), "Weights (*.npz)"
+        )
+        if path:
+            self.activity_model.setText(path)
+
+    def describe_session(self):
+        """What the visualizer needs to know about the running session."""
+        return {
+            "source": self.source_type.currentText(),
+            "beat_tracker": self.engine.config.experimental_beat_phase,
+            "activity_model": self.engine.config.activity_model_path,
+        }
+
+    def open_visualizer(self):
+        from .visualizer.window import VisualizerWindow
+
+        if self.visualizer is None:
+            self.visualizer = VisualizerWindow()
+        if self.visualizer.bus is None and self.engine and not self.engine.done.is_set():
+            self.visualizer.attach(self.engine.bus, **self.describe_session())
+        self.visualizer.show()
+        self.visualizer.raise_()
+        self.visualizer.activateWindow()
+
+    def replay_session(self):
+        from .visualizer.replay import ReplaySession
+
+        if self.engine is not None and not self.engine.done.is_set():
+            self.status_label.setText("Stop the running analysis before replaying a session")
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Choose a recorded session", str(ROOT / "sessions"), "Messages (messages.jsonl)"
+        )
+        if not path:
+            return
+        try:
+            self.stop_replay()
+            self.replaying = ReplaySession(path)
+            self.open_visualizer()
+            self.visualizer.attach(
+                self.replaying.bus,
+                source=self.replaying.title,
+                beat_tracker=self.replaying.configuration.get("experimental_beat_phase"),
+                activity_model=self.replaying.configuration.get("activity_model_path"),
+            )
+            self.replaying.start()
+            self.status_label.setText("Replaying " + self.replaying.title)
+        except Exception as exc:
+            self.status_label.setText("Unable to replay: " + str(exc))
+
+    def stop_replay(self):
+        if self.replaying is not None:
+            if self.visualizer is not None and self.visualizer.bus is self.replaying.bus:
+                self.visualizer.detach()
+            self.replaying.stop()
+            self.replaying = None
+
     def start_analysis(self):
         if self.engine is not None and not self.engine.done.is_set():
             return
         try:
+            model_path = self.activity_model.text().strip() or None
+            if model_path:
+                ActivityModel(model_path)  # fail here, with a readable message, not mid-capture
             config = AnalysisConfig(
                 window_ms=self.window_ms.value(),
                 hop_ms=self.hop_ms.value(),
                 band_edges=tuple(float(v.strip()) for v in self.band_edges.text().split(",")),
                 advanced=self.advanced.isChecked(),
                 experimental_beat_phase=self.beat_phase.isChecked(),
+                activity_model_path=model_path,
                 debug_audio_seconds=self.debug_audio.value(),
             )
             index = self.source_type.currentIndex()
@@ -277,6 +371,9 @@ class ControlCenter(QMainWindow):
                 source, config, session_root=ROOT / "sessions", logging=self.logging.isChecked()
             )
             self.subscription = self.engine.bus.subscribe(256)
+            self.stop_replay()
+            if self.visualizer is not None:
+                self.visualizer.attach(self.engine.bus, **self.describe_session())
             self.engine.start()
             self.source_note.setText(
                 f"Selected: {self.apps.currentText()} | process-tree isolation; never falls back automatically"
@@ -305,6 +402,9 @@ class ControlCenter(QMainWindow):
             self.logging,
             self.advanced,
             self.beat_phase,
+            self.activity_model,
+            self.browse_model,
+            self.replay_button,
             self.debug_audio,
             self.refresh,
         ):
@@ -323,6 +423,9 @@ class ControlCenter(QMainWindow):
             self.status_label.setText("Stopping capture and finalizing logs…")
 
     def poll(self):
+        if self.replaying is not None and self.replaying.error:
+            self.status_label.setText("Replay failed: " + self.replaying.error)
+            self.replaying.error = None
         if not self.engine:
             return
         latest = None
@@ -427,14 +530,19 @@ class ControlCenter(QMainWindow):
             self.stop_analysis()
             event.ignore()
         else:
+            self.stop_replay()
+            if self.visualizer is not None:
+                self.visualizer.close()
             event.accept()
 
 
-def main():
+def main(visualizer=False):
     app = QApplication.instance() or QApplication(sys.argv)
     app.setStyle("Fusion")
     window = ControlCenter()
     window.show()
+    if visualizer:
+        window.open_visualizer()
     return app.exec()
 
 
