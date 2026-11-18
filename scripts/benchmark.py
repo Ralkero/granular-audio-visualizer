@@ -16,6 +16,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seconds", type=int, default=60)
     parser.add_argument("--output", default="local-evidence/synthetic-benchmark.json")
+    parser.add_argument("--recognition", help="recognition model description (.json) to run")
+    parser.add_argument("--activity", help="drums / bass / vocals weights to run as well")
+    parser.add_argument("--pitch", action="store_true", help="note candidates on")
+    parser.add_argument(
+        "--realtime",
+        action="store_true",
+        help="feed the file at playback speed: load, result age and queues as in live use",
+    )
     args = parser.parse_args()
     if not 10 <= args.seconds <= 600:
         parser.error("Use a duration between 10 and 600 seconds")
@@ -35,9 +43,15 @@ def main():
                     tone *= 0
                 file.write(np.column_stack((tone, -tone)))
         began = perf_counter()
-        engine = Engine(FileAudioSource(path, realtime=False), AnalysisConfig(), logging=False)
+        config = AnalysisConfig(
+            recognition_model_path=args.recognition,
+            activity_model_path=args.activity,
+            pitch_tracking=args.pitch,
+        )
+        source = FileAudioSource(path, realtime=args.realtime)
+        engine = Engine(source, config, logging=False)
         engine.start()
-        if not engine.done.wait(120):
+        if not engine.done.wait(120 + (args.seconds if args.realtime else 0)):
             engine.stop()
             raise RuntimeError("Benchmark timed out")
         elapsed = perf_counter() - began
@@ -47,6 +61,8 @@ def main():
             "sample_rate": rate,
             "wall_seconds": elapsed,
             "realtime_factor": elapsed / args.seconds,
+            "fed_at_playback_speed": args.realtime,
+            "recognition_model": args.recognition,
             "performance": engine.metrics(),
         }
         output = Path(args.output)

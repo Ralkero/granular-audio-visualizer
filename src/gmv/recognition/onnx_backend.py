@@ -12,6 +12,7 @@ ONNX Runtime is an optional dependency (``pip install granular-music-visualizer[
 from pathlib import Path
 
 import numpy as np
+from scipy.fft import rfft
 
 from . import file_sha256, register
 
@@ -21,7 +22,8 @@ def log_mel(audio, mel_basis, n_fft, window, hop):
     emphasised = audio[1:] - 0.97 * audio[:-1]
     padded = np.pad(emphasised, n_fft // 2, mode="reflect")
     frames = np.lib.stride_tricks.sliding_window_view(padded, n_fft)[::hop]
-    power = np.abs(np.fft.rfft(frames * window, axis=1)) ** 2
+    spectrum = rfft(frames * window, axis=1)  # single precision in, single precision out
+    power = spectrum.real**2 + spectrum.imag**2
     return ((np.log(power @ mel_basis.T + 1e-5) + 4.5) / 5.0).T.astype(np.float32)
 
 
