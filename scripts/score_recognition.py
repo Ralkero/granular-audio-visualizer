@@ -191,7 +191,8 @@ def pool(items, column, minimum):
         "mean_recording_false_positive_rate": round(float(np.mean(alarms)), 3) if alarms else None,
         "state_changes_per_minute": round(changes / max(minutes, 1e-9), 2),
     }
-    silent = [i for i in items if not i["y"][:, column].any()]
+    # Recordings known to be without it: no active reference and nothing uncertain.
+    silent = [i for i in items if not i["y"][:, column].any() and i["certain"][:, column].all()]
     if silent:
         lit = [float((i["state"][:, column] >= minimum).mean()) for i in silent]
         runs = [longest_run(i["state"][:, column] >= minimum, hop) for i in silent]

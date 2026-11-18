@@ -77,6 +77,9 @@ Detected / candidate / absent: the "detected" threshold is the one that gives at
 - Real metal with stem-level truth does not exist in the material.
 - Cambridge-MT based sets are not used (terms unclear for research).
 
-## Changes after 2026-11-17
+## Changes after this was fixed
 
-None yet.
+- The Spheres could not be imported (its instrument files differ in length by more than 0.5 s) and was left out; URMP was not downloaded. The guitar-free classical pool is MusicNet only.
+- The fine-tuned model was compared on two of the four artist folds (111 songs), because one fold takes about 80 minutes; the frozen model was scored on all four.
+- Condition tags were reduced to what the report contains: dataset, genre, ensemble (MusicNet), guitar type and guitar level. The other conditions were not tagged.
+- MedleyDB, the owner's folders and Slakh2100 were not available when the test was read; the test is the MoisesDB held-out artists (previously read), their twins and the MusicNet test recordings.

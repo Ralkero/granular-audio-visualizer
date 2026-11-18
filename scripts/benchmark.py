@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 from time import perf_counter
 import numpy as np
+import psutil
 import soundfile as sf
 from gmv.engine import Engine
 from gmv.models import AnalysisConfig
@@ -43,6 +44,8 @@ def main():
                     tone *= 0
                 file.write(np.column_stack((tone, -tone)))
         began = perf_counter()
+        process = psutil.Process()
+        cpu_before = sum(process.cpu_times()[:2])
         config = AnalysisConfig(
             recognition_model_path=args.recognition,
             activity_model_path=args.activity,
@@ -61,6 +64,10 @@ def main():
             "sample_rate": rate,
             "wall_seconds": elapsed,
             "realtime_factor": elapsed / args.seconds,
+            # Whole process, all threads, over the whole run: 100 means one core fully used.
+            "mean_cpu_percent_of_one_core": 100
+            * (sum(process.cpu_times()[:2]) - cpu_before)
+            / elapsed,
             "fed_at_playback_speed": args.realtime,
             "recognition_model": args.recognition,
             "performance": engine.metrics(),

@@ -99,3 +99,11 @@ Each import hashes and registers every track, registers its stems, assigns the a
 - No official split: one artist in five is held out as test, one in five is validation (147 / 13 / 48 songs).
 - 50 guitar files and 125 vocal files carry the dataset's bleed flag. Labels backed by a flagged file are uncertain; the trainer and the frame scorer leave that time out.
 - Result of the first guitar detector: [evaluation/moisesdb_guitar_v1.md](evaluation/moisesdb_guitar_v1.md).
+
+## Guitar-free material (2026-11-17)
+
+- `moisesdb_noguitar`: every MoisesDB song that has guitar files and something else, summed without the guitar files. Same artist group and split as the song. 193 imported (132 train, 13 validation, 48 test), 29 rejected for unequal file lengths. Guitar is declared absent; faint guitar can remain where another file has bleed.
+- `musicnet`: MusicNet (CC BY 4.0, direct download), 330 classical recordings, movements of one work kept in one split (228 train, 68 validation, 34 test). No guitar: guitar and its sub-labels are declared absent for the whole recording. Note labels are not imported.
+- `spheres`: The Spheres stereo mix (CC BY-SA 4.0). The adapter exists, but both pieces are rejected on import because the instrument files differ in length by more than 0.5 s.
+- A dataset without the instrument writes a `dataset_annotation` that covers the label and contains no activity (`gmv.corpus.datasets.absent`).
+- Not used: Cambridge-MT "Mixing Secrets" and sets derived from it (terms "educational purposes only"). Pending: MedleyDB (access request), Slakh2100 (download in progress).

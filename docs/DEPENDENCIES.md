@@ -37,3 +37,12 @@ PipeWire investigation: `pw-record`/`pw-cat` support raw stdout, target nodes an
 Advanced alternatives: median spectral HPSS is computationally inexpensive but cannot distinguish vocal/bass/drum identities. It was selected as the delayed CPU prototype. Demucs provides the desired four broad stems, but chunk buffering, model latency, Torch compatibility and maintenance warrant an isolated benchmark environment. Essentia and Librosa offer richer rhythm/harmonic algorithms; neither is required for the immediate pipeline. AMD acceleration remains uninvestigated; no GPU is used.
 
 The lock file records the actual resolved Windows environment. OS adapters are optional on other platforms. This is a source checkout, not a signed packaged installer.
+
+## Context recognition (optional)
+
+| Dependency | Decision | Notes |
+|---|---|---|
+| ONNX Runtime (CPU) | Optional extra `recognition`; needed only when a recognition model is chosen | MIT. Wheels for Python 3.11 to 3.14 on Windows. The DirectML provider (AMD GPUs) is not used: the model takes 13 ms per estimate on the CPU. |
+| EfficientAT `mn10_as` weights | Base of the experimental guitar model; local only | Code MIT (github.com/fschmid56/EfficientAT). The weight file has no separate licence statement; trained on AudioSet. |
+| torch, torchaudio, torchvision, matplotlib | Experiments environment only (training, export, plots) | CPU builds. Never imported by the application. |
+| PaSST (`hear21passt`) | Installed in the experiments environment to measure cost; not used | Apache-2.0. 2.5 s of one core per 10 s clip. |
