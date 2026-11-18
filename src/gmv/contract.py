@@ -5,8 +5,15 @@ from . import models, models_v1
 
 def parse_message(data):
     version = data.get("schema_version", "1.0")
-    classes = {"feature_frame": "FeatureFrame", "musical_event": "MusicalEvent", "status": "Status"}
+    classes = {
+        "feature_frame": "FeatureFrame",
+        "musical_event": "MusicalEvent",
+        "status": "Status",
+        "instrument_estimate": "InstrumentEstimate",
+    }
     name = classes[data["type"]]
+    if version == "1.0" and name == "InstrumentEstimate":
+        raise ValueError("Schema 1.0 has no instrument estimates")
     if version == "1.0":
         legacy = getattr(models_v1, name).model_validate(data)
         data = legacy.model_dump()

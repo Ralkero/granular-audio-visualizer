@@ -24,6 +24,7 @@ class Engine:
         self.stop_event, self.done = Event(), Event()
         self.writer = None
         self.advanced = None
+        self.recognition = None
         self.recorder = None
         self.frame_count, self.event_count, self.discontinuities = 0, 0, 0
         self.dsp_times, self.ages, self.queue_times = (
@@ -64,7 +65,7 @@ class Engine:
             self.error = str(exc)
             self.stop_event.set()
             try:
-                for worker in (self.advanced, self.recorder):
+                for worker in (self.advanced, self.recognition, self.recorder):
                     if worker:
                         worker.close()
                 if self.writer:
@@ -97,6 +98,17 @@ class Engine:
                 self.bus, self.session_id, self.source.kind, live=self.source.live
             )
             self.advanced.start()
+        if self.config.recognition_model_path:
+            from .recognition.worker import RecognitionWorker
+
+            self.recognition = RecognitionWorker(
+                self.bus,
+                self.session_id,
+                self.source.kind,
+                self.config.recognition_model_path,
+                live=self.source.live,
+            )
+            self.recognition.start()
         self.status("starting", "Opening audio source")
         self.threads = [
             Thread(target=self._capture, name="capture", daemon=True),
@@ -171,6 +183,8 @@ class Engine:
                             self.ages.append(frame.capture_to_publish_ms)
                     if self.advanced:
                         self.advanced.offer(block)
+                    if self.recognition:
+                        self.recognition.offer(block)
                 if perf_counter() - last_metrics > 1:
                     self.cpu = process.cpu_percent()
                     self.memory_mb = process.memory_info().rss / 1024**2
@@ -194,6 +208,8 @@ class Engine:
                 )
             if self.advanced:
                 self.advanced.close()
+            if self.recognition:
+                self.recognition.close()
             if self.recorder:
                 self.recorder.close()
                 if self.recorder.error:
@@ -227,6 +243,7 @@ class Engine:
                 else None
             )
 
+        recognition = self.recognition
         return {
             "frames": self.frame_count,
             "events": self.event_count,
@@ -251,6 +268,13 @@ class Engine:
             "advanced_discarded_results": self.advanced.discarded_results if self.advanced else 0,
             "advanced_latest_age_ms": self.advanced.latest_age_ms if self.advanced else None,
             "advanced_processing_ms": stats(self.advanced.times) if self.advanced else None,
+            "recognition_status": recognition.state if recognition else "disabled",
+            "recognition_jobs": recognition.jobs if recognition else 0,
+            "recognition_drops": recognition.queue.dropped if recognition else 0,
+            "recognition_skipped_hops": recognition.skipped_hops if recognition else 0,
+            "recognition_discarded_results": recognition.discarded_results if recognition else 0,
+            "recognition_latest_age_ms": recognition.latest_age_ms if recognition else None,
+            "recognition_processing_ms": stats(recognition.times) if recognition else None,
             "debug_audio_saved_seconds": self.recorder.saved_seconds if self.recorder else 0,
             "debug_audio_dropped_blocks": self.recorder.queue.dropped if self.recorder else 0,
             "error": self.error,

@@ -23,6 +23,8 @@ class AnalysisConfig(FrozenModel):
     activity_model_path: str | None = None
     # Weights file for the guitar tracker; no file, no guitar output.
     guitar_model_path: str | None = None
+    # Description file of a context recognition model (gmv.recognition); off when None.
+    recognition_model_path: str | None = None
     # Multi-pitch note candidates in the guitar register (E2 to E6); off by default.
     pitch_tracking: bool = False
     # Log-spaced display spectrum carried on every feature frame; 0 turns it off.
@@ -140,6 +142,28 @@ class Status(Message):
     type: Literal["status"] = "status"
     state: str
     detail: str
+
+
+class InstrumentEstimate(Message):
+    """What a context recognition model says about ``timestamp`` .. ``interval_end``.
+
+    Published late (the model needs seconds of audio and time to run) and placed on the audio
+    timeline by its interval, never by its arrival. ``states`` is the cautious reading of
+    ``scores``: "detected" passed the threshold chosen for few false alarms, "candidate" only
+    a lower one. With ``available`` false the model is not running; ``detail`` says why.
+    """
+
+    type: Literal["instrument_estimate"] = "instrument_estimate"
+    interval_end: float = Field(ge=0)
+    backend: str
+    backend_version: str = ""
+    available: bool = True
+    detail: str = ""
+    scores: tuple[tuple[str, float], ...] = ()
+    states: tuple[tuple[str, Literal["absent", "candidate", "detected"]], ...] = ()
+    context_s: float = 0
+    processing_ms: float = 0
+    confidence_interpretation: str = "uncalibrated_model_score"
 
 
 BAND_NAMES = ("sub_bass", "bass", "low_mids", "mids", "upper_mids", "presence", "air")

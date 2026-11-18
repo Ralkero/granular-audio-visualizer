@@ -87,6 +87,18 @@
       "default": null,
       "title": "Guitar Model Path"
     },
+    "recognition_model_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Recognition Model Path"
+    },
     "pitch_tracking": {
       "default": false,
       "title": "Pitch Tracking",

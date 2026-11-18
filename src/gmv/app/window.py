@@ -164,10 +164,13 @@ class SettingsDrawer(QFrame):
         self.heading("Analysis")
         self.activity_model, self.guitar_model = QLineEdit(), QLineEdit()
         self.activity_model.setPlaceholderText("Drums / bass / vocals weights (.npz) — none")
-        self.guitar_model.setPlaceholderText("Guitar weights (.npz) — none")
+        self.guitar_model.setPlaceholderText("Guitar weights (.npz) or model (.json) — off")
         tip = "A local file; weights are not part of the repository."
         self.activity_model.setToolTip(tip)
-        self.guitar_model.setToolTip(tip)
+        self.guitar_model.setToolTip(
+            tip + " A .json file selects a context recognition model: it reports about a"
+            " second late and marks guitar as detected, candidate or absent."
+        )
         browse_activity, browse_guitar = QPushButton("Choose…"), QPushButton("Choose…")
         browse_activity.clicked.connect(lambda: self.choose_weights(self.activity_model))
         browse_guitar.clicked.connect(lambda: self.choose_weights(self.guitar_model))
@@ -305,7 +308,11 @@ class SettingsDrawer(QFrame):
         def state(path, what):
             if not path.strip():
                 return f"{what}: no weights chosen, lane shows no detector output"
-            return f"{what}: weights chosen" if Path(path).is_file() else f"{what}: file not found"
+            if not Path(path).is_file():
+                return f"{what}: file not found"
+            if path.strip().lower().endswith(".json"):
+                return f"{what}: context recognition model chosen (experimental, reports late)"
+            return f"{what}: weights chosen"
 
         self.capabilities.setText(
             "\n".join(
@@ -334,7 +341,12 @@ class SettingsDrawer(QFrame):
 
     def choose_weights(self, target):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Choose weights", str(ROOT / ".model-cache"), "Weights (*.npz)"
+            self,
+            "Choose weights",
+            str(ROOT / ".model-cache"),
+            "Weights and models (*.npz *.json)"
+            if target is self.guitar_model
+            else "Weights (*.npz)",
         )
         if path:
             target.setText(path)

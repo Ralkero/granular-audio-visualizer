@@ -1,0 +1,189 @@
+{
+  "additionalProperties": false,
+  "description": "What a context recognition model says about ``timestamp`` .. ``interval_end``.\n\nPublished late (the model needs seconds of audio and time to run) and placed on the audio\ntimeline by its interval, never by its arrival. ``states`` is the cautious reading of\n``scores``: \"detected\" passed the threshold chosen for few false alarms, \"candidate\" only\na lower one. With ``available`` false the model is not running; ``detail`` says why.",
+  "properties": {
+    "schema_version": {
+      "const": "1.1",
+      "default": "1.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "timestamp": {
+      "minimum": 0,
+      "title": "Timestamp",
+      "type": "number"
+    },
+    "detected_monotonic": {
+      "title": "Detected Monotonic",
+      "type": "number"
+    },
+    "published_monotonic": {
+      "default": 0,
+      "title": "Published Monotonic",
+      "type": "number"
+    },
+    "sequence": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "segment": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Segment"
+    },
+    "evidence_monotonic": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Evidence Monotonic"
+    },
+    "age_at_publication_ms": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Age At Publication Ms"
+    },
+    "replayed": {
+      "default": false,
+      "title": "Replayed",
+      "type": "boolean"
+    },
+    "original_published_monotonic": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Original Published Monotonic"
+    },
+    "type": {
+      "const": "instrument_estimate",
+      "default": "instrument_estimate",
+      "title": "Type",
+      "type": "string"
+    },
+    "interval_end": {
+      "minimum": 0,
+      "title": "Interval End",
+      "type": "number"
+    },
+    "backend": {
+      "title": "Backend",
+      "type": "string"
+    },
+    "backend_version": {
+      "default": "",
+      "title": "Backend Version",
+      "type": "string"
+    },
+    "available": {
+      "default": true,
+      "title": "Available",
+      "type": "boolean"
+    },
+    "detail": {
+      "default": "",
+      "title": "Detail",
+      "type": "string"
+    },
+    "scores": {
+      "default": [],
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "type": "array"
+      },
+      "title": "Scores",
+      "type": "array"
+    },
+    "states": {
+      "default": [],
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "enum": [
+              "absent",
+              "candidate",
+              "detected"
+            ],
+            "type": "string"
+          }
+        ],
+        "type": "array"
+      },
+      "title": "States",
+      "type": "array"
+    },
+    "context_s": {
+      "default": 0,
+      "title": "Context S",
+      "type": "number"
+    },
+    "processing_ms": {
+      "default": 0,
+      "title": "Processing Ms",
+      "type": "number"
+    },
+    "confidence_interpretation": {
+      "default": "uncalibrated_model_score",
+      "title": "Confidence Interpretation",
+      "type": "string"
+    }
+  },
+  "required": [
+    "session_id",
+    "source",
+    "timestamp",
+    "detected_monotonic",
+    "interval_end",
+    "backend"
+  ],
+  "title": "InstrumentEstimate",
+  "type": "object"
+}

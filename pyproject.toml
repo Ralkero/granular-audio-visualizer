@@ -17,6 +17,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "ruff>=0.11,<1", "mir_eval==0.8.2"]
 evaluation = ["mir_eval==0.8.2"]
+# Runtime for context recognition models (gmv.recognition); the application runs without it.
+recognition = ["onnxruntime>=1.23,<2"]
 
 [project.scripts]
 gmv = "gmv.cli:main"

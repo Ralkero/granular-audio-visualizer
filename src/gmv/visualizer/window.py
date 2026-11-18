@@ -79,7 +79,13 @@ class Canvas(QWidget):
         self.mode = "bars"
         self.show_beats = True
         self.hidden = set()  # timeline rows and lane keys the user switched off
-        self.info = {"source": "", "beat_tracker": None, "activity_model": None}
+        self.info = {
+            "source": "",
+            "beat_tracker": None,
+            "activity_model": None,
+            "guitar_model": None,
+            "recognition_model": None,
+        }
         self.level = self.intensity = self.flash = self.pulse = 0.0
         self.peak_level = 0.0
         self.rings = []  # [age_s, strength, predicted]
@@ -248,6 +254,8 @@ class Canvas(QWidget):
             self.now is None,
             self.state.window_s,
             bool(self.info["activity_model"]),
+            bool(self.info["recognition_model"] or self.info["guitar_model"]),
+            (self.state.board.recognition or {}).get("detail"),
             len(self.display.values) if self.display.values is not None else 0,
         )
         still = self.cached("still", key, still_picture)
@@ -819,8 +827,10 @@ class Canvas(QWidget):
         """Piano-roll of note candidates: height is pitch, strength is the score.
 
         Hollow-looking, thin marks: these are candidates. They are tinted with the guitar
-        colour only while a guitar detector judges guitar to be playing; otherwise they are
-        neutral, because the tracker cannot tell which instrument a note belongs to.
+        colour only while a guitar detector judges guitar to be playing (fully when it reports
+        "detected", faintly for "candidate"); otherwise they are neutral, because the tracker
+        cannot tell which instrument a note belongs to. A context recognition model reports
+        late, so notes first appear neutral and take their colour when its estimate arrives.
         """
         head = 22 * self.scale
         gutter = 150 * self.scale
@@ -834,7 +844,7 @@ class Canvas(QWidget):
                 rect,
                 "NOTES   ·   pitch candidates E2–E6   ·   "
                 + (
-                    "amber while the guitar detector is active"
+                    "amber while guitar is detected, pale amber for a guitar candidate"
                     if guitar_known
                     else "any pitched instrument, not attributed to guitar"
                 ),
@@ -860,15 +870,17 @@ class Canvas(QWidget):
         tall = max(3.0, step * 1.5)
         wide = max(2.0, per_second * 0.02 + 0.5)
         neutral, guitar = QColor("#9aa6c4"), QColor("#f5c451")
+        maybe_guitar = mix(neutral, guitar, 0.45)
         attacks = list(state.note_attacks)
 
         def draw(artist, at, since, height):
             first = start if since is None else self._notes_until
             rows = state.notes.since(first)
             artist.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-            for time, midi, score, by_guitar in rows.tolist():
+            levels = np.maximum(rows[:, 3], state.board.level_at("guitar", rows[:, 0]))
+            for (time, midi, score, _), level in zip(rows.tolist(), levels.tolist(), strict=True):
                 y = height - (midi - 39) * step
-                colour = guitar if by_guitar else neutral
+                colour = guitar if level >= 1 else maybe_guitar if level > 0 else neutral
                 artist.fillRect(
                     QRectF(at(time), y - tall / 2, wide, tall), alpha(colour, 0.45 + 0.55 * score)
                 )
@@ -882,7 +894,8 @@ class Canvas(QWidget):
         if self._attack_count > len(attacks):
             self._attack_count = 0
         self._new_attacks = len(attacks) - self._attack_count if self._attack_seen else 0
-        key = (state.generation, guitar_known)
+        # A late guitar estimate changes the colour of notes already drawn: draw them again.
+        key = (state.generation, guitar_known, state.board.revision)
         if self.note_strip.key is None or self.note_strip.key[0] != key:
             self._notes_until = start
         self.note_strip.paint(painter, area, start, per_second, key, state.note_serial, draw)
@@ -926,7 +939,13 @@ class Canvas(QWidget):
                     else "no detector output yet"
                 )
             elif lane.key == "guitar":
-                reason = "no detector output  ·  no guitar weights chosen in Settings"
+                recognition = self.state.board.recognition
+                if recognition and not recognition["available"]:
+                    reason = "recognition unavailable  ·  " + recognition["detail"]
+                elif self.info["recognition_model"] or self.info["guitar_model"]:
+                    reason = "no detector output yet"
+                else:
+                    reason = "no detector output  ·  guitar recognition is off in Settings"
             else:
                 reason = "no detector for this instrument yet"
             painter.drawText(band.adjusted(12, 0, 0, 0), Qt.AlignmentFlag.AlignVCenter, reason)
@@ -948,7 +967,12 @@ class Canvas(QWidget):
                 # Fills without smoothing so that consecutive slices meet without a seam.
                 artist.setRenderHint(QPainter.RenderHint.Antialiasing, False)
                 artist.setPen(Qt.PenStyle.NoPen)
-                for heights, strength in ((ys, 0.14), (np.where(rows[:, 2] > 0, ys, bottom), 0.5)):
+                sure, maybe = rows[:, 2] >= 1, (rows[:, 2] > 0) & (rows[:, 2] < 1)
+                for heights, strength in (
+                    (ys, 0.14),
+                    (np.where(maybe, ys, bottom), 0.2),  # candidate: visibly weaker
+                    (np.where(sure, ys, bottom), 0.5),
+                ):
                     artist.setBrush(alpha(color, strength))
                     artist.drawPolygon(
                         polygon(edge_x, np.concatenate(([bottom], heights, [bottom])))
@@ -1034,14 +1058,28 @@ class VisualizerWindow(QWidget):
 
     # -- stream ------------------------------------------------------------------------------
 
-    def attach(self, bus, *, source="", beat_tracker=None, activity_model=None):
+    def attach(
+        self,
+        bus,
+        *,
+        source="",
+        beat_tracker=None,
+        activity_model=None,
+        guitar_model=None,
+        recognition_model=None,
+    ):
         """Follow ``bus`` with a subscription of this window's own. Replaces any earlier one."""
         self.detach()
         self.bus, self.subscription = bus, bus.subscribe(QUEUE)
         self.state.status, self.state.detail = "starting", ""
         self.state.reset()
         self.canvas.info.update(
-            source=source, beat_tracker=beat_tracker, activity_model=activity_model, dropped=0
+            source=source,
+            beat_tracker=beat_tracker,
+            activity_model=activity_model,
+            guitar_model=guitar_model,
+            recognition_model=recognition_model,
+            dropped=0,
         )
         self.timer.start(16)
 

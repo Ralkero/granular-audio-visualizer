@@ -1,8 +1,12 @@
 """Instrument-activity lanes.
 
-A lane shows the score a detector publishes under one label in
-``FeatureFrame.instrument_scores``. Nothing here decides what is playing: a lane with no
+A lane shows the score a detector publishes under one label, either with every analysis
+frame (``FeatureFrame.instrument_scores``) or, for a context recognition model, a little
+later as an ``InstrumentEstimate``. Nothing here decides what is playing: a lane with no
 published score is shown as having no detector, never as silent or active.
+
+The third value of a lane row is how far the detector commits: 1 detected, 0.5 candidate
+(only a context model reports that), 0 not reported.
 
 Adding a detector needs no renderer change. Publishing a new label creates its lane; the
 labels listed in ``KNOWN`` only add a readable title, a colour and a place in the order.
@@ -87,6 +91,10 @@ class LaneBoard:
     def clear(self):
         self.history = {}
         self.method = None
+        self.owner = {}  # label -> "frames" or "recognition": one source per lane
+        # What the context recognition model last said about itself, or None when not in use.
+        self.recognition = None
+        self.revision = 0  # grows whenever recognition adds to the guitar lane
 
     def register(self, lane):
         """Give a label a title, colour and parent before (or after) it is published."""
@@ -94,22 +102,61 @@ class LaneBoard:
             self.order.append(lane.key)
         self.known[lane.key] = lane
 
+    def _append(self, source, name, time, score, level, gap):
+        key = ALIASES.get(name, name)
+        if self.owner.setdefault(key, source) != source:
+            return None  # another detector already draws this lane
+        if key not in self.known:
+            color = FALLBACK_COLORS[len(self.known) % len(FALLBACK_COLORS)]
+            self.register(Lane(key, key.replace("_", " ").capitalize(), color))
+        track = self.history.get(key)
+        if track is None:
+            track = self.history[key] = Track(self.capacity, 3)
+        if len(track) and time <= track.last[0]:
+            return None  # rows stay in time order
+        if len(track) and time - track.last[0] > gap:
+            # A hole in the stream is a hole in the lane, not a held score.
+            track.append(track.last[0] + 0.02, 0.0, 0.0)
+            track.append(time - 0.02, 0.0, 0.0)
+        track.append(time, min(1.0, max(0.0, float(score))), level)
+        return key
+
     def update(self, time, scores, active, method):
         self.method = method
         active = {ALIASES.get(name, name) for name in active}
         for name, score in scores:
-            key = ALIASES.get(name, name)
-            if key not in self.known:
-                color = FALLBACK_COLORS[len(self.known) % len(FALLBACK_COLORS)]
-                self.register(Lane(key, key.replace("_", " ").capitalize(), color))
-            track = self.history.get(key)
-            if track is None:
-                track = self.history[key] = Track(self.capacity, 3)
-            if len(track) and time - track.last[0] > 0.2:
-                # A hole in the stream is a hole in the lane, not a held score.
-                track.append(track.last[0] + 0.02, 0.0, 0.0)
-                track.append(time - 0.02, 0.0, 0.0)
-            track.append(time, min(1.0, max(0.0, float(score))), float(key in active))
+            level = float(ALIASES.get(name, name) in active)
+            self._append("frames", name, time, score, level, 0.2)
+
+    def estimate(self, message):
+        """Take in an ``InstrumentEstimate``: lane rows for its interval, or its failure."""
+        self.recognition = {
+            "backend": message.backend,
+            "available": message.available,
+            "detail": message.detail,
+        }
+        if not message.available:
+            return
+        levels = {"detected": 1.0, "candidate": 0.5}
+        states = dict(message.states)
+        hop = max(0.05, message.interval_end - message.timestamp)
+        for name, score in message.scores:
+            level = levels.get(states.get(name), 0.0)
+            key = self._append("recognition", name, message.interval_end, score, level, 3 * hop)
+            if key == "guitar":
+                self.revision += 1
+
+    def level_at(self, key, times):
+        """How far the detector of a lane committed at each time: 1, 0.5 or 0. Times the lane
+        has nothing about (no detector, before its first or after its newest row) give 0."""
+        times = np.asarray(times, dtype=float)
+        track = self.history.get(key)
+        if track is None or not len(track):
+            return np.zeros(len(times))
+        rows = track.since()
+        index = np.searchsorted(rows[:, 0], times, side="left")
+        inside = index < len(rows)
+        return np.where(inside, rows[np.minimum(index, len(rows) - 1), 2], 0.0)
 
     def lanes(self):
         """(lane, has detector output) in display order."""

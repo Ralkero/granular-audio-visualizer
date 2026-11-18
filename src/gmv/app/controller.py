@@ -72,12 +72,25 @@ def discover():
     return devices, applications, error
 
 
+def guitar_paths(path):
+    """(frame weights, recognition model): the Guitar setting takes either kind of file.
+    A ``.json`` file describes a context recognition model (``gmv.recognition``)."""
+    path = (path or "").strip()
+    if path.lower().endswith(".json"):
+        return None, path
+    return path or None, None
+
+
 def analysis_config(settings):
     for label, path in (("Activity", settings.activity_model), ("Guitar", settings.guitar_model)):
         if path and not Path(path).is_file():
             raise ValueError(f"{label} weights file not found: {path}")
-    if settings.activity_model:
-        ActivityModel(settings.activity_model)  # fail here with a readable message
+    guitar_weights, recognition = guitar_paths(settings.guitar_model)
+    for path in (settings.activity_model, guitar_weights):
+        if path:
+            ActivityModel(path)  # fail here with a readable message
+    # A recognition model that cannot be loaded does not stop the session: its worker
+    # reports "unavailable" and everything else runs.
     return AnalysisConfig(
         window_ms=settings.window_ms,
         hop_ms=settings.hop_ms,
@@ -85,7 +98,8 @@ def analysis_config(settings):
         advanced=settings.delayed_analysis,
         experimental_beat_phase=settings.beat_tracker,
         activity_model_path=settings.activity_model or None,
-        guitar_model_path=settings.guitar_model or None,
+        guitar_model_path=guitar_weights,
+        recognition_model_path=recognition,
         pitch_tracking=settings.pitch_tracking,
         debug_audio_seconds=settings.debug_audio_seconds,
     )
@@ -146,6 +160,8 @@ class SessionController:
             "source": self.settings.source_label(),
             "beat_tracker": self.settings.beat_tracker,
             "activity_model": self.settings.activity_model or None,
+            "guitar_model": guitar_paths(self.settings.guitar_model)[0],
+            "recognition_model": guitar_paths(self.settings.guitar_model)[1],
         }
 
     # -- replay ------------------------------------------------------------------------------
@@ -226,6 +242,12 @@ class SessionController:
         }
         if engine.config.advanced:
             lines["Delayed analysis"] = metrics["advanced_status"]
+        if engine.config.recognition_model_path:
+            lines["Guitar recognition"] = (
+                f"{metrics['recognition_status']} · estimates {metrics['recognition_jobs']}"
+                f" · skipped {metrics['recognition_skipped_hops']}"
+                f" · dropped blocks {metrics['recognition_drops']}"
+            )
         if engine.error:
             lines["Error"] = engine.error
         return lines

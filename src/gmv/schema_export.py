@@ -16,7 +16,13 @@ ROOT = Path(__file__).resolve().parents[2] / "docs" / "schemas"
 def schema_models():
     result = {
         name: getattr(models, name)
-        for name in ("AnalysisConfig", "FeatureFrame", "MusicalEvent", "Status")
+        for name in (
+            "AnalysisConfig",
+            "FeatureFrame",
+            "MusicalEvent",
+            "Status",
+            "InstrumentEstimate",
+        )
     }
     try:
         from .corpus import schema

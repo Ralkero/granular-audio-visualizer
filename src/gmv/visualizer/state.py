@@ -11,7 +11,7 @@ from time import perf_counter
 
 import numpy as np
 
-from ..models import FeatureFrame, MusicalEvent, Status
+from ..models import FeatureFrame, InstrumentEstimate, MusicalEvent, Status
 from .lanes import LaneBoard, Track
 
 # event_type -> (timeline row, plain description). Anything else lands in "changes" under
@@ -155,6 +155,8 @@ class VisualState:
                 self.beats.append(mark.time)
                 self.beat_score = message.confidence
                 self.beat_tempo = dict(message.measurements).get("tempo_bpm", self.beat_tempo)
+        elif isinstance(message, InstrumentEstimate):
+            self.board.estimate(message)
         elif isinstance(message, Status):
             self.status, self.detail = message.state, message.detail
 

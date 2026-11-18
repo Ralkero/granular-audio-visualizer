@@ -323,3 +323,35 @@ def test_moisesdb_holds_out_artists_and_trainer_handles_split_stems_and_bleed(
     removed = np.load(cache / f"train-{train.recording_id}.no_guitar.npz")
     assert not removed["y"].any() and removed["k"].all()  # removed: known to be absent
     assert removed["db"][np.abs(times - 0.5).argmin()] > -40  # the bass is still there
+
+
+def test_guitar_free_twins_share_the_split_of_their_song_and_declare_guitar_absent(tmp_path):
+    from gmv.corpus.datasets import moisesdb_noguitar
+
+    root = tmp_path / "moisesdb"
+    for number in range(12):
+        stems = {"bass": [("b1", "bass_guitar", False, [(0, 4)])]}
+        if number != 3:  # one song has no guitar at all: nothing to remove, no twin
+            stems["guitar"] = [("g1", "distorted_electric_guitar", False, [(0, 2)])]
+        fake_moises_track(root, f"song-{number:02d}", f"Artist {number}", stems, shift=number)
+    fake_moises_track(  # guitar is all there is: no twin either
+        root, "solo", "Artist 0", {"guitar": [("g1", "acoustic_guitar", False, [(0, 2)])]}, 50
+    )
+    manifest_path = tmp_path / "corpus" / "manifest.json"
+    quiet = {"progress": lambda *_: None}
+    import_dataset(manifest_path, moisesdb.ADAPTER, root, **quiet)
+    summary = import_dataset(manifest_path, moisesdb_noguitar.ADAPTER, root, **quiet)
+    assert summary["failed"] == [] and summary["imported"] == 11
+
+    recordings = registry.load_manifest(manifest_path).recordings
+    songs = {r.dataset_track_id: r for r in recordings if r.dataset == "moisesdb"}
+    twins = [r for r in recordings if r.dataset == "moisesdb_noguitar"]
+    for twin in twins:
+        song = songs[twin.dataset_track_id.removesuffix("-noguitar")]
+        assert (twin.group_id, twin.split) == (song.group_id, song.split)
+        assert twin.sha256 != song.sha256 and "guitar_removed" in twin.tags
+        annotations = registry.annotations_for(manifest_path, twin.recording_id)
+        absent = next(a for a in annotations if a.annotator_id == "dataset-absent")
+        assert absent.usable_as_reference and absent.covers("activity.guitar_distorted")
+        assert not any(a.label.startswith("guitar") for f in annotations for a in f.activity)
+        assert any(a.label == "bass" for f in annotations for a in f.activity)

@@ -7,7 +7,7 @@ from pathlib import Path
 from threading import Thread
 from time import perf_counter
 
-from .models import BAND_NAMES, FeatureFrame, MusicalEvent
+from .models import BAND_NAMES, FeatureFrame, InstrumentEstimate, MusicalEvent
 
 
 def utc_now():
@@ -53,6 +53,9 @@ class SessionWriter:
                 (self.path / "advanced_analysis" / "mixed_hpss.jsonl").open(
                     "w", encoding="utf-8"
                 ) as advanced,
+                (self.path / "advanced_analysis" / "recognition.jsonl").open(
+                    "w", encoding="utf-8"
+                ) as recognition,
                 (self.path / "debug" / "errors.log").open("w", encoding="utf-8") as errors,
             ):
                 writer = None
@@ -84,10 +87,12 @@ class SessionWriter:
                         writer.writerow(row)
                     elif isinstance(message, MusicalEvent):
                         (advanced if message.analysis_tier == "advanced" else events).write(line)
+                    elif isinstance(message, InstrumentEstimate):
+                        recognition.write(line)
                     elif message.state in {"error", "recovering", "discontinuity"}:
                         errors.write(line)
                     if perf_counter() - flushed >= 1:
-                        for file in (messages, features, events, errors, advanced):
+                        for file in (messages, features, events, errors, advanced, recognition):
                             file.flush()
                         flushed = perf_counter()
         except Exception as exc:

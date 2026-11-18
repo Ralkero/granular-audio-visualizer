@@ -19,7 +19,7 @@ import numpy as np
 import soundfile as sf
 
 from .. import registry, stems
-from ..schema import CorpusManifest, Recording
+from ..schema import AnnotationFile, CorpusManifest, Coverage, Recording, TimeRange
 
 SPLITS = ("train", "validation", "test")
 
@@ -71,6 +71,32 @@ def group_id(dataset, key):
     (MUSDB18 and MDB Drums both draw on MedleyDB), so the same artist must land in one
     split everywhere. ``dataset`` is accepted for callers but deliberately not hashed."""
     return f"artist-{hashlib.sha256(key.encode('utf-8')).hexdigest()[:10]}"
+
+
+GUITAR_LABELS = ("guitar", "guitar_distorted", "guitar_clean", "guitar_acoustic")
+
+
+def absent(labels, why):
+    """Annotation builder: these instruments are known not to play anywhere in the recording
+    (the dataset has no such instrument, or its files were left out of the mix). Coverage
+    without any activity is what "absent" means in the annotation format."""
+
+    def build(recording):
+        return AnnotationFile(
+            recording_id=recording.recording_id,
+            recording_sha256=recording.sha256,
+            annotator_id="dataset-absent",
+            tool="dataset_instrumentation",
+            provenance=why,
+            status="automatic",
+            reference_kind="dataset_annotation",
+            coverage=Coverage(
+                ranges=(TimeRange(start=0, end=recording.duration_s),),
+                layers=tuple(f"activity.{label}" for label in labels),
+            ),
+        )
+
+    return build
 
 
 def read_sum(paths, read=registry.read_audio):
@@ -245,6 +271,8 @@ def import_dataset(manifest_path, adapter, root, *, limit=None, progress=print):
 
 
 def adapters():
-    from . import mdbdrums, moisesdb, musdb
+    from . import guitar_free, mdbdrums, moisesdb, moisesdb_noguitar, musdb
 
-    return {m.ADAPTER.name: m.ADAPTER for m in (mdbdrums, musdb, moisesdb)}
+    found = [m.ADAPTER for m in (mdbdrums, musdb, moisesdb, moisesdb_noguitar)]
+    found += [guitar_free.MUSICNET, guitar_free.SPHERES]
+    return {adapter.name: adapter for adapter in found}
