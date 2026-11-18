@@ -67,6 +67,21 @@ def load_parts(folder, jobs):
     return songs
 
 
+def load_extra(folder):
+    """Every cached song of a folder (synthesized training help such as Slakh2100)."""
+    songs = []
+    for path in sorted(Path(folder).glob("*.npz")):
+        with np.load(path, allow_pickle=False) as data:
+            parts = {k: data[k] for k in data.files if k != "guitar_bleed"}
+        songs.append({"id": path.stem, "group": path.stem, "parts": parts})
+    return songs
+
+
+def pick(songs, extra, share, rng):
+    pool = extra if extra and rng.random() < share else songs
+    return pool[rng.integers(len(pool))]
+
+
 def cut(song, rng, names):
     """Random 10 s of the named parts of a song (zeros where a part does not exist)."""
     length = len(next(iter(song["parts"].values())))
@@ -87,16 +102,19 @@ def gain(rng, low, high):
     return 10 ** (rng.uniform(low, high) / 20)
 
 
-def make_clip(songs, rng):
-    """(audio, target, weight): one training clip and its per-column labels."""
-    song = songs[rng.integers(len(songs))]
+def make_clip(songs, rng, extra=(), share=0.0):
+    """(audio, target, weight): one training clip and its per-column labels.
+
+    ``extra`` songs (synthesized) are used for a ``share`` of the clips, and of the guitar
+    and keyboard donors."""
+    song = pick(songs, extra, share, rng)
     mode = rng.choice(["own", "none", "cross"], p=[0.45, 0.25, 0.30])
     backing = cut(song, rng, ("rest", "keys", *GUITAR_PARTS))
     rest = backing.get("rest", np.zeros(CLIP, np.float32)) * gain(rng, -3, 3)
     if "keys" in backing and rng.random() > 0.1:
         rest = rest + backing["keys"] * gain(rng, -6, 6)
     if rng.random() < 0.2:  # somebody else's keyboards on top
-        other = cut(songs[rng.integers(len(songs))], rng, ("keys",))
+        other = cut(pick(songs, extra, share, rng), rng, ("keys",))
         if "keys" in other:
             rest = rest + other["keys"] * gain(rng, -6, 6)
     guitars = {}
@@ -107,7 +125,7 @@ def make_clip(songs, rng):
             if name in backing and rng.random() > 0.15
         }
     elif mode == "cross":
-        donor = cut(songs[rng.integers(len(songs))], rng, GUITAR_PARTS)
+        donor = cut(pick(songs, extra, share, rng), rng, GUITAR_PARTS)
         level = np.sqrt(np.mean(rest**2)) + 1e-6
         for name, audio in donor.items():
             own = np.sqrt(np.mean(audio**2))
@@ -165,6 +183,8 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--weights", required=True)
     parser.add_argument("--scores")
+    parser.add_argument("--extra-parts", help="folder of additional (synthesized) songs")
+    parser.add_argument("--extra-share", type=float, default=0.35)
     args = parser.parse_args()
     torch.set_num_threads(args.threads)
     torch.manual_seed(args.seed)
@@ -173,7 +193,8 @@ def main():
     jobs = json.loads(Path(args.jobs).read_text(encoding="utf-8"))
     held = [j for j in jobs if fold_of(j["group"], folds) == fold]
     songs = load_parts(args.parts, [j for j in jobs if fold_of(j["group"], folds) != fold])
-    print(f"{len(songs)} training songs, {len(held)} held out", flush=True)
+    extra = load_extra(args.extra_parts) if args.extra_parts else []
+    print(f"{len(songs)} training songs, {len(extra)} extra, {len(held)} held out", flush=True)
 
     body, mel = embed.load_model(Path(args.source).resolve(), args.model)
     mel.freqm, mel.timem = torch.nn.Identity(), torch.nn.Identity()
@@ -192,7 +213,7 @@ def main():
     )
     started, running = perf_counter(), 0.0
     for step in range(1, args.steps + 1):
-        clips = [make_clip(songs, rng) for _ in range(args.batch)]
+        clips = [make_clip(songs, rng, extra, args.extra_share) for _ in range(args.batch)]
         audio = torch.from_numpy(np.stack([c[0] for c in clips]))
         target = torch.from_numpy(np.stack([c[1] for c in clips]))
         weight = torch.from_numpy(np.stack([c[2] for c in clips]))

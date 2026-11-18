@@ -106,4 +106,4 @@ Each import hashes and registers every track, registers its stems, assigns the a
 - `musicnet`: MusicNet (CC BY 4.0, direct download), 330 classical recordings, movements of one work kept in one split (228 train, 68 validation, 34 test). No guitar: guitar and its sub-labels are declared absent for the whole recording. Note labels are not imported.
 - `spheres`: The Spheres stereo mix (CC BY-SA 4.0). The adapter exists, but both pieces are rejected on import because the instrument files differ in length by more than 0.5 s.
 - A dataset without the instrument writes a `dataset_annotation` that covers the label and contains no activity (`gmv.corpus.datasets.absent`).
-- Not used: Cambridge-MT "Mixing Secrets" and sets derived from it (terms "educational purposes only"). Pending: MedleyDB (access request), Slakh2100 (download in progress).
+- Not used: Cambridge-MT "Mixing Secrets" and sets derived from it (terms "educational purposes only"). Pending: MedleyDB (access request). Slakh2100: downloaded (104 GB, local only); a subset was tried as extra guitar training data and did not help (see `evaluation/guitar_recognition_comparison.md`).

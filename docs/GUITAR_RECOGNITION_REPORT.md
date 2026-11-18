@@ -21,7 +21,7 @@
 | Acoustic sub-label | measured, promising (see results), not validated further |
 | Test on MedleyDB (untouched final test) | planned; waiting for the owner's access request |
 | Check on the owner's own music (metal, electronic, orchestral) | planned; waiting for the two folders |
-| Slakh2100 as extra training data | planned; download interrupted, being resumed (17 of 104 GB) |
+| Slakh2100 as extra training data | investigated and rejected: no change on held-out real songs (recall 0.672 → 0.675, folds disagree), clean sub-label worse |
 | The Spheres orchestral recordings | downloaded; import rejected (instrument files differ in length), not used |
 | PaSST, BEATs, hybrid with the separation model | investigated on paper / cost only, not scored |
 | Note attribution beyond colouring notes by guitar state | not started, as agreed, until detection is reliable |
@@ -65,7 +65,7 @@ Numbers and method: [evaluation/guitar_recognition_comparison.md](evaluation/gui
 | MoisesDB twins: each song summed without its guitar files | same | guitar-free counterpart, same split as the song | 132 / 13 / 48 |
 | MusicNet | CC BY 4.0 | guitar-free classical recordings | by work: 228 train, 68 validation, 34 test; only the 34 test recordings were used |
 | The Spheres | CC BY-SA 4.0 | not used (import rejected) | – |
-| Slakh2100 | CC BY 4.0 | not yet available | – |
+| Slakh2100 | CC BY 4.0 | training experiment only (312 synthesized songs); not used by the selected model | official train split |
 
 No dataset has real metal or djent with separate stems. Cambridge-MT based sets were not used (terms unclear for research). Protocol: [evaluation/GUITAR_PROTOCOL.md](evaluation/GUITAR_PROTOCOL.md).
 
@@ -193,7 +193,7 @@ The description file records the checksums of the network and the front end, the
 In order of expected value:
 
 1. **Test on MedleyDB and on the owner's music.** Every figure above rests on one dataset family; rock is the nearest thing to metal in it.
-2. **More training artists.** Frozen and fine-tuned models stop at the same ranking quality, and misses are whole songs, which points at variety of training material (about 160 songs) rather than at the network. Slakh2100 (2,100 synthesized songs with separate guitar, keyboards and strings) is the first thing to add; MedleyDB cannot be both training and final test.
+2. **More training artists.** Frozen and fine-tuned models stop at the same ranking quality, and misses are whole songs, which points at variety of training material (about 160 songs) rather than at the network. Slakh2100 was tried and gave no gain on real songs, so the variety has to come from real recordings: more stem datasets with guitar, or music the owner can label by folder. MedleyDB cannot be both training and final test.
 3. **Faster reaction at changes.** Train with shorter contexts or with the newest column weighted, so the model commits within a second; or pair it with a fast cue for entrances only.
 4. **Sub-label thresholds** set on the final model with held-out data, then a decision on showing the acoustic lane.
 5. **Second opinion from the separation model** on stretches where this model says "candidate".
@@ -210,6 +210,9 @@ python experiments/recognition/cache_stems.py --jobs JOBS.json --dataset-root C:
 python experiments/recognition/finetune.py --jobs JOBS.json --parts PARTS --labels LABELS --source EfficientAT-src --fold 0/4 --weights W.pt --scores SCORES
 python experiments/recognition/summarise.py SCORES --labels LABELS
 python experiments/recognition/finetune.py ... --fold=-1/4 --weights .model-cache/guitar_mn10_ft_all.pt
+python experiments/recognition/cache_slakh.py extract --archive slakh2100_flac_redux.tar.gz --output SLAKH --every 4
+python experiments/recognition/cache_slakh.py parts --root SLAKH --output PARTS_SLAKH
+python experiments/recognition/finetune.py ... --fold 0/4 --extra-parts PARTS_SLAKH --scores SCORES_SLAKH
 python experiments/recognition/export.py --weights .model-cache/guitar_mn10_ft_all.pt --source EfficientAT-src --name guitar_mn10_v1 --thresholds T.json --output .model-cache
 python scripts/score_recognition.py run --corpus corpus-data/corpus/manifest.json --model .model-cache/guitar_mn10_v1.json --datasets moisesdb,moisesdb_noguitar,musicnet --split test --output OUT
 python scripts/score_recognition.py report OUT

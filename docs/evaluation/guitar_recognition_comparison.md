@@ -93,6 +93,25 @@ By genre: rap 0.08 (4 songs), reggae 0.16 (2), rock 0.64 (27), pop 0.73 (32), si
 
 The final model is trained on all 160 songs with the same settings; its scores may sit slightly differently from the fold models the thresholds came from.
 
+## Slakh2100 as extra training data (after the test, selection folds only)
+
+Added on 2026-11-18, after the test was read. Only the selection folds were used; the test was **not** read again, because the result did not justify a new model.
+
+- Material: every fourth Slakh2100 training track (312 synthesized songs), cut to their middle 90 s and turned into the same parts as MoisesDB songs (`experiments/recognition/cache_slakh.py`): guitar by General MIDI program (distorted 122 songs, clean 202, acoustic 167, other 6), keyboards (piano, organ, synth lead and pad classes; all 312) and everything else.
+- Training: identical to the fine-tuned model above (same folds, steps, seed, rate) except that 35% of clips, guitar donors and keyboard donors come from Slakh (`finetune.py --extra-parts`).
+- Scoring: the same held-out real MoisesDB songs and their twins; Slakh is never scored or pooled.
+
+| Label (folds 0 + 2, 111 songs, 107 twins) | ROC-AUC without / with Slakh | Recall at 5% false alarms without / with | F1 without / with |
+|---|---:|---:|---:|
+| guitar | 0.919 / 0.923 | 0.672 / 0.675 | 0.771 / 0.773 |
+| distorted | 0.889 / 0.904 | 0.636 / 0.653 | 0.633 / 0.645 |
+| clean | 0.732 / 0.715 | 0.190 / 0.095 | 0.265 / 0.142 |
+| acoustic | 0.887 / 0.905 | 0.565 / 0.609 | 0.661 / 0.694 |
+
+Per fold (guitar, recall at 5% false alarms): fold 0 0.808 → 0.814, fold 2 0.630 → 0.608. The two folds move in opposite directions by about as much as the pooled change, so the guitar result is no change within noise. Distorted and acoustic gain a little; clean, already unusable, halves. With the main label unchanged, no model was trained on all folds and `guitar_mn10_v1` stays the selected model.
+
+Reading: synthesized guitars rendered from MIDI do not add the variety that real recordings by more artists would. Slakh's clean and jazz guitar presets may also teach a sound that differs from real clean guitar, which fits the drop on that label; this is an inference, not tested.
+
 ## Against the targets, before the test
 
 | Target | Selection-stage result |
@@ -104,7 +123,7 @@ The final model is trained on all 160 songs with the same settings; its scores m
 
 ## Not done at this stage
 
-- Slakh2100 (synthetic) was not available in time: the download was interrupted at 8 GB and is being resumed. Whether it helps real validation songs is untested.
+- Slakh2100 (synthetic) was not available in time; it was tried afterwards (section above) and did not help.
 - PaSST and BEATs were not scored. The frozen and fine-tuned small model end at the same AUC, which points at the training data (115 to 120 songs by about 25 artists per fold) rather than the size of the network; that is an inference, not a measurement.
 - Folds 1 and 3 were not run for the fine-tuned model.
 - No hybrid with the separation model's guitar output was built.

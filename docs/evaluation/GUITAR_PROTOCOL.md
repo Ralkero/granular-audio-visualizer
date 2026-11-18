@@ -83,3 +83,4 @@ Detected / candidate / absent: the "detected" threshold is the one that gives at
 - The fine-tuned model was compared on two of the four artist folds (111 songs), because one fold takes about 80 minutes; the frozen model was scored on all four.
 - Condition tags were reduced to what the report contains: dataset, genre, ensemble (MusicNet), guitar type and guitar level. The other conditions were not tagged.
 - MedleyDB, the owner's folders and Slakh2100 were not available when the test was read; the test is the MoisesDB held-out artists (previously read), their twins and the MusicNet test recordings.
+- 2026-11-18: Slakh2100 was tried as extra training data on the selection folds only. It brought no gain, so no new model was made and the test was not read again. Slakh was not used as a synthetic test pool.
