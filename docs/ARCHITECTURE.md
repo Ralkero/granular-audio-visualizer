@@ -67,3 +67,7 @@ A second optional worker beside Tier B. `gmv.recognition.RecognitionWorker` rece
 - **Failure is local.** A missing package, an unreadable model or an error during inference ends recognition only: one estimate with `available` false carries the reason, the guitar lane shows it, and capture, analysis and drawing continue.
 - **One code path.** `gmv.evaluation.detect.run_recognition` feeds the same `Recognizer` offline; `scripts/score_recognition.py` scores models through it.
 - **Display.** A lane has one source (frame detector or recognition model). Lane rows carry how far the detector commits; candidate is drawn weaker than detected. Notes take their guitar colour from the guitar lane when drawn, so a late estimate recolours them.
+
+## Excerpt review (real-world guitar review)
+
+`gmv.review` is an offline tool beside the application, not part of capture or drawing. It selects recordings from a local inventory by metadata, registers them in a corpus manifest as `owned_local`, runs the model over each whole recording through `run_recognition` (model output only), cuts non-overlapping 12 s excerpts in three categories (core, feature, model-flagged) as unchanged decoded samples, and opens a separate PySide6 review window that writes human labels to an append-only log. Labels and model output live in different files; the label store accepts annotation fields only. Reviewed core labels export to the corpus annotation format, where time outside the labelled excerpts is unknown. Method: [evaluation/REAL_WORLD_REVIEW.md](evaluation/REAL_WORLD_REVIEW.md).

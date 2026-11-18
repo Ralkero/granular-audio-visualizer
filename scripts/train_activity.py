@@ -68,12 +68,22 @@ def frame_rows(audio, rate, config):
 def frame_labels(manifest_path, recording, times):
     """(active, known) per frame and label. Activity measured on a stem that contains bleed
     is uncertain: those frames are neither active nor inactive and are left out of training
-    and scoring for that label."""
+    and scoring for that label.
+
+    Time outside every usable annotation's coverage ranges is unknown, never absent (an
+    excerpt-level human review covers only its excerpts). A range spanning the whole
+    recording covers every frame, including a last frame just past the end."""
     labels = np.zeros((len(times), len(LABELS)), bool)
     unsure = np.zeros_like(labels)
+    covered = np.zeros(len(times), bool)
     for annotation in registry.annotations_for(manifest_path, recording.recording_id):
         if not annotation.usable_as_reference:
             continue
+        for part in annotation.coverage.ranges:
+            if part.start <= 0 and part.end >= recording.duration_s - 1e-6:
+                covered[:] = True
+            else:
+                covered |= (times >= part.start) & (times < part.end)
         for span in annotation.activity:
             # A certain sub-label (a clean guitar track without bleed) also makes its
             # parent certain, even if another track of that instrument has bleed.
@@ -85,7 +95,7 @@ def frame_labels(manifest_path, recording, times):
                     inside = (times >= span.start) & (times < span.end)
                     target = labels if span.certainty == "certain" else unsure
                     target[inside, LABELS.index(name)] = True
-    return labels, ~unsure | labels
+    return labels, (~unsure | labels) & covered[:, None]
 
 
 def remix(stems, variant, seed):

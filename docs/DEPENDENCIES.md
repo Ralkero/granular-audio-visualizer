@@ -46,3 +46,7 @@ The lock file records the actual resolved Windows environment. OS adapters are o
 | EfficientAT `mn10_as` weights | Base of the experimental guitar model; local only | Code MIT (github.com/fschmid56/EfficientAT). The weight file has no separate licence statement; trained on AudioSet. |
 | torch, torchaudio, torchvision, matplotlib | Experiments environment only (training, export, plots) | CPU builds. Never imported by the application. |
 | PaSST (`hear21passt`) | Installed in the experiments environment to measure cost; not used | Apache-2.0. 2.5 s of one core per 10 s clip. |
+
+## Excerpt review (`gmv review`)
+
+No new dependencies. Decoding uses soundfile (libsndfile with mpg123, reads MP3 and MPEG Layer II); measurements use numpy and scipy; the window uses PySide6 Essentials; playback uses PyAudioWPatch (PortAudio), already used for capture. Qt Multimedia was not added: it is in the PySide6 Addons wheel (about 200 MB). Model timelines need the optional `recognition` extra (ONNX Runtime, CPU).

@@ -41,9 +41,14 @@ def main(argv=None):
     from .corpus import cli as corpus_cli
 
     corpus_cli.add_parser(commands)
+    from .review import cli as review_cli
+
+    review_cli.add_parser(commands)
     args = parser.parse_args(argv)
     if args.command == "corpus":
         return corpus_cli.run(args)
+    if args.command == "review":
+        return review_cli.run(args)
     if args.command in ("ui", "visualizer"):
         from .app.window import main as app_main
 

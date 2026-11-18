@@ -21,3 +21,5 @@ separated/
 *.aif
 corpus-local/
 corpus-data/
+# excerpt review work folders: excerpts, labels and reports of the owner's music
+review-local/

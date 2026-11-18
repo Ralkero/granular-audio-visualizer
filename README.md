@@ -101,4 +101,12 @@ gmv corpus import-dataset mdbdrums "E:\datasets\MDBDrums"
 .venv\Scripts\python.exe -m gmv.evaluation.run --detector candidate --corpus corpus/manifest.json --corpus-split validation --output local-evidence/validation.json
 ```
 
+Your own music can be reviewed excerpt by excerpt without editing audio: `gmv review` picks recordings from a local inventory, cuts short excerpts, runs the guitar model over the full tracks for comparison and opens a review window that stores your labels locally ([method](docs/evaluation/REAL_WORLD_REVIEW.md)). Excerpts, labels and reports stay in the ignored `review-local/` folder.
+
+```powershell
+gmv review --workdir review-local\pilot-v1 build --inventory Complete_Music_Inventory.csv --selection review-local\pilot-v1\selection.json
+gmv review --workdir review-local\pilot-v1 open
+gmv review --workdir review-local\pilot-v1 report
+```
+
 See [capture test matrix and legacy single-file import format](docs/CAPTURE_VALIDATION.md), [schema 1.1 / replay / stale-event policy](docs/SCHEMA.md), and [isolated Demucs benchmark](experiments/separation/README.md). Demucs is an offline research experiment: overlap throughput, latency, synthetic quality and unresolved weight licensing did not justify live integration. The control center distinguishes observed/candidate/predicted/delayed events, reports separate losses and helper resources, and shows pending hardware checks. Raw recording stays off.
