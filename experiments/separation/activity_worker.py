@@ -14,6 +14,7 @@ Two passes per track:
 """
 
 import argparse
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -24,11 +25,13 @@ import soundfile as sf
 import torch
 from demucs.apply import apply_model
 from demucs.hf import load_safetensors_model
+from demucs.states import load_model
 
 from setup_model import verify
 
 HOP_S, WINDOW_S = 0.01, 0.05  # gmv.corpus.stems
 WEIGHTS = Path(".model-cache/955717e8.safetensors")
+SIX_SOURCE = Path(".model-cache/5c90dfd2-34c22ccb.th")
 
 
 def levels(audio, rate):
@@ -88,11 +91,22 @@ def main():
     parser.add_argument("--batch", type=int, default=2)
     parser.add_argument("--limit-seconds", type=float, help="Only the start of each track")
     parser.add_argument("--passes", default="full,causal")
+    parser.add_argument(
+        "--six-source", action="store_true", help="htdemucs_6s: adds guitar and piano stems"
+    )
     args = parser.parse_args()
     torch.set_num_threads(args.threads)
     torch.set_num_interop_threads(1)
-    verify(WEIGHTS)
-    model = load_safetensors_model(WEIGHTS).cpu().eval()
+    if args.six_source:
+        # Official Demucs checkpoint (a pickle); the file name carries its checksum prefix.
+        with SIX_SOURCE.open("rb") as file:
+            digest = hashlib.file_digest(file, "sha256").hexdigest()
+        if not digest.startswith(SIX_SOURCE.stem.split("-")[1]):
+            raise ValueError("Six-source checkpoint does not match its checksum")
+        model = load_model(SIX_SOURCE).cpu().eval()
+    else:
+        verify(WEIGHTS)
+        model = load_safetensors_model(WEIGHTS).cpu().eval()
     rate = model.samplerate
     index, count = map(int, args.shard.split("/"))
     jobs = json.loads(Path(args.jobs).read_text(encoding="utf-8"))[index::count]
@@ -105,6 +119,8 @@ def main():
         audio, file_rate = sf.read(
             io.BytesIO(Path(job["path"]).read_bytes()), dtype="float32", always_2d=True
         )
+        if audio.shape[1] == 1:
+            audio = np.repeat(audio, 2, axis=1)
         if file_rate != rate or audio.shape[1] != 2:
             raise ValueError(f"{job['id']}: expected {rate} Hz stereo")
         if args.limit_seconds:
