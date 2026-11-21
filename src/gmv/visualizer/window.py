@@ -703,8 +703,10 @@ class Canvas(QWidget):
                 )
             )
 
+        # no frame yet right after a session starts in a window that already drew one
+        newest = frames.last[0] if frames.last is not None else start
         self.level_strip.paint(
-            painter, area, start, per_second, self.state.generation, frames.last[0], draw_level
+            painter, area, start, per_second, self.state.generation, newest, draw_level
         )
         for second in range(5 * math.ceil(start / 5), math.floor(self.now) + 1, 5):
             painter.fillRect(QRectF(to_x(second), area.top(), 1, area.height()), alpha(FAINT, 0.9))

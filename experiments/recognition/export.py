@@ -45,6 +45,10 @@ def main():
     parser.add_argument("--thresholds", required=True, help="JSON: label -> detected/candidate")
     parser.add_argument("--hop", type=float, default=0.5)
     parser.add_argument("--notes", default="")
+    parser.add_argument(
+        "--trained-on", default="MoisesDB v0.1 (CC BY-NC-SA 4.0), mixes made from its stems"
+    )
+    parser.add_argument("--script", default="experiments/recognition/finetune.py")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
     out = Path(args.output)
@@ -95,9 +99,9 @@ def main():
         "source": {
             "base_model": f"EfficientAT {saved['model']} (github.com/fschmid56/EfficientAT, MIT)",
             "base_weights": "release v0.0.1 of that repository; trained on AudioSet",
-            "fine_tuned_on": "MoisesDB v0.1 (CC BY-NC-SA 4.0), mixes made from its stems",
+            "fine_tuned_on": args.trained_on,
             "redistribution": "not redistributed; derived from non-commercial data",
-            "training_script": "experiments/recognition/finetune.py",
+            "training_script": args.script,
             "notes": args.notes,
         },
     }

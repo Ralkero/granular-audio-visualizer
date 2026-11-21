@@ -68,6 +68,10 @@ A second optional worker beside Tier B. `gmv.recognition.RecognitionWorker` rece
 - **One code path.** `gmv.evaluation.detect.run_recognition` feeds the same `Recognizer` offline; `scripts/score_recognition.py` scores models through it.
 - **Display.** A lane has one source (frame detector or recognition model). Lane rows carry how far the detector commits; candidate is drawn weaker than detected. Notes take their guitar colour from the guitar lane when drawn, so a late estimate recolours them.
 
+## Where files are found
+
+`gmv.paths` is the one place that knows where models, sessions and the capture helper are. From a checkout they are in the repository (`.model-cache`, `sessions`, `native/...`). In a packaged build models and the helper are beside the executable and sessions go to the user's local application data. `models/defaults.json` in a build names the weights it starts with; each is applied once, so a later choice in Settings is kept. A checkout has no such file and experimental models stay off.
+
 ## Excerpt review (real-world guitar review)
 
 `gmv.review` is an offline tool beside the application, not part of capture or drawing. It selects recordings from a local inventory by metadata, registers them in a corpus manifest as `owned_local`, runs the model over each whole recording through `run_recognition` (model output only), cuts non-overlapping 12 s excerpts in three categories (core, feature, model-flagged) as unchanged decoded samples, and opens a separate PySide6 review window that writes human labels to an append-only log. Labels and model output live in different files; the label store accepts annotation fields only. Reviewed core labels export to the corpus annotation format, where time outside the labelled excerpts is unknown. Method: [evaluation/REAL_WORLD_REVIEW.md](evaluation/REAL_WORLD_REVIEW.md).

@@ -1,6 +1,7 @@
 """The unified application: one window, settings in a drawer, driven without audio hardware."""
 
 import os
+import sys
 from time import perf_counter, sleep
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -194,3 +195,24 @@ def test_settings_become_engine_configuration():
         audio_source(Settings(source="application"))
     with pytest.raises(ValueError):
         audio_source(Settings(source="device"))
+
+
+def test_packaged_build_finds_its_files_beside_the_executable(tmp_path, monkeypatch):
+    from gmv import paths
+
+    assert not paths.packaged() and paths.build_defaults() == {}
+    assert paths.models_folder().name == ".model-cache"
+    program = tmp_path / "app"
+    (program / "models").mkdir(parents=True)
+    (program / "models" / "guitar.json").write_text("{}", encoding="utf-8")
+    (program / "models" / "defaults.json").write_text(
+        '\ufeff{"guitar_model": "guitar.json", "activity_model": "missing.npz"}', encoding="utf-8"
+    )
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(program / "app.exe"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    assert paths.models_folder() == program / "models"
+    assert paths.capture_helper() == program / "ProcessLoopback" / "ProcessLoopback.exe"
+    assert paths.sessions_folder() == tmp_path / "local" / "GranularMusicVisualizer" / "sessions"
+    # weights that are not there are not offered
+    assert paths.build_defaults() == {"guitar_model": str(program / "models" / "guitar.json")}

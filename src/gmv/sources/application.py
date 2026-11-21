@@ -5,18 +5,15 @@ import subprocess
 import sys
 import os
 from collections import deque
-from pathlib import Path
 from threading import Thread
 from time import perf_counter
 import psutil
+from .. import paths
 from .base import AudioBlock, AudioSource
 
 
 HEADER = struct.Struct("<4sIIIqqI")
-HELPER = (
-    Path(__file__).resolve().parents[3]
-    / "native/ProcessLoopback/bin/Release/net9.0-windows/ProcessLoopback.exe"
-)
+HELPER = paths.capture_helper()
 
 
 def root_process(process):

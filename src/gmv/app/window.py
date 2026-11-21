@@ -39,11 +39,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .. import paths
 from ..visualizer.state import ROWS
 from ..visualizer.window import VisualizerWindow
 from .controller import DEFAULT_EDGES, SOURCES, SessionController, Settings, discover
 
-ROOT = Path(__file__).resolve().parents[3]
 DRAWER_WIDTH = 440
 STYLE = """
 QWidget#app { background: #05060a; }
@@ -343,7 +343,7 @@ class SettingsDrawer(QFrame):
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Choose weights",
-            str(ROOT / ".model-cache"),
+            str(paths.models_folder()),
             "Weights and models (*.npz *.json)"
             if target is self.guitar_model
             else "Weights (*.npz)",
@@ -449,7 +449,7 @@ class MainWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         self.setStyleSheet(STYLE)
         self.resize(1440, 900)
-        self.controller = SessionController(session_root or ROOT / "sessions")
+        self.controller = SessionController(session_root or paths.sessions_folder())
         self.remember = remember
         self.restart_wanted = False
         self.problem = ""
@@ -478,11 +478,11 @@ class MainWindow(QWidget):
         for name, default in (
             (
                 "activity_model",
-                os.environ.get("GMV_ACTIVITY_MODEL") or ROOT / ".model-cache/activity_v2.npz",
+                os.environ.get("GMV_ACTIVITY_MODEL") or paths.models_folder() / "activity_v2.npz",
             ),
             (
                 "guitar_model",
-                os.environ.get("GMV_GUITAR_MODEL") or ROOT / ".model-cache/guitar_v1.npz",
+                os.environ.get("GMV_GUITAR_MODEL") or paths.models_folder() / "guitar_v1.npz",
             ),
         ):
             if Path(default).is_file():
@@ -493,6 +493,7 @@ class MainWindow(QWidget):
                 self.drawer.restore(json.loads(QSettings().value("settings", "{}")))
             except (TypeError, ValueError):
                 pass
+            self.apply_build_defaults()
         self.poller = QTimer(self)
         self.poller.timeout.connect(self.poll)
         self.poller.start(250)
@@ -711,6 +712,16 @@ class MainWindow(QWidget):
                     f"messages dropped by the display {canvas.info.get('dropped', 0)}"
                 )
             drawer.diagnostics.setText("\n".join(f"{key}: {value}" for key, value in lines.items()))
+
+    def apply_build_defaults(self):
+        """A packaged build starts with the weights it was made with. Each set of weights is
+        applied once, so switching one off afterwards is remembered."""
+        store = QSettings()
+        for name, path in paths.build_defaults().items():
+            key = f"build_default/{name}"
+            if store.value(key, "") != Path(path).name:
+                getattr(self.drawer, name).setText(path)
+                store.setValue(key, Path(path).name)
 
     def closeEvent(self, event):
         self.poller.stop()

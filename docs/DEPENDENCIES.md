@@ -47,6 +47,10 @@ The lock file records the actual resolved Windows environment. OS adapters are o
 | torch, torchaudio, torchvision, matplotlib | Experiments environment only (training, export, plots) | CPU builds. Never imported by the application. |
 | PaSST (`hear21passt`) | Installed in the experiments environment to measure cost; not used | Apache-2.0. 2.5 s of one core per 10 s clip. |
 
+## Packaged build
+
+PyInstaller (GPL-2.0 with an exception that allows bundling any program; 6.22) is a build tool only, installed by `Build App.ps1` when missing and not a runtime dependency. The build is a folder, not a single file, so start-up does not unpack anything.
+
 ## Excerpt review (`gmv review`)
 
 No new dependencies. Decoding uses soundfile (libsndfile with mpg123, reads MP3 and MPEG Layer II); measurements use numpy and scipy; the window uses PySide6 Essentials; playback uses PyAudioWPatch (PortAudio), already used for capture. Qt Multimedia was not added: it is in the PySide6 Addons wheel (about 200 MB). Model timelines need the optional `recognition` extra (ONNX Runtime, CPU).

@@ -104,7 +104,7 @@ The report also lists excerpts where reviewer and model disagree strongly.
 7. Duplicates and alternate versions: one per group in a batch; groups are whole artists.
 8. Splits are by artist group, so excerpts of one recording cannot land in different splits.
 9. Whole artists can be held out later; the batch report recommends deciding this before any of this material is used for training.
-10. A review batch is evaluation material, not a training set.
+10. A review batch is evaluation material first. The pilot batch has since been used for a fine-tuning attempt ([review_finetune_v1.md](review_finetune_v1.md)), measured with whole artists held out. Weights trained on a batch (`guitar_mn10_rv1`) must not be scored on it; `guitar_mn10_v1` has never seen it and can still be.
 
 ## Dependencies and cost
 
