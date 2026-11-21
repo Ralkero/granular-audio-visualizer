@@ -25,16 +25,20 @@ from gmv.review.pipeline import build, load_tables, verify
 RATE = 8000
 
 
-class LevelIsGuitar:
-    """Stand-in model: the score is the level of the newest half second."""
+class ToneIsGuitar:
+    """Stand-in model: the score is the share of the newest half second's energy that is
+    the 220 Hz tone, whatever the level (the recogniser evens out level before the model)."""
 
-    name, version = "level_is_guitar", "test"
+    name, version = "tone_is_guitar", "test"
     labels = ("guitar", "guitar_distorted", "guitar_clean", "guitar_acoustic")
     sample_rate, context_s, hop_s = 8000, 2.0, 0.5
     thresholds = {label: {"detected": 0.6, "candidate": 0.3} for label in labels}
 
     def infer(self, context):
-        level = min(1.0, 4 * float(np.sqrt(np.mean(context[-4000:] ** 2))))
+        newest = context[-4000:].astype(np.float64)
+        phase = 2 * np.pi * 220 * np.arange(4000) / 8000
+        tone = 2 * (np.mean(newest * np.sin(phase)) ** 2 + np.mean(newest * np.cos(phase)) ** 2)
+        level = min(1.0, tone / max(float(np.mean(newest**2)), 1e-12))
         return np.array([level, level / 2, 0.1, 0.05])
 
 
@@ -43,11 +47,13 @@ def sha(path):
 
 
 def song(seconds, loud_from, loud_to, seed=0):
-    """Stereo noise-tone mix: loud (the stand-in model's "guitar") between two times."""
+    """Stereo mix: a loud tone (the stand-in model's "guitar") between two times, quiet
+    noise with a trace of the tone elsewhere."""
     rng = np.random.default_rng(seed)
     t = np.arange(round(seconds * RATE)) / RATE
-    level = np.where((t >= loud_from) & (t < loud_to), 0.4, 0.02)
-    mono = level * np.sin(2 * np.pi * 220 * t) + 0.005 * rng.standard_normal(len(t))
+    loud = (t >= loud_from) & (t < loud_to)
+    tone, noise = np.where(loud, 0.4, 0.002), np.where(loud, 0.005, 0.02)
+    mono = tone * np.sin(2 * np.pi * 220 * t) + noise * rng.standard_normal(len(t))
     return np.stack([mono, 0.9 * mono], axis=1).astype(np.float32)
 
 
@@ -81,15 +87,15 @@ def test_feature_and_model_excerpts_stay_off_core_excerpts():
     feature = ex.feature_placement("r-111111111111", audio, RATE, taken)
     assert feature.category == "feature"
     assert all(feature.end_s <= a or feature.start_s >= b for a, b in taken)
-    timeline = timelines.compute(audio, RATE, LevelIsGuitar())
-    th = LevelIsGuitar.thresholds["guitar"]
+    timeline = timelines.compute(audio, RATE, ToneIsGuitar())
+    th = ToneIsGuitar.thresholds["guitar"]
     taken.append((feature.start_s, feature.end_s))
     flagged = ex.model_placement("r-111111111111", timeline, th, "negative_candidate", 300.0, taken)
     assert flagged is not None and flagged.category == "model_flagged"
     assert "diagnostic only" in flagged.reason and 100 <= flagged.start_s and flagged.end_s <= 200.5
     assert all(flagged.end_s <= a or flagged.start_s >= b for a, b in taken)
     quiet = song(300, 400, 500)  # never loud: nothing to flag as a false activation
-    timeline = timelines.compute(quiet, RATE, LevelIsGuitar())
+    timeline = timelines.compute(quiet, RATE, ToneIsGuitar())
     assert (
         ex.model_placement("r-111111111111", timeline, th, "negative_candidate", 300.0, taken)
         is None
@@ -382,7 +388,7 @@ def test_build_end_to_end_keeps_labels_empty_and_sources_untouched(tmp_path):
     workdir = tmp_path / "work"
     manifest = tmp_path / "corpus" / "manifest.json"
     build(
-        inventory, selection, workdir, None, manifest, backend=LevelIsGuitar(), log=lambda *_: None
+        inventory, selection, workdir, None, manifest, backend=ToneIsGuitar(), log=lambda *_: None
     )
     batch, excerpts = load_tables(workdir)
     assert len(batch) == 3 and all(r["processing_status"] == "ok" for r in batch)
@@ -410,7 +416,7 @@ def test_build_end_to_end_keeps_labels_empty_and_sources_untouched(tmp_path):
     assert result["passed"] and result["excerpts_checked"] == len(excerpts)
     # rerun is resumable and gives the same excerpts
     build(
-        inventory, selection, workdir, None, manifest, backend=LevelIsGuitar(), log=lambda *_: None
+        inventory, selection, workdir, None, manifest, backend=ToneIsGuitar(), log=lambda *_: None
     )
     assert [e["excerpt_sha256"] for e in load_tables(workdir)[1]] == [
         e["excerpt_sha256"] for e in excerpts
@@ -429,7 +435,7 @@ def test_scoring_keeps_categories_apart(tmp_path):
         workdir,
         None,
         tmp_path / "c" / "manifest.json",
-        backend=LevelIsGuitar(),
+        backend=ToneIsGuitar(),
         log=lambda *_: None,
     )
     _, excerpts = load_tables(workdir)
@@ -525,7 +531,7 @@ def test_window_starts_empty_hides_model_and_resumes_after_restart(app, tmp_path
         workdir,
         None,
         tmp_path / "c" / "manifest.json",
-        backend=LevelIsGuitar(),
+        backend=ToneIsGuitar(),
         log=lambda *_: None,
     )
     window = ReviewWindow(

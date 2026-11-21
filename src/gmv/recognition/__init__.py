@@ -127,6 +127,24 @@ def downmix(samples):
     return samples[:, : min(2, samples.shape[1])].mean(axis=1)
 
 
+TARGET_RMS = 10 ** (-20 / 20)  # ordinary music level; the models were trained near it
+MOST_GAIN = 10 ** (45 / 20)
+SILENCE_RMS = 10 ** (-75 / 20)
+
+
+def levelled(context):
+    """Quiet audio raised to ordinary music level before the model sees it.
+
+    Captured audio follows the player's volume and can be 30 to 40 dB below the level of
+    the training material, where the models lose guitar they find at normal level. Audio
+    at or above the target, and near-silence, is passed unchanged.
+    """
+    rms = float(np.sqrt(np.mean(np.square(context, dtype=np.float64))))
+    if rms < SILENCE_RMS or rms >= TARGET_RMS:
+        return context
+    return (context * min(TARGET_RMS / rms, MOST_GAIN)).astype(np.float32)
+
+
 class Recognizer:
     """Feed it consecutive audio; it returns an ``Estimate`` each time a hop has passed.
 
@@ -194,7 +212,7 @@ class Recognizer:
         context = (
             context[-size:] if len(context) >= size else np.pad(context, (size - len(context), 0))
         )
-        scores = np.clip(np.asarray(backend.infer(context), dtype=np.float64), 0.0, 1.0)
+        scores = np.clip(np.asarray(backend.infer(levelled(context)), dtype=np.float64), 0.0, 1.0)
         if scores.shape != (len(backend.labels),) or not np.isfinite(scores).all():
             raise ValueError("The recognition backend returned unusable scores")
         # The answer is about the newest hop, however much audio went by unasked.

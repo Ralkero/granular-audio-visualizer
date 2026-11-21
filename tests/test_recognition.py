@@ -353,3 +353,18 @@ def test_engine_runs_recognition_beside_analysis_and_is_unchanged_without_it(tmp
     estimates = [m for m in messages if isinstance(m, InstrumentEstimate)]
     assert engine.metrics()["error"] is None and engine.frame_count > 100
     assert len(estimates) == 1 and not estimates[0].available
+
+
+def test_quiet_audio_is_raised_to_music_level_before_the_model():
+    from gmv.recognition import TARGET_RMS, levelled
+
+    rng = np.random.default_rng(0)
+    music = (0.1 * rng.standard_normal(32000)).astype(np.float32)
+    quiet = levelled(music * 0.01)  # played 40 dB down
+    assert np.sqrt(np.mean(quiet**2)) == pytest.approx(TARGET_RMS, rel=1e-3)
+    loud = music * 3
+    assert levelled(loud) is loud  # at or above the target: unchanged
+    silence = np.zeros(32000, np.float32)
+    assert levelled(silence) is silence
+    hiss = music * 1e-5  # far below anything played on purpose: not turned into music
+    assert levelled(hiss) is hiss

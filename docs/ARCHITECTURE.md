@@ -68,6 +68,8 @@ A second optional worker beside Tier B. `gmv.recognition.RecognitionWorker` rece
 - **One code path.** `gmv.evaluation.detect.run_recognition` feeds the same `Recognizer` offline; `scripts/score_recognition.py` scores models through it.
 - **Display.** A lane has one source (frame detector or recognition model). Lane rows carry how far the detector commits; candidate is drawn weaker than detected. Notes take their guitar colour from the guitar lane when drawn, so a late estimate recolours them.
 
+**Level before the model.** Captured audio follows the player's volume. In the first packaged session it arrived about 30 dB below ordinary music level, and `guitar_mn10_v1` loses guitar there: on the 223 reviewed excerpts, played 40 dB down, "detected or candidate" fell from 70% to 48% of guitar excerpts. `Recognizer` therefore raises a quiet 10 s context to -20 dBFS RMS (at most +45 dB; near-silence and audio already at that level are untouched) before inference. With it the same excerpts score the same at 0, -30 and -40 dB (70%; guitar-free excerpts 12.5% in every case).
+
 ## Where files are found
 
 `gmv.paths` is the one place that knows where models, sessions and the capture helper are. From a checkout they are in the repository (`.model-cache`, `sessions`, `native/...`). In a packaged build models and the helper are beside the executable and sessions go to the user's local application data. `models/defaults.json` in a build names the weights it starts with; each is applied once, so a later choice in Settings is kept. A checkout has no such file and experimental models stay off.
