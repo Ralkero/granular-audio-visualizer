@@ -140,10 +140,12 @@ class Canvas(QWidget):
                     self.rings.append([0.0, 1.0, True])
 
     def settled(self):
-        """True when nothing is moving any more, so the timer can slow down."""
+        """True when nothing is moving any more, so the timer can slow down. While there is
+        a time axis the history keeps scrolling, with or without audio, so it never settles."""
         values = self.display.values
         return (
-            self.condition not in ("live", "replay")
+            self.now is None
+            and self.condition not in ("live", "replay")
             and self.flash < 0.01
             and self.pulse < 0.01
             and self.level < 0.005

@@ -403,6 +403,13 @@ def test_the_refresh_timer_slows_down_when_nothing_is_arriving(window):
     publish_music(bus, 0.5)
     window.tick()
     assert window.timer.interval() == 16
+    # Silence: nothing arrives and the spectrum has died away, but the history is still
+    # scrolling, so the refresh rate must not drop.
+    later = perf_counter() + 5
+    for step in range(60):
+        window.canvas.advance(0.25, later + step * 0.25)
+    assert window.canvas.condition == "waiting"
+    assert window.canvas.level < 0.005 and not window.canvas.settled()
     window.timer.stop()
 
 
