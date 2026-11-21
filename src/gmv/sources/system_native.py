@@ -18,6 +18,7 @@ from statistics import median
 from threading import Thread
 from time import perf_counter
 
+from .. import paths
 from . import application, windows
 from .base import AudioBlock, AudioSource
 
@@ -160,6 +161,7 @@ class NativeSystemAudioSource(AudioSource):
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         creationflags=subprocess.CREATE_NO_WINDOW,
+                        env=paths.helper_environment(),
                     )
 
                     def read_status(helper=helper, stderr=stderr):
@@ -188,7 +190,9 @@ class NativeSystemAudioSource(AudioSource):
                                 raise RuntimeError(errors[0])
                             if helper.poll() is not None:
                                 workers[1].join(timeout=1)
-                                raise RuntimeError("System capture stopped: " + "; ".join(stderr))
+                                raise RuntimeError(
+                                    "System capture stopped: " + "; ".join(stderr)[:300]
+                                )
                             current = windows.endpoint_snapshot()
                             changed = (
                                 current != baseline
@@ -220,7 +224,10 @@ class NativeSystemAudioSource(AudioSource):
                         for worker in workers:
                             worker.join(timeout=2)
                         for pipe in (helper.stdin, helper.stdout, helper.stderr):
-                            pipe.close()
+                            try:
+                                pipe.close()
+                            except OSError:  # unsent "stop" to a helper that has gone
+                                pass
                 except Exception as exc:
                     if stop.is_set():
                         break

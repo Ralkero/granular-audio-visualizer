@@ -8,8 +8,25 @@ import json
 import multiprocessing
 import sys
 import tempfile
+from threading import Thread
 from pathlib import Path
 from time import perf_counter, sleep
+
+
+def play_tone(seconds):
+    """A quiet 440 Hz tone on the default output, so the capture check has something to hear."""
+    import numpy as np
+    import pyaudiowpatch as pa
+
+    audio = pa.PyAudio()
+    try:
+        t = np.arange(int(48000 * seconds)) / 48000
+        wave = (0.02 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+        stream = audio.open(format=pa.paFloat32, channels=2, rate=48000, output=True)
+        stream.write(np.repeat(wave[:, None], 2, axis=1).tobytes())
+        stream.close()
+    finally:
+        audio.terminate()
 
 
 def self_check(report):
@@ -49,7 +66,7 @@ def self_check(report):
         result["recognition_ms"] = metrics.get("recognition_processing_ms")
         result["frames_drawn"] = len(window.view.canvas.paint_ms)
         result["engine_error"] = str(window.controller.engine.error or "")
-        # live capture of the default output for a few seconds (silence is fine)
+        # live capture of the default output while a quiet tone plays on it
         devices, applications, error = discover()
         result["output_devices"], result["audio_applications"] = len(devices), len(applications)
         result["discovery_error"] = error
@@ -61,11 +78,18 @@ def self_check(report):
         drawer.source.setCurrentIndex(drawer.source.findData("system"))
         window.start()
         result["live_problem_at_start"] = window.problem
-        deadline, metrics = perf_counter() + 6, {}
+        deadline, metrics, states = perf_counter() + 8, {}, []
+        tone = Thread(target=play_tone, args=(6.0,), daemon=True)
+        tone.start()
         while perf_counter() < deadline and window.controller.engine:
             app.processEvents()
-            metrics = window.controller.engine.metrics()
+            engine = window.controller.engine
+            metrics = engine.metrics()
+            state = f"{engine.state}: {engine.detail}"
+            if not states or states[-1] != state:
+                states.append(state)
             sleep(0.01)
+        result["live_states"] = states[-6:]
         result["live_frames_analysed"] = metrics.get("frames")
         result["live_recognition_status"] = metrics.get("recognition_status")
         result["live_engine_error"] = str(window.controller.engine.error or "")

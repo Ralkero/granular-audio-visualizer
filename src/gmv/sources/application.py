@@ -174,6 +174,7 @@ class ApplicationAudioSource(AudioSource):
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     creationflags=subprocess.CREATE_NO_WINDOW,
+                    env=paths.helper_environment(),
                 )
 
                 def read_audio(
@@ -273,6 +274,9 @@ class ApplicationAudioSource(AudioSource):
                     reader.join(timeout=2)
                     diagnostics.join(timeout=2)
                     for pipe in (helper.stdin, helper.stdout, helper.stderr):
-                        pipe.close()
+                        try:
+                            pipe.close()
+                        except OSError:  # unsent "stop" to a helper that has gone
+                            pass
         finally:
             output.close()

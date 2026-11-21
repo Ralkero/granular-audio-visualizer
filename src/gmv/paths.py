@@ -38,6 +38,16 @@ def capture_helper():
     return REPOSITORY / "native/ProcessLoopback/bin/Release/net9.0-windows/ProcessLoopback.exe"
 
 
+def helper_environment():
+    """Environment for the capture helper. A private .NET runtime beside it (``dotnet``,
+    put there by ``Build App.ps1``) is used when present, so capture does not depend on
+    the .NET installed on the machine."""
+    runtime = capture_helper().parent / "dotnet"
+    if not (runtime / "host" / "fxr").is_dir():
+        return None
+    return {**os.environ, "DOTNET_ROOT": str(runtime), "DOTNET_MULTILEVEL_LOOKUP": "0"}
+
+
 def build_defaults():
     """Settings a packaged build was made with (``models/defaults.json``): which weights it
     starts with. A checkout has none, so experimental models stay off there."""

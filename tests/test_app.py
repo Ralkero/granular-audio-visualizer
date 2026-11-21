@@ -216,3 +216,13 @@ def test_packaged_build_finds_its_files_beside_the_executable(tmp_path, monkeypa
     assert paths.sessions_folder() == tmp_path / "local" / "GranularMusicVisualizer" / "sessions"
     # weights that are not there are not offered
     assert paths.build_defaults() == {"guitar_model": str(program / "models" / "guitar.json")}
+
+
+def test_capture_helper_uses_a_private_runtime_when_one_is_beside_it(tmp_path, monkeypatch):
+    from gmv import paths
+
+    helper = tmp_path / "ProcessLoopback" / "ProcessLoopback.exe"
+    monkeypatch.setattr(paths, "capture_helper", lambda: helper)
+    assert paths.helper_environment() is None
+    (helper.parent / "dotnet" / "host" / "fxr").mkdir(parents=True)
+    assert paths.helper_environment()["DOTNET_ROOT"] == str(helper.parent / "dotnet")

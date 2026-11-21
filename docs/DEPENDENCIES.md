@@ -49,7 +49,7 @@ The lock file records the actual resolved Windows environment. OS adapters are o
 
 ## Packaged build
 
-PyInstaller (GPL-2.0 with an exception that allows bundling any program; 6.22) is a build tool only, installed by `Build App.ps1` when missing and not a runtime dependency. The build is a folder, not a single file, so start-up does not unpack anything.
+PyInstaller (GPL-2.0 with an exception that allows bundling any program; 6.22) is a build tool only, installed by `Build App.ps1` when missing and not a runtime dependency. The build is a folder, not a single file, so start-up does not unpack anything. `Build App.ps1` also places Microsoft's .NET 9 runtime (MIT, pinned version and SHA-512) beside the capture helper; the helper uses it through `DOTNET_ROOT`, so capture does not depend on the machine's .NET installation. .NET 9 is out of support; moving the helper to .NET 10 is pending.
 
 ## Excerpt review (`gmv review`)
 
