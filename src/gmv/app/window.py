@@ -10,6 +10,7 @@ from threading import Thread
 from PySide6.QtCore import (
     QEasingCurve,
     QPoint,
+    QPointF,
     QPropertyAnimation,
     QSettings,
     Qt,
@@ -17,7 +18,7 @@ from PySide6.QtCore import (
     QUrl,
     Signal,
 )
-from PySide6.QtGui import QAction, QDesktopServices
+from PySide6.QtGui import QAction, QColor, QDesktopServices, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -62,6 +63,9 @@ QPushButton, QToolButton, QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox {
     border-radius: 6px; padding: 5px 10px; font-size: 12px;
 }
 QPushButton:hover, QToolButton:hover, QComboBox:hover { border-color: #3b4460; }
+QComboBox { padding-right: 26px; }
+QComboBox::drop-down { subcontrol-origin: border; subcontrol-position: center right;
+    width: 26px; border: none; }
 QPushButton:disabled, QComboBox:disabled, QLineEdit:disabled { color: #5b6377; }
 QPushButton#primary { background: #22d3ee; color: #05060a; border: none; font-weight: 600;
     padding: 6px 18px; }
@@ -77,6 +81,23 @@ QSlider::groove:horizontal { height: 4px; background: #262b3a; border-radius: 2p
 QSlider::handle:horizontal { width: 12px; margin: -5px 0; border-radius: 6px;
     background: #22d3ee; }
 """
+
+
+class Combo(QComboBox):
+    """Drop-down with its arrow drawn inside the box. The style sheet's border and padding
+    leave the platform arrow cut off at the right edge, so it is switched off there."""
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(QColor("#c9cfdd" if self.isEnabled() else "#5b6377"), 1.6)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        x, y = self.width() - 16.0, self.height() / 2 + 0.5
+        painter.drawPolyline([QPointF(x - 4, y - 2), QPointF(x, y + 2), QPointF(x + 4, y - 2)])
+        painter.end()
 
 
 def row(*widgets):
@@ -133,10 +154,10 @@ class SettingsDrawer(QFrame):
 
     def build_source(self):
         self.heading("Audio source")
-        self.source = QComboBox()
+        self.source = Combo()
         for key, title in SOURCES:
             self.source.addItem(title, key)
-        self.devices, self.applications = QComboBox(), QComboBox()
+        self.devices, self.applications = Combo(), Combo()
         self.file = QLineEdit()
         self.file.setPlaceholderText("WAV, FLAC, OGG or another supported file")
         self.browse_file = QPushButton("Choose…")
@@ -200,7 +221,7 @@ class SettingsDrawer(QFrame):
 
     def build_visualizer(self):
         self.heading("Visualizer")
-        self.mode = QComboBox()
+        self.mode = Combo()
         self.mode.addItem("Spectrum bars", "bars")
         self.mode.addItem("Radial", "radial")
         self.mode.currentIndexChanged.connect(lambda: self.view.set_mode(self.mode.currentData()))
@@ -219,7 +240,7 @@ class SettingsDrawer(QFrame):
         self.gain = QSlider(Qt.Orientation.Horizontal)
         self.gain.setRange(-12, 18)
         self.gain.valueChanged.connect(lambda value: self.view.set_gain(float(value)))
-        self.window = QComboBox()
+        self.window = Combo()
         for seconds in (10, 15, 20, 30):
             self.window.addItem(f"{seconds} seconds", seconds)
         self.window.setCurrentIndex(1)
