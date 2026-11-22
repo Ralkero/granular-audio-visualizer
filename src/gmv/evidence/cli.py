@@ -44,6 +44,12 @@ def add_parser(commands):
         action="store_true",
         help="The owner has approved sending fingerprints and durations to acoustid.org",
     )
+    trainset = sub.add_parser(
+        "trainset", help="Training and evaluation segments from reviews and candidates, with an audit"
+    )
+    trainset.add_argument("--review", action="append", required=True, help="review batch; repeatable")
+    trainset.add_argument("--folds", type=int, default=5)
+    trainset.add_argument("--name", default="trainset-v1")
     return parser
 
 
@@ -85,6 +91,10 @@ def run(args):
             workdir, args.openmic, args.moisesdb, args.moisesdb_jobs, args.medleydb
         )
         print(json.dumps({r["dataset"]: r["local_availability"] for r in rows}, indent=1))
+    elif args.evidence_command == "trainset":
+        from .trainset import write
+
+        print(json.dumps(write(workdir, args.review, args.folds, args.name), indent=1))
     elif args.evidence_command == "acoustid":
         import os
 

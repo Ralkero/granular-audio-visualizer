@@ -462,3 +462,33 @@ def test_same_audio_in_two_artist_folders_joins_them_for_every_recording():
     assert leakage.groups(rows, same_audio, identities)[rid["f"]][0].startswith("merged-")
     low = [dict(i, confidence="low") for i in identities]
     assert leakage.groups(rows, same_audio, low)[rid["f"]][0] == "artist-unrelated"
+
+
+def test_a_reviewed_stretch_is_cut_out_of_an_automatic_candidate():
+    from gmv.evidence import trainset
+
+    assert trainset.cut_away(0.0, 40.0, [(10.0, 22.0)]) == [(0.0, 10.0), (22.0, 40.0)]
+    assert trainset.cut_away(0.0, 20.0, [(4.0, 16.0)]) == []  # both remainders too short
+    candidates = [
+        {"recording_id": "r-1", "start_s": "0.0", "end_s": "40.0", "label": "present", "confidence_class": "strong_agreement"},
+        {"recording_id": "r-1", "start_s": "50.0", "end_s": "70.0", "label": "absent", "confidence_class": "weak_evidence"},
+        {"recording_id": "r-1", "start_s": "80.0", "end_s": "99.0", "label": "absent", "confidence_class": "moderate_agreement"},
+        {"recording_id": "r-2", "start_s": "", "end_s": "", "label": "present_somewhere", "confidence_class": "weak_evidence"},
+    ]
+    found = trainset.automatic_segments(candidates, {"r-1": [(10.0, 22.0)]})
+    assert [(s["start_s"], s["end_s"]) for s in found] == [(0.0, 10.0), (22.0, 40.0)]
+    assert {s["label"] for s in found} == {"present"} and not any(s["evaluation_pool"] for s in found)
+    assert {s["weight"] for s in found} == {0.5}
+
+
+def test_folds_keep_groups_whole_and_spread_the_guitar_free_excerpts():
+    from gmv.evidence import trainset
+
+    loads = {f"g{i}": {"unbiased_absent": 4, "unbiased_present": 6} for i in range(6)}
+    loads["big"] = {"automatic_s": 5000.0}
+    loads["empty"] = {}
+    first = trainset.assign_folds(loads, 3)
+    assert first == trainset.assign_folds(dict(reversed(list(loads.items()))), 3)
+    assert set(first) == set(loads) and set(first.values()) == {0, 1, 2}
+    absent = [sum(loads[g].get("unbiased_absent", 0) for g, f in first.items() if f == k) for k in range(3)]
+    assert absent == [8, 8, 8]

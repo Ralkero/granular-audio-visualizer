@@ -31,6 +31,7 @@ gmv evidence check                                       # automatic classes aga
 gmv evidence fuse --inventory INVENTORY.csv              # candidates, queue, all tables
 gmv review --workdir research-local/evidence-v1/review-queue build --inventory INVENTORY.csv --selection research-local/evidence-v1/review_queue_selection.json
 gmv review --workdir research-local/evidence-v1/review-queue open
+gmv evidence trainset --review review-local/pilot-v1 --review research-local/evidence-v1/review-queue   # segments, folds, audit
 ```
 
 The two `python experiments/...` commands run in the experiments environment (torch); the
@@ -240,17 +241,8 @@ the proposed training weights.
 Not obtained: MedleyDB (access request needs the owner's account); AcoustID results (needs
 a key); any guitar-type breakdown of the candidates.
 
-## Recommended next experiment (not started)
+## After the review queue
 
-1. Label the review queue (about an hour). It yields an error rate for each candidate class
-   and an estimated 30 or more confirmed guitar-free excerpts.
-2. Fix an evaluation set first: reviewed core excerpts of whole leakage groups, chosen
-   before training, including groups among the 26 never trained on. Score `guitar_mn10_v1`
-   on it as the baseline; never score `guitar_mn10_rv1` on excerpts it was trained with.
-3. Train from `guitar_mn10_v1`'s starting weights with human excerpts at weight 1, strong
-   candidates at 0.5, moderate at 0.25, and no automatic negatives; add OpenMIC guitar and
-   guitar-free clips (human labels, varied instruments, licence permitting) since that is
-   where confirmed negatives with organ, strings and piano exist.
-4. Report AUC, recall at 5% and 10% false alarms, precision and F1 at the shipped
-   thresholds, by guitar type, plus inference time, on the same evaluation set for both
-   models. Promote only on a clear gain on unseen artists.
+The owner answered the queue. Its outcome, the training and evaluation sets built from it
+(`gmv evidence trainset`), their audit and the proposed experiment are in
+[TRAINING_PLAN_V2.md](TRAINING_PLAN_V2.md). Nothing has been trained.
