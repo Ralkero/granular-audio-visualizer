@@ -648,3 +648,111 @@ capture.
 `docs/schemas/InstrumentActivity.json`; `src/gmv/app/window.py` (the setting);
 `tests/test_live_rings.py` (new), `tests/test_unified_view.py` (three history tests now
 select the history rings); the diagnostic scripts read the fast path and the live rings.
+
+---
+
+# Correctness pass: audio segments and the bass ring's clock
+
+Two faults in the phase 2 implementation, found in review and corrected without changing
+the look of the rings.
+
+## Live states and audio segments
+
+**Fault.** A capture stream is numbered in segments: the number changes at a gap or a
+format change, and the engine starts its analysis afresh for the new segment. The live
+states (`Live`) did not know about segments. They started afresh only when the timestamps
+went back or jumped by more than half a second. When a segment ended at 45.00 s and the
+next began at 45.02 s, attacks, bass pulses, the note, the envelopes and an open vocal
+phrase of the old segment carried on into the new one. The visual state's derived ringing
+envelope (fed to the live state) carried over too.
+
+**Correction.**
+
+- *Detection.* `VisualState._frame` compares each feature frame's `segment` with the
+  current one (`VisualState.segment`). On a change every live state starts afresh
+  (`Live.begin(segment)`), and `live_epoch` counts it. The audio-clock handling at a
+  segment change is as before.
+- *What starts afresh*, all of it in `Live.reset()`: recent attacks, bass pulses, level,
+  energy and ringing envelopes, pitch, pitch position, the vocal phrase state, repetition
+  rate, the analyzer's delay, the presence weight, and the bass ring's phase origin (below).
+  Only the instrument's pitch range stays. The first row of the new segment then sets up
+  the state as a first row always has (no glide from old values).
+- *What is kept.* The activity history (`VisualState.activity`): every row of the old
+  segment stays, so the timeline, the detail lanes, the Spectrum Bars strips and the
+  history rings show it. The one difference in the history: its derived columns (the
+  ringing envelope, the time and place of the last attack, the gap between attacks) start
+  again at the first row of a new segment, as they already did after a hole. The rows
+  themselves and their published values are unchanged.
+- *Late rows of a finished segment.* The engine publishes each frame's activity rows right
+  after the frame, and the analysis of a new segment starts from nothing, so after a
+  frame of segment *n* no row of an earlier segment is published. Should one arrive
+  anyway (out of order), it is refused, from the history as well as from the live state,
+  the same way a row out of time order always has been: kept, it would block the current
+  segment's next rows from the history. Rows of the old segment that arrived in order stay.
+  A row of a *newer* segment than the newest frame is accepted; its live state starts
+  afresh for it, and the frame that follows does not start it a second time.
+- *Restarted timeline.* When the timestamps go back, the existing full reset happens
+  (history included). It also forgets the current segment, so a segment change in the same
+  frame does not cause a second fresh start.
+- *Compatibility.* No schema change: `InstrumentActivity.segment` and
+  `FeatureFrame.segment` already existed. Every recorded session examined carries the
+  segment on both. A row parsed from a log without the field is taken to belong to the
+  current segment (`model_fields_set` tells a missing value from a stated 0), so it is
+  never mistaken for a new or an old segment. Sessions where everything is segment 0 never
+  start afresh. Messages from the analysis process keep their stated segment through the
+  pipe.
+
+**In practice** the engine's analyzers start again at a new segment and need a few frames
+(bass 170 ms) before they report, so a live ring is absent for that moment and then
+appears from the new segment's own rows.
+
+## The bass ring's flow
+
+**Fault.** The ring's travelling wave advanced by `live.dt * (0.5 + 3.0 * energy)` at each
+paint, kept in the renderer. Its position therefore depended on how often the ring had been
+drawn: hidden for a while, it resumed where it had stopped; at different frame rates the
+sum came out slightly differently.
+
+**Correction.** `Live.phase(base, per_energy)` gives the angle as a function of the rows and
+the audio time alone: `base` times the audio time since the segment's first row, plus
+`per_energy` times the integral of the energy over that time. The integral is accumulated
+as rows arrive (each row's energy held until the next row, for at most a quarter of a
+second, the same rule by which the state takes an instrument to have stopped) and
+extrapolated the same way to the instrument's present at `advance`. The bass ring uses
+`phase(0.5, 3.0)`: still 0.5 rad a second at rest and 3.5 at full energy. The renderer keeps
+no state (`BassLayer.live_shape` is a pure function of the stage and the live state).
+
+The rate now follows each row's reported energy rather than the eased energy used before.
+The eased value trails the reported one by 15 ms when rising and 100 ms when falling; as an
+integral the difference is a fraction of a radian over a note and not visible in the
+automated frames compared.
+
+**What is established by tests** (`tests/test_live_segments.py`):
+
+- the phase at 2.0 s is the same at 60, 72, 120 and 144 frames a second (to 1e-9 rad) and
+  equals the integral worked out independently;
+- not advancing the state for 1.3 s of music (a hidden ring) gives the same phase and the
+  same ring geometry; drawing twice changes nothing;
+- the same rows give the same phase and geometry in two independent states;
+- a new segment with continuous timestamps counts its phase from its own first row, exactly
+  as a state that never saw the old segment;
+- more energy flows faster (0.5, 2.0 and 3.5 rad a second at energy 0, 0.5 and 1); after
+  the rows stop, the energy part stops after a quarter of a second and the resting part
+  goes on.
+
+**Limits.** At a segment boundary the phase starts again from zero, by design; it is not
+seen because the bass ring is absent until the new segment's first rows (above). Phase is
+computed in double precision from the segment's start: after many hours the angle is large
+but its precision is still far below a visible fraction of a radian.
+
+## Drum sparks
+
+The 18 spark positions of a high-region hit were generated from the hit's seed every frame.
+They are now generated once per seed (`drums.sparks`, a cache of at most 128 hits, read-only
+arrays). The same generator and seed give the same positions; a test checks they are
+identical to what was drawn before.
+
+## Files
+
+`src/gmv/visualizer/live.py`, `state.py`, `layers/bass.py`, `layers/drums.py`;
+`tests/test_live_segments.py` (new); this document, `docs/ARCHITECTURE.md`.

@@ -16,6 +16,20 @@ history, as they arrive (one owner of the data, no second analysis), and reduces
 * ``weight``: how much of it the presence judgement lets through, eased so that a
   judgement arriving does not snap the picture.
 
+**Segments.** A live state belongs to one audio segment (the capture stream's
+``segment``: it changes at a gap or a format change, even when the timestamps carry on as
+if nothing happened). ``begin(segment)`` starts it afresh for a new one: every transient
+value goes, the pitch range stays. ``feed`` does the same if a row of a newer segment
+reaches it first. Deciding which rows are too old to be fed at all is the visual state's
+job, which knows the stream's current segment.
+
+**Phase.** ``phase(base, per_energy)`` is a running angle that advances by
+``base + per_energy * energy`` radians per second of audio. It is an integral over the rows
+themselves (the energy each row reported, held until the next, for at most ``STALE_S``),
+counted from the first row of the segment, and evaluated at the instrument's present. So
+it depends only on the rows and the audio time: not on how often, or whether, anything
+was drawn in between.
+
 **Clock.** Everything is audio time. An analyzer's rows describe a moment a fixed time
 before the newest audio (``lag``: guitar 20 ms, drums 60 ms, bass 80 ms, by how each
 works). ``advance(now)`` moves the state to the instrument's own present, ``now - lag``,
@@ -64,7 +78,10 @@ class Live:
     def reset(self):
         self.hits.clear()
         self.pulses.clear()
+        self.segment = None  # the audio segment the state belongs to
         self.time = None  # of the newest row
+        self.origin = None  # of the first row of the segment
+        self._travel, self._drive = 0.0, 0.0  # energy integral up to ``time``; energy there
         self.lag = 0.0
         self.fast = False  # whether the analyzer gives energy and pulses
         self._level = self._energy = self._ring = self._ring_level = 0.0
@@ -77,17 +94,35 @@ class Live:
         self.level = self.energy = self.ring = 0.0
         self.pitch, self.pitched, self.place = None, False, 0.5
         self.weight, self.tentative = 0.0, False
+        self.elapsed = self.travel = 0.0
+
+    def begin(self, segment):
+        """Belong to ``segment`` from now on; if that is a different one, start afresh."""
+        if segment != self.segment:
+            self.reset()
+            self.segment = segment
 
     def feed(self, time, frame_time, *, level, ring, attack=0.0, centre=0.5, spread=0.0,
              pitch=None, low=0.0, mid=0.0, high=0.0, boundary="", rate_hz=None,
-             regularity=0.0, energy=None, pulse=0.0, lead=0.0):  # fmt: skip
+             regularity=0.0, energy=None, pulse=0.0, lead=0.0, segment=None):  # fmt: skip
         """Take one activity row. ``frame_time`` is the audio time of the newest analysis
-        frame when the row arrived: the difference is the analyzer's delay."""
+        frame when the row arrived: the difference is the analyzer's delay. ``segment``
+        is the row's audio segment, None when unknown (taken to be the current one)."""
+        if segment is not None:
+            if self.segment is None:
+                self.segment = segment
+            elif segment != self.segment:
+                self.begin(segment)  # newer than anything seen: start afresh
         if self.time is not None and (time <= self.time or time - self.time > 0.5):
             if time <= self.time:
                 return
             self.hits.clear()  # a hole in the stream: what was before is over
             self.pulses.clear()
+        if self.time is None:
+            self.origin, self._travel = time, 0.0
+        else:
+            self._travel += self._drive * min(time - self.time, STALE_S)
+        self._drive = energy if energy is not None else level
         self.time = time
         self.lag = min(0.3, max(0.0, frame_time - time))
         self._level, self._ring, self._ring_level = level, ring, level
@@ -143,6 +178,9 @@ class Live:
             self.pitched = False
             if not fresh:
                 self.place = eased(self.place, 0.5, self.dt, REST_S)
+        ahead = self.t - self.time
+        self.elapsed = self.t - self.origin
+        self.travel = self._travel + self._drive * (min(ahead, STALE_S) if ahead > 0 else ahead)
         while self.hits and self.t - self.hits[0].time > KEEP_S:
             self.hits.popleft()
         while self.pulses and now - self.pulses[0][0] > KEEP_S:
@@ -177,6 +215,12 @@ class Live:
     def swell(self, seconds):
         """Sum of the recent onsets, each dying away over ``seconds``: a pulse envelope."""
         return sum(strength * math.exp(-age / seconds) for age, strength in self.beats(6 * seconds))
+
+    def phase(self, base, per_energy):
+        """Radians travelled since the segment's first row, at ``base`` per second plus
+        ``per_energy`` per second at full energy: a pure function of the rows and the
+        audio time of the last ``advance``."""
+        return base * self.elapsed + per_energy * self.travel
 
     @property
     def last(self):

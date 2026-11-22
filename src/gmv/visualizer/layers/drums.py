@@ -14,6 +14,7 @@ are absent nothing is drawn; without a judgement the marks are hollow and pale.
 """
 
 import math
+from functools import lru_cache
 
 import numpy as np
 from PySide6.QtCore import QLineF, QPointF, Qt
@@ -32,6 +33,15 @@ RAYS = [(math.cos(a), math.sin(a)) for a in np.linspace(0, 2 * math.pi, 8, endpo
 # Live ring: how long each region's impact lasts, in seconds.
 LIFE = {"low": 0.5, "mid": 0.2, "high": 0.13}
 SPOKES = 28
+
+
+@lru_cache(maxsize=128)
+def sparks(seed):
+    """Where the sparks of the high-region hit with ``seed`` are: 18 x (turn, depth), each
+    0..1. The same for a hit every frame, so worked out once (bounded cache)."""
+    spots = np.random.default_rng(seed).random((18, 2))
+    spots.flags.writeable = False
+    return spots
 
 
 class DrumsLayer(Layer):
@@ -85,7 +95,7 @@ class DrumsLayer(Layer):
                     painter.drawLines(lines)
                 else:
                     seed = int(hit.time * 1000) & 0xFFFF
-                    spots = np.random.default_rng(seed).random((18, 2))
+                    spots = sparks(seed)
                     angle = 2 * math.pi * spots[:, 0]
                     radius = stage.outer - height * (0.04 + 0.16 * spots[:, 1]) + height * 0.05 * progress
                     radius = np.minimum(radius, stage.outer)

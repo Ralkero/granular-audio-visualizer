@@ -21,6 +21,7 @@ from . import Layer, around, circle
 from .guitar import NEUTRAL, runs, tint
 
 LOW_MIDI, HIGH_MIDI = 26.0, 56.0
+FLOW_BASE, FLOW_PER_ENERGY = 0.5, 3.0  # live ring: radians a second, at rest and per unit of energy
 NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 
 
@@ -47,18 +48,18 @@ class BassLayer(Layer):
     def restart(self):
         self.last_pitch = (LOW_MIDI + HIGH_MIDI) / 2
 
-    def paint_live(self, painter, stage, live):
-        """One heavy ring that breathes. Its thickness is the energy of the low register
-        now; every note onset pushes it outwards and brightens it, and it falls back
-        between notes; it flows faster the more energy there is, so a held note keeps
-        moving; the note itself sets how far out the ring sits."""
-        colour = self.profile.colour
-        angles, sines, cosines = around(180)
+    def live_shape(self, stage, live):
+        """(outer edge radii, inner edge radii, how lit 0..1) of the live ring, one radius
+        per angle of ``around(180)``. A pure function of the stage and the live state."""
+        angles = around(180)[0]
         height = stage.height
         strength = min(1.5, self.intensity) * stage.gain
         energy = live.energy * live.weight
         swell = min(1.5, live.swell(0.16)) * live.weight
-        self.flow = getattr(self, "flow", 0.0) + live.dt * (0.5 + 3.0 * live.energy)
+        # How far the ring has flowed: 0.5 rad a second at rest, 3.5 at full energy, counted
+        # in audio time from the segment's first row (``Live.phase``), so the same moment
+        # of the same music gives the same shape whatever was or was not drawn before.
+        flow = live.phase(FLOW_BASE, FLOW_PER_ENERGY)
         middle = (
             stage.inner
             + height * (0.42 + 0.14 * (live.place - 0.5))
@@ -68,12 +69,21 @@ class BassLayer(Layer):
         wobble = height * (0.012 + 0.07 * energy) * strength
         line = (
             middle
-            + wobble * np.sin(3 * angles + self.flow)
-            + 0.5 * wobble * np.sin(5 * angles - 1.3 * self.flow)
+            + wobble * np.sin(3 * angles + flow)
+            + 0.5 * wobble * np.sin(5 * angles - 1.3 * flow)
         )
-        lit = min(1.0, swell)
         outer = np.clip(line + half, stage.inner, stage.outer)
         inner = np.clip(line - half, stage.inner, stage.outer)
+        return outer, inner, min(1.0, swell)
+
+    def paint_live(self, painter, stage, live):
+        """One heavy ring that breathes. Its thickness is the energy of the low register
+        now; every note onset pushes it outwards and brightens it, and it falls back
+        between notes; it flows faster the more energy there is, so a held note keeps
+        moving; the note itself sets how far out the ring sits."""
+        colour = self.profile.colour
+        sines, cosines = around(180)[1:]
+        outer, inner, lit = self.live_shape(stage, live)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         opacity = min(1.0, 0.25 + live.weight)
         edge = QPen(

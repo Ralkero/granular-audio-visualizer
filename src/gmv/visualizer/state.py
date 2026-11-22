@@ -130,6 +130,7 @@ class VisualState:
         self.status, self.detail = "idle", ""
         self.session_id = None
         self.generation = 0
+        self.live_epoch = 0  # grows each time the live states start afresh
         self.marked = 0  # markers ever received; lets a drawing find the new ones
         self.reset()
 
@@ -144,6 +145,9 @@ class VisualState:
         self.activity_info = {}  # instrument -> {"method": ..., "basis": ...}
         # instrument -> what it is doing now (``live.Live``), fed with the same rows.
         self.live = {}
+        self.live_epoch += 1
+        self.segment = None  # audio segment of the newest feature frame
+        self._row_segment = {}  # instrument -> segment of its newest history row
         self.music_start = None  # when sound last began after silence (or at all)
         # How intense the music is as a whole, 0..1, whatever is shown: ``musical.value``.
         # Any visualizer mode may read it.
@@ -160,7 +164,6 @@ class VisualState:
         self.pitch_method = None
         self.beat_tempo, self.beat_score = None, 0.0
         self.replayed = False
-        self.segment = None
         self.last_arrival = None
         self._offsets = deque(maxlen=150)
         self._pending = deque(maxlen=256)  # markers the renderer has not reacted to yet
@@ -247,6 +250,15 @@ class VisualState:
             ):
                 self.music_start = frame.timestamp
             self._silent_from = None
+        # A new audio segment (a gap or a format change in the capture, whether or not the
+        # timestamps jump): what the live states hold belongs to the old one. Only they
+        # start afresh; the history keeps every row. After a full reset (the timeline
+        # restarted) there is no segment to compare with, so this cannot happen twice.
+        if self.segment is not None and frame.segment != self.segment:
+            for live in self.live.values():
+                live.begin(frame.segment)
+            self.live_epoch += 1
+        self.segment = frame.segment
         self.musical.step(frame)
         level = min(1.0, max(0.0, (frame.loudness_dbfs + 60) / 60))
         self.frames.append(frame.timestamp, level, frame.dynamic_intensity, frame.onset_strength)
@@ -272,6 +284,14 @@ class VisualState:
             )
 
     def _activity(self, message):
+        # Rows logged before activity carried a segment stand for the current one.
+        segment = message.segment if "segment" in message.model_fields_set else None
+        if segment is not None and self.segment is not None and segment < self.segment:
+            # A row of a segment that is over, arriving after the stream moved on. The engine
+            # never publishes one (each frame's rows follow it, and the analysis starts
+            # anew with a new segment); if one comes, it is late, like a row out of time
+            # order, and is refused. Rows of the old segment that came in order are kept.
+            return
         track = self.activity.get(message.instrument)
         if track is None:
             track = self.activity[message.instrument] = Track(self.capacity, len(ACTIVITY))
@@ -282,7 +302,14 @@ class VisualState:
             "method": message.method,
             "basis": message.basis,
         }
-        fresh = last is None or message.timestamp - last[0] > 0.5  # start, or a hole
+        previous = self._row_segment.get(message.instrument)
+        self._row_segment[message.instrument] = segment
+        # The derived envelope starts again at a start, a hole, or a new segment.
+        fresh = (
+            last is None
+            or message.timestamp - last[0] > 0.5
+            or (segment is not None and previous is not None and segment != previous)
+        )
         ring, struck, centre, spread = (0.0, -1e6, 0.5, 0.0) if fresh else last[8:12]
         # The envelope dies away over 60 ms when little is ringing, half a second when a
         # chord is held: a held chord stays on screen, a muted stroke does not.
@@ -335,6 +362,7 @@ class VisualState:
             energy=message.energy,
             pulse=message.pulse,
             lead=message.lead_s,
+            segment=segment,
         )
 
     def attribution(self, key, times):
