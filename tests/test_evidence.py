@@ -245,7 +245,8 @@ def test_a_recording_level_credit_strengthens_presence_only():
     assert rows[0]["confidence_class"] == "moderate_agreement"
     # Models hearing no guitar are not contradicted or supported by any credit.
     rows, _ = fuse(0.01, 0.001, credits=[GUITAR_CREDIT])
-    assert rows[0]["label"] == "absent" and rows[0]["confidence_class"] == "moderate_agreement"
+    assert rows[0]["label"] == "absent" and rows[0]["confidence_class"] == "weak_evidence"
+    assert not rows[0]["training_suitable"]  # two models hearing nothing is not a negative label
 
 
 def test_missing_credits_and_single_models_never_make_a_label():
@@ -286,7 +287,8 @@ def test_human_labels_win_and_intermittent_is_not_given_times():
 def test_separation_can_support_or_contradict():
     count = round(60 / fusion.HOP_S)
     rows, _ = fuse(0.01, 0.001, separation=np.full(count, -50.0))
-    assert rows[0]["confidence_class"] == "strong_agreement" and rows[0]["label"] == "absent"
+    assert rows[0]["confidence_class"] == "moderate_agreement" and rows[0]["label"] == "absent"
+    assert fuse(0.99, 0.8, separation=np.full(count, -5.0))[0][0]["confidence_class"] == "strong_agreement"
     rows, _ = fuse(0.01, 0.001, separation=np.full(count, -5.0))
     assert rows[0]["confidence_class"] == "conflict" and rows[0]["review_required"]
 

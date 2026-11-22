@@ -327,6 +327,8 @@ def hop_level_check(workdir, review_workdir):
     workdir = Path(workdir)
     gmv_dir = sorted(p for p in (workdir / "timelines").glob("*") if p.is_dir())[0]
     tally = Counter()
+    excerpts = Counter()
+    artists = set()
     for rid, spans in human.items():
         gmv = fusion.load_npz(gmv_dir / f"{rid}.npz")
         panns = fusion.load_npz(workdir / "panns" / "timelines" / f"{rid}.npz")
@@ -339,6 +341,13 @@ def hop_level_check(workdir, review_workdir):
                 continue
             piece = classes[round(start / HOP_S) : round(end / HOP_S)]
             truth = "guitar" if presence == "present_throughout" else "no_guitar"
+            # the excerpt as a whole: what at least half of its hops were called
+            called = "undecided"
+            for value, name in ((2, "both_present"), (-2, "both_absent"), (9, "conflict")):
+                if len(piece) and (piece == value).mean() >= 0.5:
+                    called = name
+            excerpts[(truth, called)] += 1
+            artists.add(rid)
             for value, name in ((2, "both_present"), (-2, "both_absent"), (9, "conflict"), (0, "undecided"), (-9, "silence")):
                 tally[(truth, name)] += int((piece == value).sum())
     out = {}
@@ -351,6 +360,28 @@ def hop_level_check(workdir, review_workdir):
         }
     total_yes = sum(v for (t, _), v in tally.items() if t == "guitar")
     total_no = sum(v for (t, _), v in tally.items() if t == "no_guitar")
+    by_excerpt = {"recordings": len(artists)}
+    for name, right in (("both_present", "guitar"), ("both_absent", "no_guitar")):
+        wrong = "no_guitar" if right == "guitar" else "guitar"
+        selected = excerpts[(right, name)] + excerpts[(wrong, name)]
+        of_kind = sum(v for (t, _), v in excerpts.items() if t == right)
+        by_excerpt[name] = {
+            "excerpts_selected": selected,
+            "correct": excerpts[(right, name)],
+            "wrong": excerpts[(wrong, name)],
+            "precision": round(excerpts[(right, name)] / selected, 3) if selected else None,
+            "excerpts_of_that_kind": of_kind,
+            "coverage": round(excerpts[(right, name)] / of_kind, 3) if of_kind else None,
+        }
+    by_excerpt["conflict"] = {
+        "guitar": excerpts[("guitar", "conflict")],
+        "guitar_free": excerpts[("no_guitar", "conflict")],
+    }
+    by_excerpt["undecided"] = {
+        "guitar": excerpts[("guitar", "undecided")],
+        "guitar_free": excerpts[("no_guitar", "undecided")],
+    }
+    out["by_excerpt"] = by_excerpt
     out["coverage"] = {
         "guitar_time_called_present": round(tally[("guitar", "both_present")] / max(1, total_yes), 3),
         "guitar_free_time_called_absent": round(tally[("no_guitar", "both_absent")] / max(1, total_no), 3),

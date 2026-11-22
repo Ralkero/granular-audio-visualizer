@@ -36,7 +36,7 @@ LIMITS = {
     "suspected_distorted": 15,
     "metadata_mismatch": 20,
     "low_quality_source": 6,
-    "random_audit": 90,
+    "random_audit": 120,
 }
 PRIORITY = {
     "model_disagreement": 1,
@@ -164,7 +164,11 @@ def build(recordings, seed="gmv-evidence-v1", limits=LIMITS):
         except ValueError:
             low = False
         for candidate in recording["candidates"]:
-            if candidate["confidence_class"] not in ("strong_agreement", "moderate_agreement"):
+            if candidate["confidence_class"] not in (
+                "strong_agreement",
+                "moderate_agreement",
+                "weak_evidence",
+            ) or candidate["start_s"] == "":
                 continue
             if candidate["end_s"] - candidate["start_s"] < EXCERPT_S:
                 continue

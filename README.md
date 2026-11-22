@@ -103,7 +103,7 @@ gmv corpus import-dataset mdbdrums "E:\datasets\MDBDrums"
 .venv\Scripts\python.exe -m gmv.evaluation.run --detector candidate --corpus corpus/manifest.json --corpus-split validation --output local-evidence/validation.json
 ```
 
-Your own music can be reviewed excerpt by excerpt without editing audio: `gmv review` picks recordings from a local inventory, cuts short excerpts, runs the guitar model over the full tracks for comparison and opens a review window that stores your labels locally ([method](docs/evaluation/REAL_WORLD_REVIEW.md)). Excerpts, labels and reports stay in the ignored `review-local/` folder.
+Your own music can be reviewed excerpt by excerpt without editing audio: `gmv review` picks recordings from a local inventory, cuts short excerpts, runs the guitar model over the full tracks for comparison and opens a review window that stores your labels locally ([method](docs/evaluation/REAL_WORLD_REVIEW.md)). Excerpts, labels and reports stay in the ignored `review-local/` folder. `gmv evidence` gathers what can be known about a collection without listening (MusicBrainz identity and credits, local fingerprints, two audio models, dataset references), combines it into label candidates by evidence class and builds a short, targeted review queue ([method and results](docs/evidence/EVIDENCE_ENRICHMENT.md)); its output stays in the ignored `research-local/` folder.
 
 ```powershell
 gmv review --workdir review-local\pilot-v1 build --inventory Complete_Music_Inventory.csv --selection review-local\pilot-v1\selection.json

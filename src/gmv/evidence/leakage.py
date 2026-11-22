@@ -69,7 +69,7 @@ def groups(rows, same_audio=(), identities=()):
     name_of = {}
     for members in components.values():
         ordered = sorted(members)
-        name = ordered[0] if len(ordered) == 1 else "merged-" + "+".join(m.removeprefix("artist-") for m in ordered)[:90]
+        name = ordered[0] if len(ordered) == 1 else ("merged-" + ".".join(m.removeprefix("artist-") for m in ordered))[:64]
         for folder in ordered:
             name_of[folder] = name
     out = {}

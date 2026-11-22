@@ -19,8 +19,10 @@ Classes given to a stretch of time (``confidence_class``):
 ``strong_agreement``     both models agree and a third, different kind of source supports
                          them (recording-level guitar credit or separation for "present";
                          separation for "absent"; credits can never support "absent")
-``moderate_agreement``   both models agree, nothing else to go on
-``weak_evidence``        one source only
+``moderate_agreement``   both models agree on "present" with nothing else to go on, or agree
+                         on "absent" and separation supports them
+``weak_evidence``        one source only; also both models agreeing on "absent" with nothing
+                         else, which measured too unreliable on this collection to be a label
 ``conflict``             the models contradict each other
 ``unknown``              anything else
 
@@ -46,8 +48,8 @@ CUTS = {
     "panns_window_s": 10.0,
     "silence_dbfs": -60.0,
     "min_run_s": 6.0,  # shorter agreements are not turned into intervals
-    "separation_present_db": -18.0,  # guitar stem level relative to the mix
-    "separation_absent_db": -35.0,
+    "separation_present_db": -10.0,  # guitar stem level relative to the mix
+    "separation_absent_db": -40.0,
 }
 WEIGHTS = {  # proposals for a later training experiment, not calibrated values
     "verified_reference": 1.0,
@@ -225,8 +227,12 @@ def candidates_for(recording, cuts=CUTS):
                 third = True
             if against:
                 confidence = "conflict"
-            else:
+            elif label == "present":
                 confidence = "strong_agreement" if third else "moderate_agreement"
+            else:
+                # On the owner's reviewed excerpts the two models agreeing on "no guitar"
+                # was right about four times in five: too weak to be a label by itself.
+                confidence = "moderate_agreement" if third else "weak_evidence"
             rows.append(
                 {
                     "recording_id": rid,

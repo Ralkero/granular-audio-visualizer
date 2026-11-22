@@ -47,6 +47,10 @@ The lock file records the actual resolved Windows environment. OS adapters are o
 | torch, torchaudio, torchvision, matplotlib | Experiments environment only (training, export, plots) | CPU builds. Never imported by the application. |
 | PaSST (`hear21passt`) | Installed in the experiments environment to measure cost; not used | Apache-2.0. 2.5 s of one core per 10 s clip. |
 
+## Evidence enrichment (`gmv evidence`)
+
+No new dependency in the application environment: MusicBrainz and AcoustID are reached with the standard library, or with the system `curl` when Python has no TLS. External tools, all local files outside Git: Chromaprint `fpcalc` 1.6.2, FFmpeg, MusicBrainz Picard 3.0.5 portable (available, not used by any command). Experiments environment only: `panns-inference` 0.1.1 with `torchlibrosa` (PANNs CNN14, CPU), `demucs` 4.1.0. Licences: [evidence/LICENCES_AND_PROVENANCE.md](evidence/LICENCES_AND_PROVENANCE.md).
+
 ## Packaged build
 
 PyInstaller (GPL-2.0 with an exception that allows bundling any program; 6.22) is a build tool only, installed by `Build App.ps1` when missing and not a runtime dependency. The build is a folder, not a single file, so start-up does not unpack anything. `Build App.ps1` also places Microsoft's .NET 9 runtime (MIT, pinned version and SHA-512) beside the capture helper; the helper uses it through `DOTNET_ROOT`, so capture does not depend on the machine's .NET installation. .NET 9 is out of support; moving the helper to .NET 10 is pending.

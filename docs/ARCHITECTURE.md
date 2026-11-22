@@ -70,6 +70,10 @@ A second optional worker beside Tier B. `gmv.recognition.RecognitionWorker` rece
 
 **Level before the model.** Captured audio follows the player's volume. In the first packaged session it arrived about 30 dB below ordinary music level, and `guitar_mn10_v1` loses guitar there: on the 223 reviewed excerpts, played 40 dB down, "detected or candidate" fell from 70% to 48% of guitar excerpts. `Recognizer` therefore raises a quiet 10 s context to -20 dBFS RMS (at most +45 dB; near-silence and audio already at that level are untouched) before inference. With it the same excerpts score the same at 0, -30 and -40 dB (70%; guitar-free excerpts 12.5% in every case).
 
+## Evidence enrichment
+
+`gmv.evidence` is offline tooling beside the application, like `gmv.review`: it never runs during capture or drawing and the application does not import it. `musicbrainz` and `enrich` identify recordings and collect credits with their scope; `fingerprint` computes Chromaprint locally and holds the AcoustID lookup behind an explicit approval flag; `leakage` builds split groups; `openmic` and `datasets` describe external references; `scan` runs the application's own `Recognizer` over a collection; `fusion` turns model timelines, credits, separation levels and human labels into candidates by evidence class; `queue` chooses what a person should hear; `outputs` writes the tables. The second audio model and separation need torch and live in `experiments/evidence`, in the experiments environment. Method and results: [evidence/EVIDENCE_ENRICHMENT.md](evidence/EVIDENCE_ENRICHMENT.md).
+
 ## Where files are found
 
 `gmv.paths` is the one place that knows where models, sessions and the capture helper are. From a checkout they are in the repository (`.model-cache`, `sessions`, `native/...`). In a packaged build models and the helper are beside the executable and sessions go to the user's local application data. `models/defaults.json` in a build names the weights it starts with; each is applied once, so a later choice in Settings is kept. A checkout has no such file and experimental models stay off.
