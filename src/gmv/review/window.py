@@ -81,8 +81,18 @@ FILTERS = (
     ("feature", "Feature-selected excerpts"),
     ("model_flagged", "Model-flagged excerpts (diagnostic)"),
     ("labelled", "Labelled excerpts"),
+    ("evidence", "Evidence queue: all"),
+    ("ev:model_disagreement", "Evidence: the audio models disagree"),
+    ("ev:possible_false_positive", "Evidence: possible false guitar detection"),
+    ("ev:possible_false_negative", "Evidence: possible missed guitar"),
+    ("ev:suspected_clean", "Evidence: suspected clean guitar"),
+    ("ev:suspected_distorted", "Evidence: suspected distorted guitar"),
+    ("ev:suspected_acoustic", "Evidence: suspected acoustic guitar"),
+    ("ev:metadata_mismatch", "Evidence: credits and audio disagree"),
+    ("ev:low_quality_source", "Evidence: low-quality source audio"),
+    ("ev:random_audit", "Evidence: automatically classified, audit sample"),
 )
-CATEGORY_ORDER = {"core": 0, "feature": 1, "model_flagged": 2}
+CATEGORY_ORDER = {"core": 0, "evidence": 0, "feature": 1, "model_flagged": 2}
 
 
 def clock(seconds):
@@ -335,6 +345,11 @@ class ReviewWindow(QMainWindow):
             return values["guitar_presence"] == "uncertain" or values["needs_revisit"]
         if mode == "labelled":
             return status != "unreviewed"
+        if mode.startswith("ev:"):
+            return (
+                excerpt["excerpt_category"] == "evidence"
+                and excerpt["excerpt_position"] == mode[3:]
+            )
         if mode in CATEGORY_ORDER:
             return excerpt["excerpt_category"] == mode
         return True

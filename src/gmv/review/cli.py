@@ -76,7 +76,7 @@ def run(args):
         from .pipeline import TOOL_VERSION, load_tables
 
         categories = tuple(c.strip() for c in args.categories.split(",") if c.strip())
-        unknown = set(categories) - {"core", "feature", "model_flagged"}
+        unknown = set(categories) - {"core", "feature", "model_flagged", "evidence"}
         if unknown:
             raise SystemExit(f"Unknown categories: {sorted(unknown)}")
         if "model_flagged" in categories:

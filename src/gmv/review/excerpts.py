@@ -21,7 +21,7 @@ import soundfile as sf
 from .audio import level_profile
 
 LENGTH_S = 12.0
-CATEGORIES = ("core", "feature", "model_flagged")
+CATEGORIES = ("core", "feature", "model_flagged", "evidence")
 GRID_S = 0.5
 
 

@@ -23,3 +23,5 @@ corpus-local/
 corpus-data/
 # excerpt review work folders: excerpts, labels and reports of the owner's music
 review-local/
+# evidence enrichment work folders: identities, credits and labels of the owner's music
+research-local/

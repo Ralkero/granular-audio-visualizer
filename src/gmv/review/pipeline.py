@@ -7,6 +7,7 @@ against the inventory on the same read that decodes them.
 
 import hashlib
 import json
+import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
@@ -207,17 +208,31 @@ def process(job):
             "hard_negative_candidate": False,
         }.get(row["selection_category"])
         observed = tl.observations(timeline, levels, backend.hop_s, expect)
-        placements = ex.core_placements(rid, row["sha256"], duration)
-        taken = [(p.start_s, p.end_s) for p in placements]
-        feature = ex.feature_placement(rid, audio, rate, taken)
-        if feature:
-            placements.append(feature)
-            taken.append((feature.start_s, feature.end_s))
-        flagged = ex.model_placement(
-            rid, timeline, backend.thresholds["guitar"], row["selection_category"], duration, taken
-        )
-        if flagged:
-            placements.append(flagged)
+        if job.get("queue_excerpts"):
+            # A batch made from an evidence review queue: only the stretches it names.
+            placements = [
+                ex.Placement(
+                    f"{rid}-e{index}",
+                    "evidence",
+                    item["queue"],
+                    max(0.0, min(float(item["start_s"]), max(0.0, duration - ex.LENGTH_S))),
+                    min(duration, max(0.0, min(float(item["start_s"]), max(0.0, duration - ex.LENGTH_S))) + ex.LENGTH_S),
+                    item["reason"],
+                )
+                for index, item in enumerate(job["queue_excerpts"], 1)
+            ]
+        else:
+            placements = ex.core_placements(rid, row["sha256"], duration)
+            taken = [(p.start_s, p.end_s) for p in placements]
+            feature = ex.feature_placement(rid, audio, rate, taken)
+            if feature:
+                placements.append(feature)
+                taken.append((feature.start_s, feature.end_s))
+            flagged = ex.model_placement(
+                rid, timeline, backend.thresholds["guitar"], row["selection_category"], duration, taken
+            )
+            if flagged:
+                placements.append(flagged)
         for p in placements:
             path = workdir / "excerpts" / rid / f"{p.excerpt_id}.wav"
             begin, end = ex.write_excerpt(audio, rate, p, path)
@@ -384,7 +399,19 @@ def build(
         row["recording_id"] = "r-" + row["sha256"][:12]
     log(f"{len(rows)} recordings selected; problems: {problems or 'none'}")
     results = {}
-    jobs = [{"row": row, "workdir": str(workdir)} for row in rows]
+    queued = {
+        os.path.normcase(pick["path"]): pick["excerpts"]
+        for pick in spec.get("picks", [])
+        if pick.get("excerpts")
+    }
+    jobs = [
+        {
+            "row": row,
+            "workdir": str(workdir),
+            "queue_excerpts": queued.get(os.path.normcase(row["relative_path"])),
+        }
+        for row in rows
+    ]
 
     def done(n, result):
         results[result["recording_id"]] = result

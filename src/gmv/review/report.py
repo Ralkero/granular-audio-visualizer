@@ -21,6 +21,7 @@ POOL_TITLES = {
     "core": "Primary result: core excerpts (unbiased positions)",
     "feature": "Feature-selected excerpts (separate, not part of the primary result)",
     "model_flagged": "Model-flagged excerpts (diagnostic only, never an evaluation result)",
+    "evidence": "Evidence-queue excerpts (chosen from model and credit evidence; not unbiased)",
 }
 
 
