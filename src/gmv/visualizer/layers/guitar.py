@@ -95,7 +95,7 @@ class GuitarLayer(Layer):
 
     def paint_history(self, artist, to_x, rows, weights, tentative, height, stage):
         colour = self.profile.colour
-        strength = min(1.6, self.intensity)
+        strength = min(1.6, self.drawn)
         ys, spacing, rail = self.geometry(height)
         times = rows[:, 0]
         x0, x1 = float(to_x(times[0])), float(to_x(times[-1]))
@@ -156,13 +156,13 @@ class GuitarLayer(Layer):
                 bottom, top = height * (0.5 + 0.38 * attack), height * (0.5 - 0.38 * attack)
             else:
                 bottom, top = ys[low] + spacing * 0.42, ys[high] - spacing * 0.42
-            opacity = (0.35 + 0.65 * attack) * weight * min(1.0, 0.4 + 0.6 * self.intensity)
+            opacity = (0.35 + 0.65 * attack) * weight * min(1.0, 0.4 + 0.6 * self.drawn)
             shade = (
                 tint(colour, NEUTRAL, 0.6, opacity * 0.75)
                 if faint
                 else tint(colour, "#ffffff", 0.2 + 0.6 * attack, opacity)
             )
-            pen = QPen(shade, 1.0 + 2.4 * attack * min(1.5, self.intensity))
+            pen = QPen(shade, 1.0 + 2.4 * attack * min(1.5, self.drawn))
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             artist.setPen(pen)
             stage.surface.line(artist, x - lean / 2, bottom, x + lean / 2, top)
@@ -182,13 +182,14 @@ class GuitarLayer(Layer):
         colour = self.profile.colour
         angles, sines, cosines = around(240)
         height = stage.height
-        strength = min(1.6, self.intensity) * stage.gain
+        respond = stage.response
+        strength = min(1.6, self.intensity) * stage.gain * respond.motion
         last = live.last
         since = max(0.0, live.t - last.time) if last is not None else 1e6
         centre, spread = (last.centre, last.spread) if last is not None else (0.5, 1.0)
         struck = last.strength if last is not None else 0.0
         reach = 0.14 + 0.7 * spread
-        flash = struck * np.exp(-since / 0.11)
+        flash = struck * np.exp(-since / 0.11) * respond.impact
         ring = live.ring * (0.55 + 0.45 * struck)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -203,7 +204,9 @@ class GuitarLayer(Layer):
                 NODES[string] * angles + 2 * np.pi * 1.1 * live.t + string
             )
             lit = min(1.0, flash * part)
-            opacity = (0.5 + 0.5 * max(min(1.0, ring * part * 1.5), 0.35 * live.level)) * min(
+            opacity = respond.shine * (
+                0.5 + 0.5 * max(min(1.0, ring * part * 1.5), 0.35 * live.level)
+            ) * min(
                 1.0, live.weight * 1.2
             )
             pen = QPen(

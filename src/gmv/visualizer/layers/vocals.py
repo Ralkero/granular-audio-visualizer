@@ -44,8 +44,9 @@ class VocalsLayer(Layer):
         colour = self.profile.colour
         angles, sines, cosines = around(180)
         height = stage.height
-        strength = min(1.5, self.intensity) * stage.gain
-        bloom = sum(
+        respond = stage.response
+        strength = min(1.5, self.intensity) * stage.gain * respond.motion
+        bloom = respond.impact * sum(
             hit.strength * np.exp(-age / 0.35) for age, hit in live.recent(2.0) if hit.start
         )
         opened = min(1.3, live.level * (1.0 + 0.6 * bloom)) * live.weight
@@ -61,7 +62,7 @@ class VocalsLayer(Layer):
                 + curl * np.sin(waves * angles + speed * live.t + phase)
                 + 0.5 * curl * np.sin(2 * angles - 0.4 * live.t + phase)
             )
-        opacity = min(1.0, 0.2 + live.weight)
+        opacity = min(1.0, 0.2 + live.weight) * respond.shine
         if opened > 0.03 and not live.tentative:
             outer = np.clip(lines[-1], stage.inner, stage.outer)
             inner = np.clip(lines[0], stage.inner, stage.outer)
@@ -132,7 +133,7 @@ class VocalsLayer(Layer):
         place = self.contour(rows, self.place)
         xs = np.asarray(to_x(rows[:, 0]), dtype=float)
         middle = height * (0.84 - 0.68 * place)
-        opening = height * 0.3 * rows[:, C["level"]] * weights * min(1.5, self.intensity)
+        opening = height * 0.3 * rows[:, C["level"]] * weights * min(1.5, self.drawn)
         unread = ~np.isfinite(rows[:, C["pitch"]])
         artist.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         if self.style != "strands":

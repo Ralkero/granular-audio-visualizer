@@ -276,6 +276,21 @@ class SettingsDrawer(QFrame):
         )
         self.intensity_colour.toggled.connect(self.view.set_intensity_colour)
         self.form.addRow(self.intensity_colour)
+        self.reactive_background = QCheckBox("Instrument-reactive background")
+        self.reactive_background.setChecked(True)
+        self.reactive_background.setToolTip(
+            "Match the radial background illumination to the currently dominant instrument. "
+            "Off: the neutral glow. Only the drawing: nothing about the analysis."
+        )
+        self.reactive_background.toggled.connect(self.view.set_reactive_background)
+        self.form.addRow(self.reactive_background)
+        self.expressive = QCheckBox("Expressive Mode")
+        self.expressive.setToolTip(
+            "Amplify the visual impact of instrument animations, spectrum movement, and "
+            "illumination without changing audio analysis."
+        )
+        self.expressive.toggled.connect(self.view.set_expressive)
+        self.form.addRow(self.expressive)
         self.form.addRow(row(self.reset, self.fullscreen))
 
     def apply_frame_rate(self):
@@ -576,6 +591,8 @@ class SettingsDrawer(QFrame):
             "frame_rate": self.frame_rate.currentData(),
             "intensity_colour": self.intensity_colour.isChecked(),
             "radial_rings": self.radial_rings.currentData(),
+            "reactive_background": self.reactive_background.isChecked(),
+            "expressive": self.expressive.isChecked(),
         }
 
     def restore(self, saved):
@@ -601,6 +618,8 @@ class SettingsDrawer(QFrame):
         self.view.restore_layout(saved.get("sections"))
         self.own_process.setChecked(bool(saved.get("analysis_process", True)))
         self.intensity_colour.setChecked(bool(saved.get("intensity_colour", True)))
+        self.reactive_background.setChecked(bool(saved.get("reactive_background", True)))
+        self.expressive.setChecked(bool(saved.get("expressive", False)))
         self.radial_rings.setCurrentIndex(
             max(0, self.radial_rings.findData(saved.get("radial_rings", "live")))
         )
@@ -735,6 +754,17 @@ class MainWindow(QWidget):
             button.toggled.connect(lambda on, name=name: self.view.set_section(name, shown=on))
             line.addWidget(button)
             self.section_buttons[name] = button
+        line.addSpacing(10)
+        # Expressive Mode at hand: the same switch as in Settings, kept in step with it.
+        self.expressive_button = QPushButton("Expressive", objectName="section")
+        self.expressive_button.setCheckable(True)
+        self.expressive_button.setToolTip(
+            "Expressive Mode: amplify the visual impact of instrument animations, spectrum "
+            "movement, and illumination without changing audio analysis."
+        )
+        self.expressive_button.toggled.connect(self.drawer.expressive.setChecked)
+        self.drawer.expressive.toggled.connect(self.expressive_button.setChecked)
+        line.addWidget(self.expressive_button)
         line.addSpacing(10)
         for widget in (self.apply, self.toggle, self.settings_button):
             line.addWidget(widget)

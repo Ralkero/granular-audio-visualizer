@@ -38,8 +38,9 @@ F = {name: index for index, name in enumerate(FIELDS)}
 BOUNDARY = {"": 0.0, "start": 1.0, "end": 2.0}
 
 
-def trace(audio, rate, config, sensitivity=None):
-    """instrument -> rows of ``FIELDS``, and instrument-analysis milliseconds per frame."""
+def trace(audio, rate, config, sensitivity=None, frames=None):
+    """instrument -> rows of ``FIELDS``, and instrument-analysis milliseconds per frame.
+    The feature frames themselves are appended to ``frames`` when a list is given."""
     analyzer = Analyzer(rate, audio.shape[1], config, "responsiveness", "responsiveness", sensitivity)
     assembler = WindowAssembler(config)
     rows, times = {name: [] for name in config.instrument_analyzers}, []
@@ -52,6 +53,8 @@ def trace(audio, rate, config, sensitivity=None):
         for window, start, mono, _reset in assembler.push(block):
             frame, _ = analyzer.process(window, start, mono, block, live=False)
             times.append(analyzer.instrument_ms)
+            if frames is not None:
+                frames.append(frame)
             for message in analyzer.instrument_activity:
                 parts = dict(message.components)
                 judged = (

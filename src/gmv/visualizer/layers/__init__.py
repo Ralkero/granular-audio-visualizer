@@ -36,6 +36,7 @@ import numpy as np
 from PySide6.QtCore import QRectF
 
 from .. import palette
+from ..response import BASELINE
 from ..strip import Strip, Sweep
 from .surface import Linear, Polar
 
@@ -81,8 +82,11 @@ class Stage:
     in both kinds."""
 
     def __init__(
-        self, now, seconds, scale, generation, font, *, rect=None, ring=None, live=False, gain=1.0
-    ):
+        self, now, seconds, scale, generation, font, *, rect=None, ring=None, live=False, gain=1.0,
+        response=BASELINE,
+    ):  # fmt: skip
+        # ``response``: how strongly everything is drawn (``visualizer.response``).
+        self.response = response
         # ``live``: a polar stage is drawn as a fixed, animated object from the
         # instrument's present state instead of as a history swept by a hand.
         # ``gain``: how much larger everything moves in intense music, about 0.5..1.
@@ -114,6 +118,7 @@ class Layer:
         self.profile = profile
         self.enabled = True
         self.intensity = 1.0
+        self.response = BASELINE  # of the stage being painted; see ``drawn``
         self.style = self.profile.styles[0][0] if self.profile.styles else ""
         self.strip = Strip()  # history as a scrolling strip (linear stages)
         self.sweep = Sweep()  # history as a ring that a hand sweeps round (polar stages)
@@ -123,6 +128,11 @@ class Layer:
     @property
     def key(self):
         return self.profile.key
+
+    @property
+    def drawn(self):
+        """The layer's own intensity times the response's: what history pictures scale by."""
+        return self.intensity * self.response.motion
 
     def rows(self, state):
         track = state.activity.get(self.key)
@@ -165,6 +175,7 @@ class Layer:
         track = self.rows(state)
         if track is None or stage.now is None:
             return
+        self.response = stage.response
         if stage.live:
             live = state.live.get(self.key)
             if live is None or live.time is None:
@@ -179,6 +190,7 @@ class Layer:
             state.board.judged.get(self.key, 0),
             self.style,
             round(self.intensity, 3),
+            self.response.name,
         )
         if stage.kind != self._kind:  # the mode changed: the other picture starts afresh
             self._kind, self.drawn_until = stage.kind, None

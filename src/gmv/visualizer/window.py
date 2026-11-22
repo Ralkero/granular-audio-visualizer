@@ -33,6 +33,7 @@ from . import layers as layer_registry
 from . import palette
 from .intensity import tint
 from .perf import Timings
+from .response import BASELINE, EXPRESSIVE
 from .state import ROWS, SpectrumDisplay, VisualState
 from .strip import Strip, polygon
 
@@ -59,6 +60,9 @@ DRAIN_MOST = 1024  # and most messages
 SECTIONS = ("timeline", "details", "notes")
 DEFAULT_SECTIONS = {"timeline": True, "details": False, "notes": False}
 MIN_MAIN, MIN_SECTION = 260, 56  # smallest useful heights, before scaling
+# Instrument-coloured glows are kept at full size, made when first needed: stretching a
+# half-size picture every frame was measured at 4 ms a frame, a plain copy at well under 1.
+GLOW_DETAIL = 1.0
 RADIAL_SPECTRUM = 0.5  # share of the radius the spectrum keeps when instrument rings are shown
 RING_SECONDS = 6.0  # one turn of the instrument rings
 
@@ -186,6 +190,11 @@ class Canvas(canvas_base()):
         # Radial instrument rings: live objects drawn from each instrument's present
         # state (the default), or the six-second history swept by a hand.
         self.radial_live = True
+        # The radial background glow takes the colour of the most prominent instrument
+        # (``state.dominance``); off, it keeps the spectrum's neutral colour.
+        self.reactive_background = True
+        # How strongly everything is drawn: the baseline, or Expressive Mode.
+        self.response = BASELINE
         self.static = False  # True while the rarely-changing picture is being drawn
         self.ring_offset = 0.0
         edges = np.linspace(0, 2 * np.pi, 97)
@@ -216,7 +225,11 @@ class Canvas(canvas_base()):
         rate = 0.03 if target > self.level else 0.25
         self.level += (target - self.level) * (1 - math.exp(-dt / rate))
         self.intensity += (intensity - self.intensity) * (1 - math.exp(-dt / 0.2))
-        heat = tint(state.musical.value) if running and self.colour_by_intensity else 0.0
+        heat = (
+            min(1.0, tint(state.musical.value) * self.response.heat)
+            if running and self.colour_by_intensity
+            else 0.0
+        )
         self.heat += (heat - self.heat) * (1 - math.exp(-dt / 0.12))
         self.peak_level = max(self.level, self.peak_level - 0.25 * dt)
         self.flash *= math.exp(-dt / 0.14)
@@ -468,7 +481,7 @@ class Canvas(canvas_base()):
                 stage = layer_registry.Stage(
                     self.now, RING_SECONDS, self.scale, state.generation, self.font,
                     ring=(cx, cy, low, high), live=self.radial_live,
-                    gain=0.55 + 0.45 * state.musical.value,
+                    gain=0.55 + 0.45 * state.musical.value, response=self.response,
                 )  # fmt: skip
                 with self.perf.measure("layer " + layer.key):
                     layer.paint_stage(painter, stage, state)
@@ -490,7 +503,8 @@ class Canvas(canvas_base()):
         slots = layer_registry.slots(field, active, 5 * self.scale)
         for layer, slot in zip(active, slots, strict=True):
             stage = layer_registry.Stage(
-                self.now, self.stage_seconds, self.scale, state.generation, self.font, rect=slot
+                self.now, self.stage_seconds, self.scale, state.generation, self.font, rect=slot,
+                response=self.response,
             )
             if self.static:
                 layer.paint_static(painter, slot, stage, state)
@@ -636,9 +650,11 @@ class Canvas(canvas_base()):
             held = self._cache[name] = (key, build())
         return held[1]
 
-    def glow_picture(self, size, colour):
-        """A soft elliptical glow, drawn once; each frame only sets how strongly it shows."""
-        ratio = self.devicePixelRatioF()
+    def glow_picture(self, size, colour, detail=1.0):
+        """A soft elliptical glow, drawn once; each frame only sets how strongly it shows.
+        ``detail`` below one keeps a smaller picture that is stretched when drawn (less
+        memory, slower to draw)."""
+        ratio = self.devicePixelRatioF() * detail
         picture = QPixmap(round(size.width() * ratio), round(size.height() * ratio))
         picture.fill(Qt.GlobalColor.transparent)
         artist = QPainter(picture)
@@ -650,17 +666,40 @@ class Canvas(canvas_base()):
         artist.end()
         return picture
 
+    def glow_parts(self):
+        """What the background glow is made of now: (name, colour, strength 0..1, detail)."""
+        # How strong the glow is follows the music as it always has; the response only
+        # scales it. Which colour it has is a separate matter: the neutral one, or, in
+        # the radial view, as much of each instrument's as that instrument leads.
+        strength = (0.05 + 0.20 * self.intensity + 0.16 * self.flash) * self.response.glow
+        glows = [("glow", SPECTRUM[1], strength, 1.0)]
+        if (
+            self.reactive_background
+            and self.mode == "radial"
+            and self.condition in ("live", "replay")
+        ):
+            mix = self.state.dominance.mix
+            glows = [
+                ("glow " + name, palette.INSTRUMENTS[name], strength * share, GLOW_DETAIL)
+                for name, share in mix.items()
+                if share > 0.02
+            ]
+            glows.append(("glow", SPECTRUM[1], strength * max(0.0, 1.0 - sum(mix.values())), 1.0))
+        glows.append(("beat glow", PREDICTED, 0.14 * self.pulse * self.response.glow, 1.0))
+        return [(name, colour, min(1.0, strength), detail) for name, colour, strength, detail in glows]
+
     def draw_glow(self, painter, rect):
         centre_y = rect.bottom() if self.mode == "bars" else rect.center().y()
         area = QRectF(0, centre_y - rect.height(), self.width(), rect.height() * 2)
         key = (round(area.width()), round(area.height()), self.devicePixelRatioF())
-        for name, colour, strength in (
-            ("glow", SPECTRUM[1], 0.05 + 0.20 * self.intensity + 0.16 * self.flash),
-            ("beat glow", PREDICTED, 0.14 * self.pulse),
-        ):
+        for name, colour, strength, detail in self.glow_parts():
             if strength > 0.01:
                 picture = self.cached(
-                    name, key, lambda colour=colour: self.glow_picture(area.size(), colour)
+                    name,
+                    key,
+                    lambda colour=colour, detail=detail: self.glow_picture(
+                        area.size(), colour, detail
+                    ),
                 )
                 painter.setOpacity(min(1.0, strength))
                 part = 0.5 if self.mode == "bars" else 1.0  # below the baseline is not needed
@@ -694,6 +733,8 @@ class Canvas(canvas_base()):
 
     def draw_bars(self, painter, rect):
         values, peaks = self.display.values, self.display.peaks
+        if values is not None:  # the response may lift the bars; never past full
+            values, peaks = self.response.lifted(values), self.response.lifted(peaks)
         count = len(values) if values is not None else 48
         ratio = self.devicePixelRatioF()
         mirror = rect.height() * 0.14
@@ -724,7 +765,8 @@ class Canvas(canvas_base()):
         )
         heights = np.maximum(2.0, values * reach).tolist() if values is not None else [2.0] * count
         tops = (peaks * reach).tolist() if peaks is not None else [0.0] * count
-        flashing = self.flash > 0.03
+        flash = min(1.0, self.flash * self.response.flash)
+        flashing = flash > 0.03
         left = rect.left() + (slot - bar) / 2
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         for index, tall in enumerate(heights):
@@ -733,7 +775,7 @@ class Canvas(canvas_base()):
             source = QRectF(index * BAR_STRIPE + 1, (reach - tall) * ratio, 1, tall * ratio)
             painter.drawPixmap(target, plain, source)
             if flashing:
-                painter.setOpacity(min(1.0, self.flash * tall / reach))
+                painter.setOpacity(min(1.0, flash * tall / reach))
                 painter.drawPixmap(target, bright, source)
                 painter.setOpacity(1.0)
             if tops[index] > 2:
@@ -798,7 +840,9 @@ class Canvas(canvas_base()):
         # With instrument rings round it, the spectrum keeps the inner half of the radius.
         reach = self.radial_geometry(rect)[2]
         outer = reach * (RADIAL_SPECTRUM if self.active_layers() else 1.07)
-        inner = outer * (0.27 + 0.07 * self.level + 0.03 * self.pulse)
+        inner = outer * (
+            0.27 + self.response.breath * (0.07 * self.level + 0.03 * self.pulse)
+        )
         reach = outer - inner - 10
         bar = max(2.0, math.pi * inner / count * 0.62)
         # Core: one cached picture, resized as it breathes with the level.
@@ -834,7 +878,7 @@ class Canvas(canvas_base()):
                 painter.drawEllipse(centre, ring, ring)
         # Bars: lows at the top, highs at the bottom, mirrored left and right.
         cos, sin = self.cached("spokes", count, lambda: self.spokes(count))
-        lengths = values * reach if values is not None else np.zeros(count)
+        lengths = self.response.lifted(values) * reach if values is not None else np.zeros(count)
         far = inner + np.maximum(2.0, np.concatenate((lengths, lengths[::-1])))
         half = bar / 2
         xs = np.empty((2 * count, 4))
@@ -851,7 +895,8 @@ class Canvas(canvas_base()):
                 for whiten in (0.0, 0.45)
             ),
         )
-        colours = bright if self.flash > 0.35 else plain  # an onset briefly whitens the bars
+        # An onset briefly whitens the bars.
+        colours = bright if self.flash * self.response.flash > 0.35 else plain
         xs, ys = xs + cx, ys + cy
         painter.setPen(Qt.PenStyle.NoPen)
         for index in range(2 * count):
@@ -1341,6 +1386,18 @@ class VisualizerWindow(QWidget):
         if place in ("beside", "behind", "hidden"):
             self.canvas.spectrum_place = place
             self.canvas.update()
+
+    def set_reactive_background(self, enabled):
+        """Whether the radial background glow takes the colour of the most prominent
+        instrument. Off: the neutral glow, as before. Only the drawing."""
+        self.canvas.reactive_background = bool(enabled)
+        self.canvas.update()
+
+    def set_expressive(self, enabled):
+        """Expressive Mode: the same music, events and timing, drawn larger and brighter
+        (``response.EXPRESSIVE``). Nothing about the analysis changes."""
+        self.canvas.response = EXPRESSIVE if enabled else BASELINE
+        self.canvas.update()
 
     def set_radial_rings(self, kind):
         """How the instrument rings of the radial view are drawn: "live" (fixed objects

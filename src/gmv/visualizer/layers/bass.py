@@ -53,9 +53,10 @@ class BassLayer(Layer):
         per angle of ``around(180)``. A pure function of the stage and the live state."""
         angles = around(180)[0]
         height = stage.height
-        strength = min(1.5, self.intensity) * stage.gain
+        respond = stage.response
+        strength = min(1.5, self.intensity) * stage.gain * respond.motion
         energy = live.energy * live.weight
-        swell = min(1.5, live.swell(0.16)) * live.weight
+        swell = min(1.5, live.swell(0.16)) * live.weight * respond.impact
         # How far the ring has flowed: 0.5 rad a second at rest, 3.5 at full energy, counted
         # in audio time from the segment's first row (``Live.phase``), so the same moment
         # of the same music gives the same shape whatever was or was not drawn before.
@@ -101,7 +102,12 @@ class BassLayer(Layer):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
             pale = not live.pitched  # no note could be read: paler, as in the history
             painter.setBrush(
-                tint(colour, "#ffffff", 0.22 * lit, (0.3 if pale else 0.5) * opacity + 0.25 * lit)
+                tint(
+                    colour,
+                    "#ffffff",
+                    0.22 * lit,
+                    stage.response.shine * ((0.3 if pale else 0.5) * opacity + 0.25 * lit),
+                )
             )
             painter.drawPolygon(
                 polygon(
@@ -128,7 +134,7 @@ class BassLayer(Layer):
         pitch = held(rows[:, C["pitch"]], self.last_pitch)
         place = np.clip((pitch - LOW_MIDI) / (HIGH_MIDI - LOW_MIDI), 0.0, 1.0)
         middle = height * (0.82 - 0.64 * place)
-        half = height * 0.22 * rows[:, C["level"]] * weights * min(1.5, self.intensity)
+        half = height * 0.22 * rows[:, C["level"]] * weights * min(1.5, self.drawn)
         return pitch, middle, half
 
     def paint_history(self, artist, to_x, rows, weights, tentative, height, stage):

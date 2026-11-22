@@ -40,6 +40,10 @@ def main():
     parser.add_argument(
         "--rings", default="live", choices=("live", "history"), help="radial instrument rings"
     )
+    parser.add_argument("--expressive", action="store_true", help="Expressive Mode")
+    parser.add_argument(
+        "--neutral-background", action="store_true", help="no instrument-reactive glow"
+    )
     parser.add_argument(
         "--plain-spectrum", action="store_true", help="do not colour the spectrum by intensity"
     )
@@ -54,6 +58,8 @@ def main():
     window.set_mode(args.mode)
     window.set_intensity_colour(not args.plain_spectrum)
     window.set_radial_rings(args.rings)
+    window.set_expressive(args.expressive)
+    window.set_reactive_background(not args.neutral_background)
     if args.fps and hasattr(window, "set_frame_rate"):
         window.set_frame_rate(args.fps)
     shown = {name for name in args.sections.split(",") if name}

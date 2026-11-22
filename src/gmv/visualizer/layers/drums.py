@@ -52,14 +52,15 @@ class DrumsLayer(Layer):
         sparks at the outer edge, gone almost at once. Size and brightness are the
         strength of the hit. Between hits there is only a faint circle."""
         height = stage.height
-        strength = min(1.5, self.intensity) * stage.gain
-        shown = min(1.0, live.weight * 1.2)
+        respond = stage.response
+        strength = min(1.5, self.intensity) * stage.gain * respond.motion * respond.impact
+        shown = min(1.0, live.weight * 1.2) * respond.shine
         hollow = live.tentative
         cx, cy = stage.cx, stage.cy
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         rest = stage.inner + height * 0.2
-        painter.setPen(QPen(tint(self.profile.colour, NEUTRAL, 0.3, 0.16 * shown), 1))
+        painter.setPen(QPen(tint(self.profile.colour, NEUTRAL, 0.3, 0.16 * min(1.0, shown)), 1))
         painter.drawEllipse(QPointF(cx, cy), rest, rest)
         regions = ("low", "mid") if self.style == "low and mid" else ("low", "mid", "high")
         for age, hit in live.recent(max(LIFE.values())):
@@ -77,7 +78,9 @@ class DrumsLayer(Layer):
                 )
                 if name == "low":
                     out = 1.0 - (1.0 - progress) ** 2  # fast at first, then slowing
-                    radius = rest + height * (0.05 + 0.55 * out) * min(1.2, 0.6 + 0.5 * power * strength)
+                    radius = rest + height * (0.05 + 0.55 * out) * min(
+                        1.2 * respond.motion, 0.6 + 0.5 * power * strength
+                    )
                     width = (1.0 + height * 0.16 * power * strength * (1.0 - progress)) * (0.5 if hollow else 1.0)
                     painter.setPen(QPen(colour, width))
                     painter.drawEllipse(QPointF(cx, cy), min(radius, stage.outer - width / 2), min(radius, stage.outer - width / 2))
@@ -152,7 +155,7 @@ class DrumsLayer(Layer):
 
     def paint_history(self, artist, to_x, rows, weights, tentative, height, stage):
         artist.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        size = height * 0.16 * min(1.5, 0.5 + 0.5 * self.intensity)
+        size = height * 0.16 * min(1.5, 0.5 + 0.5 * self.drawn)
         only = None if self.style != "low and mid" else ("low", "mid")
         for row, weight, pale in zip(rows[1:], weights[1:], tentative[1:], strict=True):
             if row[C["attack"]] <= 0 or weight <= 0:
@@ -161,7 +164,7 @@ class DrumsLayer(Layer):
             for name, place in ROWS:
                 strength = row[C[name]]
                 if strength > 0 and (only is None or name in only):
-                    opacity = (0.4 + 0.6 * strength) * weight * min(1.0, 0.4 + 0.6 * self.intensity)
+                    opacity = (0.4 + 0.6 * strength) * weight * min(1.0, 0.4 + 0.6 * self.drawn)
                     self.mark(
                         stage.surface,
                         artist,

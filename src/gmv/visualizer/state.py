@@ -19,6 +19,7 @@ from ..models import (
     MusicalEvent,
     Status,
 )
+from .dominance import Dominance
 from .intensity import MusicalIntensity
 from .lanes import LaneBoard, Track
 from .live import Live
@@ -160,6 +161,11 @@ class VisualState:
         # How intense the music is as a whole, 0..1, whatever is shown: ``musical.value``.
         # Any visualizer mode may read it.
         self.musical = MusicalIntensity()
+        # Which instrument is most prominent now (``dominance.Dominance``): for the colour
+        # of the background glow. Kept here, not in a renderer, so it goes on whatever
+        # is or is not drawn.
+        self.dominance = Dominance()
+        self._weights, self._weights_age = {}, 0
         self._silent_from = None
         self.latest = None
         self.spectrum = None
@@ -265,6 +271,16 @@ class VisualState:
             self._silent_from = None
         self._observe(frame.segment, frame.timestamp)
         self.musical.step(frame)
+        # Presence weights change with the models' judgements, a few times a second at most:
+        # looked up every fifth frame (100 ms), counted in frames so replay does the same.
+        if self._weights_age % 5 == 0 or len(self._weights) != len(self.live):
+            self._weights = {
+                key: float(self.attribution(key, (frame.timestamp,))[0][0])
+                for key in self.live
+                if key in self.dominance.scores
+            }
+        self._weights_age += 1
+        self.dominance.step(frame.timestamp, frame.band_energy, frame.silence, self._weights)
         level = min(1.0, max(0.0, (frame.loudness_dbfs + 60) / 60))
         self.frames.append(frame.timestamp, level, frame.dynamic_intensity, frame.onset_strength)
         if frame.spectrum_db:
@@ -302,6 +318,8 @@ class VisualState:
             for live in self.live.values():
                 live.begin(segment)
             self.live_epoch += 1
+            self.dominance.reset()  # nobody leads a segment because of the one before
+            self._weights, self._weights_age = {}, 0
         if self.segment is None or segment > self.segment:
             self.segment = segment
         self._newest = time if self._newest is None else max(self._newest, time)
@@ -391,6 +409,13 @@ class VisualState:
             pulse=message.pulse,
             lead=message.lead_s,
             segment=segment,
+        )
+        fast = message.energy is not None
+        self.dominance.row(
+            message.instrument,
+            message.timestamp,
+            message.energy if fast else message.level,
+            message.pulse if fast else message.attack,
         )
 
     def attribution(self, key, times):
