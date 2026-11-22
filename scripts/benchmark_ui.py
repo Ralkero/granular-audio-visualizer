@@ -30,9 +30,13 @@ def main():
     parser.add_argument("--size", default="1440x900")
     parser.add_argument("--mode", default="radial", choices=("bars", "radial"))
     parser.add_argument("--seconds", type=float, default=36)
-    parser.add_argument("--sections", default="timeline,details,notes", help="comma list; '' for none")
+    parser.add_argument(
+        "--sections", default="timeline,details,notes", help="comma list; '' for none"
+    )
     parser.add_argument("--layers", default="vocals,guitar,bass,drums")
     parser.add_argument("--label", default="")
+    parser.add_argument("--screen", default="", help="part of the name of the display to open on")
+    parser.add_argument("--fps", type=float, default=0, help="0: the window's own choice")
     args = parser.parse_args()
     app = application()
     session = ReplaySession(args.session)
@@ -40,8 +44,10 @@ def main():
     window = VisualizerWindow()
     window.setWindowFlag(Qt.WindowType.FramelessWindowHint)
     window.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-    window.setGeometry(0, 0, width, height)
+    place(app, window, args.screen, width, height)
     window.set_mode(args.mode)
+    if args.fps and hasattr(window, "set_frame_rate"):
+        window.set_frame_rate(args.fps)
     shown = {name for name in args.sections.split(",") if name}
     layers = {name for name in args.layers.split(",") if name}
     configure(window, shown, layers)
@@ -76,15 +82,37 @@ def main():
             "sections": sorted(shown),
             "layers": sorted(layers),
             "measured_seconds": round(elapsed, 1),
-            "frames_per_second": round((window.canvas.painted - warm.get("painted", 0)) / elapsed, 1),
-            "frames_over_25ms": int(sum(v > 25 for v in window.canvas.perf.series["frame interval"].values))
+            "target_fps": round(1 / window.frame_s, 2) if hasattr(window, "frame_s") else 60.0,
+            "screen": f"{window.screen().size().width()}x{window.screen().size().height()} at {window.screen().refreshRate():.0f} Hz",
+            "frames_over": {
+                limit: int(
+                    sum(
+                        v > float(limit) for v in window.canvas.perf.series["frame interval"].values
+                    )
+                )
+                for limit in ("16.67", "20", "25", "33.33")
+            }
             if intervals
             else None,
-            "timings_ms": {k: v for k, v in perf.items() if k != "counts" and k not in ("backlog", "messages per tick")},
+            "frames_per_second": round(
+                (window.canvas.painted - warm.get("painted", 0)) / elapsed, 1
+            ),
+            "frames_over_25ms": int(
+                sum(v > 25 for v in window.canvas.perf.series["frame interval"].values)
+            )
+            if intervals
+            else None,
+            "timings_ms": {
+                k: v
+                for k, v in perf.items()
+                if k != "counts" and k not in ("backlog", "messages per tick")
+            },
             "backlog_messages": perf.get("backlog"),
             "messages_per_tick": perf.get("messages per tick"),
             "counts": perf["counts"] | strips(window),
-            "messages_dropped_by_window": window.subscription.dropped if window.subscription else None,
+            "messages_dropped_by_window": window.subscription.dropped
+            if window.subscription
+            else None,
             "process_cpu_percent_of_one_core": round(process.cpu_percent()),
             "process_memory_mib": round(process.memory_info().rss / 2**20),
             "replay_error": session.error,
@@ -97,6 +125,16 @@ def main():
     QTimer.singleShot(4000, settle)
     QTimer.singleShot(int(args.seconds * 1000), finish)
     return app.exec()
+
+
+def place(app, window, name, width, height):
+    """Put the window on the display whose name contains ``name`` (the primary one when
+    empty), no larger than that display."""
+    screen = next((s for s in app.screens() if name and name.lower() in s.name().lower()), None)
+    if name and screen is None:
+        raise SystemExit(f"No display named like {name!r}: {[s.name() for s in app.screens()]}")
+    area = (screen or app.primaryScreen()).geometry()
+    window.setGeometry(area.x(), area.y(), min(width, area.width()), min(height, area.height()))
 
 
 def configure(window, shown, layers):

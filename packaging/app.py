@@ -5,6 +5,7 @@ saved settings and writes what happened, to confirm that a build is complete.
 """
 
 import json
+import os
 import multiprocessing
 import sys
 import tempfile
@@ -53,6 +54,17 @@ def self_check(report):
         drawer.source.setCurrentIndex(drawer.source.findData("file"))
         drawer.file.setText(str(Path(folder) / "tone.wav"))
         drawer.logging.setChecked(False)
+        # GMV_SCREEN: part of the name of the display the check should open on.
+        wanted = os.environ.get("GMV_SCREEN", "").lower()
+        screen = next((s for s in app.screens() if wanted and wanted in s.name().lower()), None)
+        if screen is not None:
+            area = screen.geometry()
+            window.setGeometry(
+                area.x() + 40,
+                area.y() + 40,
+                min(1500, area.width() - 80),
+                min(900, area.height() - 80),
+            )
         window.show()
         window.start()
         result["problem_at_start"] = window.problem
@@ -66,6 +78,7 @@ def self_check(report):
         result["recognition_ms"] = metrics.get("recognition_processing_ms")
         result["frames_drawn"] = len(window.view.canvas.paint_ms)
         result["engine_error"] = str(window.controller.engine.error or "")
+        result["analysis_process"] = getattr(window.controller.engine, "process_id", None)
         # The unified view: both modes, every instrument off and on, every section.
         try:
             view = window.view

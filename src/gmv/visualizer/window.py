@@ -6,6 +6,7 @@ oldest messages and the display carries on from the newest.
 """
 
 import math
+import os
 from collections import deque
 from contextlib import contextmanager
 
@@ -89,7 +90,30 @@ def spectrum_color(position):
     return mix(low, middle, position * 2) if position < 0.5 else mix(middle, high, position * 2 - 1)
 
 
-class Canvas(QWidget):
+def automatic_rate(refresh):
+    """Frames per second for a display refreshing ``refresh`` times a second: that rate
+    divided by a whole number, as near 66 as it gets. 60 Hz gives 60, 120 Hz 60, 144 Hz 72,
+    180 Hz 60, 240 Hz 60. An unusable report from the system gives 60."""
+    if not 30 <= refresh <= 1000:
+        return 60.0
+    return refresh / max(1, round(refresh / 66))
+
+
+def canvas_base():
+    """The widget class the canvas is built on. ``GMV_RENDERER=opengl`` selects an OpenGL
+    surface (QPainter then draws through the graphics card); anything else, or a failure
+    to import it, the ordinary CPU-painted widget. Experimental: see docs/PERFORMANCE.md."""
+    if os.environ.get("GMV_RENDERER", "").lower() == "opengl":
+        try:
+            from PySide6.QtOpenGLWidgets import QOpenGLWidget
+
+            return QOpenGLWidget
+        except ImportError:
+            pass
+    return QWidget
+
+
+class Canvas(canvas_base()):
     def __init__(self, state, parent=None):
         super().__init__(parent)
         self.state = state
@@ -1232,6 +1256,8 @@ class VisualizerWindow(QWidget):
         layout.addWidget(self.canvas)
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self.frame_s = FRAME_S  # seconds per frame; see set_frame_rate
+        self.frame_rate = None  # None: chosen from the display
         self.timer.timeout.connect(self.poll)
         self.last_tick = self.next_frame = perf_counter()
         self.timer.start(ACTIVE_MS)
@@ -1339,8 +1365,9 @@ class VisualizerWindow(QWidget):
         if self.timer.interval() < 250 and clock < self.next_frame - 0.0007:
             self.timer.start(max(1, int((self.next_frame - clock) * 1000)))
             return
-        # After a long stall, start the grid again from now instead of catching up.
-        self.next_frame = max(self.next_frame + FRAME_S, clock - FRAME_S / 2)
+        # After a stall the grid starts again from now: the next frame is at least half a
+        # frame away, so lateness is never made up with a burst of frames.
+        self.next_frame = max(self.next_frame + self.frame_s, clock + self.frame_s / 2)
         self.tick()
 
     def tick(self):
@@ -1378,6 +1405,17 @@ class VisualizerWindow(QWidget):
             self.timer.start(interval)
 
     # -- sections and layout -------------------------------------------------------------------
+
+    def set_frame_rate(self, rate=None):
+        """Frames per second to draw at. None chooses from the display the window is on:
+        the refresh rate divided by a whole number, as near 66 as that gets (60 on a 60,
+        120, 180 or 240 Hz display, 72 on 144 Hz). A rate that divides the refresh rate
+        gives every frame the same time on screen; one that does not cannot."""
+        self.frame_rate = rate
+        if rate is None:
+            screen = self.screen()
+            rate = automatic_rate(screen.refreshRate() if screen is not None else 60.0)
+        self.frame_s = 1.0 / min(240.0, max(20.0, float(rate)))
 
     def set_section(self, name, *, shown=None, height=None):
         """Show or hide a section under the main visualizer, or set its height in pixels
@@ -1420,6 +1458,14 @@ class VisualizerWindow(QWidget):
         event.accept()
 
     def showEvent(self, event):
+        if self.frame_rate is None:
+            self.set_frame_rate(None)
+            handle = self.window().windowHandle()
+            if handle is not None and not getattr(self, "_watching_screen", False):
+                self._watching_screen = True  # moved to another display: choose again
+                handle.screenChanged.connect(
+                    lambda _screen: self.frame_rate is None and self.set_frame_rate(None)
+                )
         self.last_tick = perf_counter()
         if not self.timer.isActive():
             self.timer.start(ACTIVE_MS)

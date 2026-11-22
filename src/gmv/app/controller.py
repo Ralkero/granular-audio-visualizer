@@ -4,6 +4,7 @@ The window owns one ``SessionController`` and polls it. Capture and analysis sta
 engine's own threads; nothing here blocks the GUI thread for longer than a join on close.
 """
 
+import os
 import zipfile
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -37,6 +38,9 @@ class Settings:
     beat_tracker: bool = False
     pitch_tracking: bool = True
     logging: bool = True
+    # Capture and analysis in a process of their own, so that drawing and analysis do
+    # not wait for each other (gmv.remote). Off: both in this process, as before.
+    analysis_process: bool = True
     # How readily each fast instrument analyzer reports, 0..1. Not a display setting.
     instrument_sensitivity: tuple[tuple[str, float], ...] = ()
     # Advanced
@@ -152,9 +156,24 @@ class SessionController:
         config = analysis_config(settings)
         source = audio_source(settings)
         self.stop_replay()
-        self.engine = Engine(
-            source, config, session_root=self.session_root, logging=settings.logging
-        )
+        if settings.analysis_process and os.environ.get("GMV_ANALYSIS", "").lower() != "thread":
+            from ..remote import RemoteEngine
+
+            # The source built above only proved that the settings describe one; the worker
+            # builds its own from the same settings.
+            self.engine = RemoteEngine(
+                audio_source,
+                (settings,),
+                None,
+                config,
+                session_root=self.session_root,
+                logging=settings.logging,
+                source=source,
+            )
+        else:
+            self.engine = Engine(
+                source, config, session_root=self.session_root, logging=settings.logging
+            )
         self.settings = settings
         return self.engine
 
@@ -266,6 +285,11 @@ class SessionController:
                 f"{metrics['recognition_status']} · estimates {metrics['recognition_jobs']}"
                 f" · skipped {metrics['recognition_skipped_hops']}"
                 f" · dropped blocks {metrics['recognition_drops']}"
+            )
+        if getattr(engine, "process_id", None):
+            lines["Analysis process"] = (
+                f"separate process {engine.process_id}; messages lost on the way: "
+                f"{engine.forwarder_dropped}"
             )
         if engine.error:
             lines["Error"] = engine.error

@@ -258,7 +258,23 @@ class SettingsDrawer(QFrame):
         self.form.addRow("Smoothing", self.smoothing)
         self.form.addRow("Intensity", self.gain)
         self.form.addRow("Timeline", self.window)
+        self.frame_rate = Combo()
+        self.frame_rate.addItem("Automatic (a whole fraction of the display's rate)", "auto")
+        self.frame_rate.addItem("Every refresh of the display (more CPU)", "display")
+        self.frame_rate.setToolTip(
+            "Automatic draws at the display's refresh rate divided by a whole number, near "
+            "60 to 72 frames a second, so every frame is on screen equally long."
+        )
+        self.frame_rate.currentIndexChanged.connect(self.apply_frame_rate)
+        self.form.addRow("Frame rate", self.frame_rate)
         self.form.addRow(row(self.reset, self.fullscreen))
+
+    def apply_frame_rate(self):
+        if self.frame_rate.currentData() == "display":
+            screen = self.view.screen()
+            self.view.set_frame_rate(screen.refreshRate() if screen is not None else 60.0)
+        else:
+            self.view.set_frame_rate(None)
 
     def build_instruments(self):
         """One block of controls per instrument layer, built from the layer registry: a new
@@ -375,12 +391,20 @@ class SettingsDrawer(QFrame):
         self.form.addRow("Window / hop (ms)", row(self.window_ms, self.hop_ms))
         self.form.addRow("Band edges (Hz)", self.band_edges)
         self.form.addRow(self.delayed)
+        self.own_process = QCheckBox("Run capture and analysis in their own process")
+        self.own_process.setChecked(True)
+        self.own_process.setToolTip(
+            "Smoother animation: drawing and analysis no longer wait for each other. "
+            "Uses about 110 MiB more memory. Turn off to run both in one process."
+        )
+        self.form.addRow(self.own_process)
         self.form.addRow("Debug recording", self.debug_audio)
         for signal in (
             self.window_ms.valueChanged,
             self.hop_ms.valueChanged,
             self.band_edges.textChanged,
             self.delayed.toggled,
+            self.own_process.toggled,
             self.debug_audio.valueChanged,
         ):
             signal.connect(self.engine_changed)
@@ -499,6 +523,7 @@ class SettingsDrawer(QFrame):
                 for key, controls in self.layer_controls.items()
             ),
             delayed_analysis=self.delayed.isChecked(),
+            analysis_process=self.own_process.isChecked(),
             debug_audio_seconds=self.debug_audio.value(),
             window_ms=self.window_ms.value(),
             hop_ms=self.hop_ms.value(),
@@ -527,6 +552,8 @@ class SettingsDrawer(QFrame):
             "spectrum_place": self.spectrum_place.currentData(),
             "layers": self.layer_settings(),
             "sections": self.view.layout_state(),
+            "analysis_process": self.own_process.isChecked(),
+            "frame_rate": self.frame_rate.currentData(),
         }
 
     def restore(self, saved):
@@ -550,6 +577,10 @@ class SettingsDrawer(QFrame):
             max(0, self.spectrum_place.findData(saved.get("spectrum_place", "behind")))
         )
         self.view.restore_layout(saved.get("sections"))
+        self.own_process.setChecked(bool(saved.get("analysis_process", True)))
+        self.frame_rate.setCurrentIndex(
+            max(0, self.frame_rate.findData(saved.get("frame_rate", "auto")))
+        )
         for key, values in (saved.get("layers") or {}).items():
             controls = self.layer_controls.get(key)
             if controls is None or not isinstance(values, dict):

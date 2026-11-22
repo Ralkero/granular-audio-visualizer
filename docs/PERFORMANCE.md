@@ -122,3 +122,138 @@ at 1440 x 900) are met with room.
 - The live figures above are from a file source and a synthetic band. On real capture the
   owner's last session before this work had no dropped blocks; a session after it has not
   been recorded yet.
+
+---
+
+# Phase 3: interpreter contention, frame rate and the graphics card
+
+Same machine. **All on-screen measurements of this phase were made on the second display
+(1920 x 1080, 144 Hz, device pixel ratio 1), full screen**, at the owner's request not to
+use the main one. Qt reports the main display as 2560 x 1440 at 180 Hz. Nothing here was
+measured at 2560 x 1440.
+
+Workload "engine + window": the fixed synthetic band from a file at playing speed, all
+four analyzers, activity model, recognition model, pitch tracking, the window drawing all
+four layers. 30 s per run, the first 240 frames left out of the interval figures. The
+machine was in ordinary use by its owner during the runs, so single outliers (one frame of
+40 to 50 ms in a run) come and go between identical runs.
+
+## Findings
+
+1. **Analysis and drawing wait for each other in one interpreter, and it gets worse the
+   more often the window draws.** In one process, analysis frames took 3.6 ms at the median
+   with the window at 60 fps, 7.9 ms at 120 fps and 16.2 ms at 144 fps, where the 95th
+   percentile (21.6 ms) is longer than the 20 ms the analysis has per frame. 144 fps was not
+   reached (127). The analysis is mostly short NumPy calls with Python between them
+   (message objects, per-band loops): each call releases the interpreter only briefly, so
+   the drawing thread and the analysis thread take turns. Handing over every 1 ms instead
+   of 5 ms (phase 2) shortens each wait but does not make them run at once.
+2. **In its own process the analysis does not notice the window at all**: 2.7 to 2.9 ms at
+   the median and at most 7.5 ms at every frame rate tried.
+3. **The frame rate should divide the display's.** 60 fps on a 144 Hz display cannot give
+   every frame the same time on screen; 72 can. On a 180 Hz display it is 60 that divides.
+4. **The graphics card is not the limit.** Painting takes 5 to 9 ms of CPU at 1080p at the
+   95th percentile, inside a 13.9 ms frame; once the analysis is out of the way no frames
+   are late.
+
+## Frame rates, one process against two (radial, engine + window)
+
+Frames later than 20 ms / 25 ms / 33.3 ms, of the frames in the run; interval and analysis
+times in ms.
+
+| Target | Engine | Achieved | Interval p50 / p95 / p99 / max | Late 20 / 25 / 33 | Analysis p50 / p95 / max | CPU, % of a core |
+|---|---|---|---|---|---|---|
+| 60 | same process | 59.4 | 16.63 / 18.23 / 25.68 / 74.58 | 27 / 18 / 2 of 1,543 | 3.62 / 11.86 / 28.86 | 82 |
+| 60 | own process | 60 | 16.66 / 18.07 / 18.55 / 19.63 | 0 / 0 / 0 of 1,447 | 2.72 / 3.83 / 5.88 | 42 + 38 |
+| 72 | same process | 71.4 | 13.92 / 15.12 / 20.42 / 26.14 | 22 / 3 / 0 of 1,903 | 3.31 / 9.30 / 21.61 | 93 |
+| 72 | own process | 72 | 13.91 / 15.09 / 15.46 / 45.07 | 4 / 2 / 1 of 1,799 | 2.68 / 3.79 / 7.49 | 44 + 35 |
+| 120 | same process | 116.7 | 8.31 / 10.15 / 17.92 / 49.60 | 23 / 8 / 6 of 3,258 | 7.87 / 19.11 / 53.16 | 120 |
+| 120 | own process | 120 | 8.34 / 9.62 / 10.25 / 13.45 | 0 / 0 / 0 of 3,156 | 2.82 / 3.91 / 7.09 | 68 + 42 |
+| 144 | same process | 127.0 | 7.40 / 10.51 / 14.22 / 23.75 | 14 / 0 / 0 of 3,570 | 16.21 / 21.62 / 28.55 | 152 |
+| 144 | own process | 144 | 6.97 / 8.19 / 8.74 / 10.37 | 0 / 0 / 0 of 3,833 | 2.85 / 4.00 / 5.25 | 78 + 34 |
+
+No capture blocks were dropped in any run. "Achieved" for the own-process rows is from the
+median interval; the run's average is lower because the worker takes about two seconds to
+start. 144 fps is sustainable with the analysis in its own process, for about three
+quarters more CPU in the window's process than 72 fps.
+
+## What was adopted
+
+| Change | Where | Default |
+|---|---|---|
+| Capture, analysis, recognition and session logging run in a worker process; the window receives the same messages over a pipe | `gmv.remote.RemoteEngine`, `EventBus.forward`, `app.controller` | on (Settings → Advanced, or `GMV_ANALYSIS=thread`, to turn off) |
+| Frame rate chosen from the display the window is on: its refresh rate divided by a whole number, as near 66 as that gets; chosen again when the window moves to another display | `VisualizerWindow.set_frame_rate`, `automatic_rate` | automatic (Settings → Visualizer → Frame rate offers "every refresh") |
+| After a late wake-up the next frame is at least half a frame away: no catch-up burst | `VisualizerWindow.poll` | always |
+| The canvas can be an OpenGL surface | `GMV_RENDERER=opengl` | off: experimental |
+
+**The worker.** One persistent process per session runs the unchanged `Engine`. Messages
+cross in batches gathered for 4 ms, in publication order, exactly as published: the same
+objects, sequence numbers, timestamps and ages; nothing is merged, restamped or skipped.
+The audio path is entirely inside the worker, so nothing in the window's process can delay
+capture. Stop and sensitivity changes go the other way. If the worker fails to start or
+dies, the session ends with an error saying so, the window carries on, and the next Start
+makes a new worker. A session only counts as over once its worker has gone, and the worker
+is a daemon process, so it cannot outlive the application. A shared-memory ring buffer for
+audio was not built: the audio never crosses the process boundary, only the results do, at
+about 260 small messages a second.
+
+**Cost.** Memory 314 to 327 MiB in one process against 236 + 191 MiB in two (about 110 MiB
+more). Starting a session takes about two seconds longer, during which the window shows
+"Starting the analysis process". Total CPU is about the same (81 to 96% of a core before,
+47 to 52% + 34 to 36% after), now on two cores.
+
+## Before and after (engine + window, this phase's default against the last one's)
+
+| | Radial | Bars, all sections |
+|---|---|---|
+| Frame rate | 60 → 72 | 60 → 72 |
+| Interval p50, ms | 16.68 → 13.90 | 16.64 → 13.90 |
+| Interval p99, ms | 25.36 → 15.63 | 22.40 → 15.80 |
+| Interval max, ms | 30.75 → 17.48 | 42.17 → 21.53 |
+| Frames later than 20 ms | 27 of 1,544 → 0 of 1,800 | 23 of 1,544 → 1 of 1,799 |
+| Frames later than 25 ms | 18 → 0 | 7 → 0 |
+| Paint p95 / p99, ms | 8.89 / 10.71 → 6.69 / 8.43 | 7.16 / 8.68 → 7.09 / 7.65 |
+| Analysis p50 / p95 / max, ms | 4.37 / 12.79 / 22.68 → 2.72 / 4.05 / 6.60 | 3.11 / 9.57 / 32.49 → 2.74 / 3.99 / 7.40 |
+| Capture blocks dropped | 0 → 0 | 0 → 0 |
+| CPU, % of a core | 96 → 52 + 36 | 81 → 47 + 34 |
+| Memory, MiB | 327 → 238 + 191 | 314 → 236 + 191 |
+
+The visualizer alone (session replay, no engine) at the automatic 72 fps, 1080p: 72.0 fps,
+paint 4.4 to 6.1 ms at the median, 6.3 to 8.7 ms p95, 9.2 to 10.9 ms p99.
+
+## The graphics card experiment
+
+With `GMV_RENDERER=opengl` the canvas is a `QOpenGLWidget` and the same QPainter code draws
+through OpenGL. The context reported **AMD Radeon RX 9070 XT**, OpenGL 4.6 compatibility
+profile, driver 26.11.2. Same workload, analysis in its own process, 72 fps:
+
+| | CPU painting | OpenGL |
+|---|---|---|
+| Paint p95 / p99, ms (radial) | 6.48 / 7.46 | 5.30 / 5.82 |
+| Paint p95 / p99, ms (bars) | 6.21 / 6.94 | 4.52 / 5.45 |
+| Interval p99, ms (radial / bars) | 15.49 / 15.53 | 15.43 / 15.36 |
+| Memory of the window's process, MiB | 238 to 247 | 434 to 475 |
+
+About a fifth to a quarter less CPU time in the paint, the same frame pacing, about 200 MiB
+more memory. "Paint" is the CPU time of the paint call; the card's own execution time and
+its utilisation were not measured. The picture was not compared by eye (lines and
+antialiasing can differ under the OpenGL paint engine). On this evidence it is not worth
+making the default; it stays an opt-in experiment and CPU painting is unchanged.
+
+## Not done, and what remains
+
+- Nothing was measured at 2560 x 1440 or on the 180 Hz display in this phase. Paint time
+  grows with the area; the phase 2 figure at that size was about 6.6 ms at the median.
+- No measurement with real capture and real music after the change; the figures are from
+  a file source. Whether it looks smooth is for the owner to see.
+- Presentation was measured as the time between paints. When the desktop compositor
+  actually showed each frame was not measured, and the frame grid is not locked to the
+  display's vertical sync: at 72 fps on 144 Hz each frame covers two refreshes on average,
+  but which two can slip by one now and then.
+- Changing the refresh rate while running, minimising, and long sessions were not
+  exercised by hand. Moving the window to another display chooses the rate again (the rate
+  function is tested; a real window was not moved).
+- Per-core utilisation, context-switch counts and graphics-card utilisation were not
+  recorded.
+- An occasional single late frame (one in a run of 1,800) still appears in some runs with
+  the machine in other use.

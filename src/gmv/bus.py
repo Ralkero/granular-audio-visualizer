@@ -43,3 +43,11 @@ class EventBus:
             for subscriber in self._subscribers:
                 subscriber.put(message)
         return message
+
+    def forward(self, message):
+        """Hand an already published message (from another process's bus) to this bus's
+        subscribers exactly as it is: its stamps were set where it was published."""
+        with self._lock:
+            for subscriber in self._subscribers:
+                subscriber.put(message)
+        return message
