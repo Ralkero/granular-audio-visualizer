@@ -189,6 +189,7 @@ class SessionController:
             "guitar_model": guitar_paths(self.settings.guitar_model)[0],
             "recognition_model": guitar_paths(self.settings.guitar_model)[1],
             "instruments": tuple(analyzers()),
+            "band_edges": tuple(self.settings.band_edges),
         }
 
     def set_sensitivity(self, instrument, value):

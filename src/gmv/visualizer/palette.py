@@ -35,6 +35,30 @@ def shade(colour, towards="#ffffff", share=0.0):
     return "#" + "".join(f"{round(x + (y - x) * share):02x}" for x, y in zip(a, b, strict=True))
 
 
+def blend(parts):
+    """One colour from [(colour, weight)], weights adding up to one: mixed as light adds up
+    (each channel made linear, averaged, and turned back), so a mixture is not darker than
+    the colours it is between. A single part comes back exactly as it went in."""
+    parts = [(colour, weight) for colour, weight in parts if weight > 0]
+    if len(parts) == 1:
+        return parts[0][0]
+
+    def linear(channel):
+        value = channel / 255.0
+        return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+
+    def display(value):
+        value = value * 12.92 if value <= 0.0031308 else 1.055 * value ** (1 / 2.4) - 0.055
+        return max(0, min(255, round(value * 255)))
+
+    total = sum(weight for _, weight in parts)
+    mixed = [
+        sum(linear(rgb(colour)[index]) * weight for colour, weight in parts) / total
+        for index in range(3)
+    ]
+    return "#" + "".join(f"{display(value):02x}" for value in mixed)
+
+
 def instrument(key, fallback=NEUTRAL):
     return INSTRUMENTS.get(key, fallback)
 

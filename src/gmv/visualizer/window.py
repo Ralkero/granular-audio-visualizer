@@ -7,7 +7,7 @@ oldest messages and the display carries on from the newest.
 
 import math
 import os
-from collections import deque
+from collections import OrderedDict, deque
 from contextlib import contextmanager
 
 import numpy as np
@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 from . import layers as layer_registry
 from . import palette
 from .intensity import tint
+from .dominance import DEFAULT_EDGES
 from .perf import Timings
 from .response import BASELINE, EXPRESSIVE
 from .state import ROWS, SpectrumDisplay, VisualState
@@ -60,9 +61,8 @@ DRAIN_MOST = 1024  # and most messages
 SECTIONS = ("timeline", "details", "notes")
 DEFAULT_SECTIONS = {"timeline": True, "details": False, "notes": False}
 MIN_MAIN, MIN_SECTION = 260, 56  # smallest useful heights, before scaling
-# Instrument-coloured glows are kept at full size, made when first needed: stretching a
-# half-size picture every frame was measured at 4 ms a frame, a plain copy at well under 1.
-GLOW_DETAIL = 1.0
+GLOW_STEPS = 12  # the glow's colour mix is taken in this many steps of each share
+GLOW_KEPT = 4  # mixed-colour glow pictures kept (each is as large as the view)
 RADIAL_SPECTRUM = 0.5  # share of the radius the spectrum keeps when instrument rings are shown
 RING_SECONDS = 6.0  # one turn of the instrument rings
 
@@ -183,6 +183,8 @@ class Canvas(canvas_base()):
         self._background = None
         self._colors = {}
         self._cache = {}
+        self._glow_colours = {}  # colour-mix steps -> colour
+        self._glow_pictures = OrderedDict()  # (colour, size) -> picture, newest last
         # Colouring of the spectrum by the intensity of the music as a whole: how far it
         # is coloured now (0 neutral .. 1), and whether it is coloured at all.
         self.heat = 0.0
@@ -650,11 +652,9 @@ class Canvas(canvas_base()):
             held = self._cache[name] = (key, build())
         return held[1]
 
-    def glow_picture(self, size, colour, detail=1.0):
-        """A soft elliptical glow, drawn once; each frame only sets how strongly it shows.
-        ``detail`` below one keeps a smaller picture that is stretched when drawn (less
-        memory, slower to draw)."""
-        ratio = self.devicePixelRatioF() * detail
+    def glow_picture(self, size, colour):
+        """A soft elliptical glow, drawn once; each frame only sets how strongly it shows."""
+        ratio = self.devicePixelRatioF()
         picture = QPixmap(round(size.width() * ratio), round(size.height() * ratio))
         picture.fill(Qt.GlobalColor.transparent)
         artist = QPainter(picture)
@@ -666,41 +666,68 @@ class Canvas(canvas_base()):
         artist.end()
         return picture
 
-    def glow_parts(self):
-        """What the background glow is made of now: (name, colour, strength 0..1, detail)."""
-        # How strong the glow is follows the music as it always has; the response only
-        # scales it. Which colour it has is a separate matter: the neutral one, or, in
-        # the radial view, as much of each instrument's as that instrument leads.
-        strength = (0.05 + 0.20 * self.intensity + 0.16 * self.flash) * self.response.glow
-        glows = [("glow", SPECTRUM[1], strength, 1.0)]
-        if (
+    def glow_colour(self):
+        """The colour of the background glow now: the neutral one, or, in the radial view
+        with a stream running, the neutral and the instruments' colours mixed in the shares
+        ``state.dominance.mix`` gives. The shares are taken in ``GLOW_STEPS`` steps, so only
+        so many colours ever occur and each has its picture made once."""
+        if not (
             self.reactive_background
             and self.mode == "radial"
             and self.condition in ("live", "replay")
         ):
-            mix = self.state.dominance.mix
-            glows = [
-                ("glow " + name, palette.INSTRUMENTS[name], strength * share, GLOW_DETAIL)
-                for name, share in mix.items()
-                if share > 0.02
-            ]
-            glows.append(("glow", SPECTRUM[1], strength * max(0.0, 1.0 - sum(mix.values())), 1.0))
-        glows.append(("beat glow", PREDICTED, 0.14 * self.pulse * self.response.glow, 1.0))
-        return [(name, colour, min(1.0, strength), detail) for name, colour, strength, detail in glows]
+            return SPECTRUM[1]
+        steps = tuple(
+            min(GLOW_STEPS, round(share * GLOW_STEPS)) for share in self.state.dominance.mix.values()
+        )
+        colour = self._glow_colours.get(steps)
+        if colour is None:
+            if len(self._glow_colours) > 512:
+                self._glow_colours.clear()
+            left = max(0, GLOW_STEPS - sum(steps))
+            colour = self._glow_colours[steps] = palette.blend(
+                [(SPECTRUM[1], left)]
+                + [
+                    (palette.INSTRUMENTS[name], step)
+                    for name, step in zip(self.state.dominance.mix, steps, strict=True)
+                ]
+            )
+        return colour
+
+    def glow_parts(self):
+        """What the background glow is made of now: (name, colour, strength 0..1). One glow
+        in one colour at the strength the music gives it (the response only scales that),
+        and the beat glow, which is its own thing and keeps its own colour."""
+        strength = (0.05 + 0.20 * self.intensity + 0.16 * self.flash) * self.response.glow
+        return [
+            ("glow", self.glow_colour(), min(1.0, strength)),
+            ("beat glow", PREDICTED, min(1.0, 0.14 * self.pulse * self.response.glow)),
+        ]
+
+    def glow_for(self, colour, key, size):
+        """The glow picture in ``colour``. The two fixed colours are kept for good; mixed
+        ones in a small most-recently-used store, since a picture is as large as the view."""
+        if colour in (SPECTRUM[1], PREDICTED.name()):
+            name = "glow" if colour == SPECTRUM[1] else "beat glow"
+            return self.cached(name, key, lambda: self.glow_picture(size, colour))
+        held = self._glow_pictures.get((colour, key))
+        if held is None:
+            with self.perf.measure("glow picture"):
+                held = self.glow_picture(size, colour)
+            while len(self._glow_pictures) >= GLOW_KEPT:
+                self._glow_pictures.popitem(last=False)
+        else:
+            del self._glow_pictures[(colour, key)]
+        self._glow_pictures[(colour, key)] = held  # newest last
+        return held
 
     def draw_glow(self, painter, rect):
         centre_y = rect.bottom() if self.mode == "bars" else rect.center().y()
         area = QRectF(0, centre_y - rect.height(), self.width(), rect.height() * 2)
         key = (round(area.width()), round(area.height()), self.devicePixelRatioF())
-        for name, colour, strength, detail in self.glow_parts():
+        for _name, colour, strength in self.glow_parts():
             if strength > 0.01:
-                picture = self.cached(
-                    name,
-                    key,
-                    lambda colour=colour, detail=detail: self.glow_picture(
-                        area.size(), colour, detail
-                    ),
-                )
+                picture = self.glow_for(QColor(colour).name(), key, area.size())
                 painter.setOpacity(min(1.0, strength))
                 part = 0.5 if self.mode == "bars" else 1.0  # below the baseline is not needed
                 painter.drawPixmap(
@@ -1447,11 +1474,15 @@ class VisualizerWindow(QWidget):
         guitar_model=None,
         recognition_model=None,
         instruments=(),
+        band_edges=DEFAULT_EDGES,
     ):
         """Follow ``bus`` with a subscription of this window's own. Replaces any earlier one."""
         self.detach()
         self.bus, self.subscription = bus, bus.subscribe(QUEUE)
         self.state.status, self.state.detail = "starting", ""
+        # The band edges of this stream's analysis (None: not known, as for a recording
+        # whose configuration is missing). Not passing any means the analysis default.
+        self.state.set_band_edges(band_edges)
         self.state.reset()
         self.canvas.info.update(
             source=source,

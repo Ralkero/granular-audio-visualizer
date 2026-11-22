@@ -71,6 +71,7 @@ def main():
         activity_model=session.configuration.get("activity_model_path"),
         recognition_model=session.configuration.get("recognition_model_path"),
         instruments=session.configuration.get("instrument_analyzers") or (),
+        band_edges=session.configuration.get("band_edges"),
     )
     window.show()
     session.start()

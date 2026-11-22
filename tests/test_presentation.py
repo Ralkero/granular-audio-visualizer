@@ -14,7 +14,17 @@ from PySide6.QtGui import QColor
 
 from gmv.visualizer import layers as layer_registry
 from gmv.visualizer import palette
-from gmv.visualizer.dominance import BLEND_S, FLOOR, HOLD_S, KEYS, MARGIN, MODELS, Dominance
+from gmv.visualizer.dominance import (
+    BLEND_S,
+    DEFAULT_EDGES,
+    FLOOR,
+    HOLD_S,
+    KEYS,
+    MARGIN,
+    MODELS,
+    Bands,
+    Dominance,
+)
 from gmv.visualizer.response import BASELINE, EXPRESSIVE, Response
 from gmv.visualizer.state import VisualState
 
@@ -200,7 +210,7 @@ def test_the_state_keeps_it_from_the_messages_alone_and_a_new_segment_starts_it_
 
 
 def glow(canvas):
-    return {name: (colour, strength) for name, colour, strength, _ in canvas.glow_parts()}
+    return {name: (colour, strength) for name, colour, strength in canvas.glow_parts()}
 
 
 def bass_led(window):
@@ -214,42 +224,127 @@ def bass_led(window):
     return window.canvas
 
 
-def test_the_radial_glow_takes_the_leaders_colour_at_the_strength_it_would_have_had(window):
-    canvas = bass_led(window)
-    assert canvas.reactive_background and window.state.dominance.leader == "bass"
-    parts = glow(canvas)
-    colour, strength = parts["glow bass"]
-    assert colour == palette.INSTRUMENTS["bass"] and strength > 0.03
-    window.set_reactive_background(False)
-    neutral = glow(canvas)
-    assert set(neutral) == {"glow", "beat glow"} and neutral["glow"][0] == palette.SPECTRUM[1]
-    # Only the colour changed hands: the parts add up to the neutral glow's strength.
-    total = sum(strength for name, (_, strength) in parts.items() if name.startswith("glow"))
-    assert total == pytest.approx(neutral["glow"][1], rel=1e-6)
-    assert all(math.isfinite(s) and 0.0 <= s <= 1.0 for _, s in parts.values())
-    # In the picture: the background beside the rings is bluer than it is red with it on.
-    def beside(image):
-        pixel = QColor(image.pixel(int(image.width() * 0.5), int(image.height() * 0.03)))
-        return pixel.blue() - pixel.red()
+def led(window, **shares):
+    """Put the colour mix where a test wants it (the dominance tests cover how it gets
+    there) and hold the glow's strength still."""
+    canvas = window.canvas
+    window.state.dominance.mix = dict.fromkeys(KEYS, 0.0) | shares
+    canvas.intensity, canvas.flash, canvas.pulse = 0.8, 0.0, 0.0
+    return canvas
 
-    off = beside(window.grab().toImage())
+
+SPOT = (0.14, 0.42)  # beside the rings, well inside the glow
+
+
+def spot(window):
+    image = window.grab().toImage()
+    pixel = QColor(image.pixel(int(image.width() * SPOT[0]), int(image.height() * SPOT[1])))
+    return np.array([pixel.red(), pixel.green(), pixel.blue()], dtype=float)
+
+
+def rgb(colour):
+    return np.array(palette.rgb(QColor(colour).name()), dtype=float)
+
+
+def coverage(pixel, background, colour):
+    """How much of ``colour`` lies over ``background`` in a rendered pixel (0..1): the glow's
+    effective strength there, read from the channel in which the two differ most."""
+    channel = int(np.argmax(np.abs(colour - background)))
+    return (pixel[channel] - background[channel]) / (colour[channel] - background[channel])
+
+
+def no_glow(window):
+    """The same picture with the glow switched out, to measure against."""
+    canvas = window.canvas
+    kept = canvas.response
+    canvas.response = Response(glow=0.0)
+    background = spot(window)
+    canvas.response = kept
+    return background
+
+
+def test_the_glow_is_one_colour_at_the_strength_the_music_gives_it(window):
+    canvas = bass_led(window)
+    for key in canvas.layers:
+        window.set_layer(key, enabled=False)  # nothing but spectrum and glow near the spot
+    led(window)
+    background = no_glow(window)
+    window.set_reactive_background(False)
+    neutral = spot(window)
+    covered = coverage(neutral, background, rgb(palette.SPECTRUM[1]))
+    assert 0.03 < covered < 0.6  # there is a glow at the spot, as before
     window.set_reactive_background(True)
-    assert beside(window.grab().toImage()) > off
+    assert np.array_equal(spot(window), neutral)  # nobody leads: exactly the neutral picture
+    assert glow(canvas)["glow"][0] == palette.SPECTRUM[1]
+    # Each instrument alone: its own colour, lying over the background exactly as far as the
+    # neutral glow did. The rendered pixel is checked, not the numbers handed to the painter.
+    for key, colour in palette.INSTRUMENTS.items():
+        led(window, **{key: 1.0})
+        assert glow(canvas)["glow"][0] == colour
+        expected = background + covered * (rgb(colour) - background)
+        assert np.abs(spot(window) - expected).max() <= 2.0, key
     # Spectrum Bars has no instrument glow; a stopped stream goes back to neutral.
+    led(window, bass=1.0)
     window.set_mode("bars")
-    assert set(glow(canvas)) == {"glow", "beat glow"}
+    assert glow(canvas)["glow"][0] == palette.SPECTRUM[1]
     window.set_mode("radial")
     window.state.status = "stopped"
     canvas.advance(0.014, perf_counter())
-    assert set(glow(canvas)) == {"glow", "beat glow"}
+    assert glow(canvas)["glow"][0] == palette.SPECTRUM[1]
 
 
-def test_hiding_a_layer_or_not_painting_does_not_stop_the_leader_being_followed(window):
+def test_a_change_of_leader_moves_the_colour_smoothly_without_dimming_the_glow(window):
+    canvas = bass_led(window)
+    for key in canvas.layers:
+        window.set_layer(key, enabled=False)
+    led(window)
+    background = no_glow(window)
+    window.set_reactive_background(False)
+    covered = coverage(spot(window), background, rgb(palette.SPECTRUM[1]))
+    window.set_reactive_background(True)
+    bass, vocals = rgb(palette.INSTRUMENTS["bass"]), rgb(palette.INSTRUMENTS["vocals"])
+    seen, light = [], []
+    for step in range(13):  # bass hands over to vocals in twelve steps
+        share = step / 12
+        led(window, bass=1.0 - share, vocals=share)
+        colour = rgb(canvas.glow_colour())
+        pixel = spot(window)
+        # The glow lies over the background as far as ever, whatever its colour is ...
+        assert np.abs(pixel - (background + covered * (colour - background))).max() <= 2.0
+        seen.append(colour)
+        light.append(float(pixel @ (0.2126, 0.7152, 0.0722)))
+    assert np.array_equal(seen[0], bass) and np.array_equal(seen[-1], vocals)
+    # ... each channel goes one way from the one colour to the other, in small steps ...
+    path = np.array(seen)
+    for channel in range(3):
+        steps = np.diff(path[:, channel])
+        assert np.all(steps >= 0) or np.all(steps <= 0)
+        assert np.abs(steps).max() <= 0.25 * abs(vocals[channel] - bass[channel]) + 2
+    # ... and the picture is never darker or brighter on the way than at its two ends.
+    assert min(light) >= min(light[0], light[-1]) - 1.0
+    assert max(light) <= max(light[0], light[-1]) + 1.0
+    # A leader fading out to nobody goes to the neutral colour the same way.
+    led(window, drums=0.5)
+    half = rgb(canvas.glow_colour())
+    drums, plain = rgb(palette.INSTRUMENTS["drums"]), rgb(palette.SPECTRUM[1])
+    assert all(min(a, b) - 1 <= value <= max(a, b) + 1 for value, a, b in zip(half, drums, plain, strict=True))
+    # Only so many colours are ever made, and only a few pictures of them are kept.
+    assert len(canvas._glow_pictures) <= 4 and len(canvas._glow_colours) <= 40
+
+
+def test_the_beat_glow_keeps_its_own_colour_and_hiding_a_layer_stops_nothing(window):
     window.set_layer("bass", enabled=False)  # its ring is not drawn
     canvas = bass_led(window)
-    assert window.state.dominance.leader == "bass" and "glow bass" in glow(canvas)
+    assert window.state.dominance.leader == "bass"
+    assert canvas.glow_colour() == palette.INSTRUMENTS["bass"]
+    canvas.pulse = 1.0
+    parts = glow(canvas)
+    assert QColor(parts["beat glow"][0]).name() == palette.PREDICTED and parts["beat glow"][1] > 0.1
+    assert parts["glow"][0] == palette.INSTRUMENTS["bass"]
     # Layer colours are not touched by any of this.
     assert palette.INSTRUMENTS["bass"] == "#4cc9f0" and canvas.layers["bass"].profile.colour == "#4cc9f0"
+    assert palette.blend([("#4cc9f0", 1.0)]) == "#4cc9f0"
+    assert palette.blend([("#000000", 0.5), ("#ffffff", 0.5)]) == "#bcbcbc"  # light adds up
 
 
 # -- Expressive Mode -------------------------------------------------------------------------
@@ -339,26 +434,35 @@ def test_expressive_mode_draws_more_from_the_same_state_and_off_is_the_picture_a
 
 def test_the_two_settings_work_alone_and_together(window):
     canvas = bass_led(window)
+    for key in canvas.layers:
+        window.set_layer(key, enabled=False)
+    canvas.intensity, canvas.flash, canvas.pulse = 0.5, 0.0, 0.0
+    background = no_glow(window)
     results = {}
     for reactive in (False, True):
         for expressive in (False, True):
             window.set_reactive_background(reactive)
             window.set_expressive(expressive)
             results[reactive, expressive] = (
-                glow(canvas),
+                glow(canvas)["glow"],
                 dict(window.state.dominance.scores),
                 window.state.dominance.leader,
+                spot(window),
             )
     # Who leads, and by how much, is the same whatever is switched on.
-    assert len({str(scores) for _, scores, _ in results.values()}) == 1
-    assert {leader for _, _, leader in results.values()} == {"bass"}
+    assert len({str(scores) for _, scores, _, _ in results.values()}) == 1
+    assert {leader for _, _, leader, _ in results.values()} == {"bass"}
     for expressive in (False, True):
-        assert set(results[False, expressive][0]) == {"glow", "beat glow"}
-        assert results[True, expressive][0]["glow bass"][0] == palette.INSTRUMENTS["bass"]
-    # Expressive Mode scales the strength of the glow and leaves its colour alone.
-    for reactive, name in ((False, "glow"), (True, "glow bass")):
-        plain, bold = results[reactive, False][0][name], results[reactive, True][0][name]
-        assert bold[0] == plain[0] and bold[1] == pytest.approx(min(1.0, plain[1] * EXPRESSIVE.glow))
+        assert results[False, expressive][0][0] == palette.SPECTRUM[1]
+        assert results[True, expressive][0][0] == palette.INSTRUMENTS["bass"]
+    # Expressive Mode scales the strength of the glow and leaves its colour alone: in the
+    # numbers, and in how far the colour lies over the background in the picture.
+    for reactive in (False, True):
+        (colour, plain), (bold_colour, bold) = results[reactive, False][0], results[reactive, True][0]
+        assert bold_colour == colour and bold == pytest.approx(min(1.0, plain * EXPRESSIVE.glow))
+        thin = coverage(results[reactive, False][3], background, rgb(colour))
+        thick = coverage(results[reactive, True][3], background, rgb(colour))
+        assert thick == pytest.approx(thin * EXPRESSIVE.glow, rel=0.12) and thick > thin
 
 
 def test_both_settings_are_remembered_and_old_settings_get_the_defaults(app, tmp_path):
@@ -410,3 +514,108 @@ def test_expressive_mode_changes_no_segment_or_event_bookkeeping():
         assert (list(a.hits), list(a.pulses), a.segment, a.origin) == (list(b.hits), list(b.pulses), b.segment, b.origin)
         assert a.phase(0.5, 3.0) == b.phase(0.5, 3.0)
     assert one.dominance.scores == two.dominance.scores and one.live_epoch == two.live_epoch
+
+
+# -- band edges are a setting ----------------------------------------------------------------
+
+DISPLAY = (30.0, 18000.0)  # the display spectrum's range, 48 bands
+
+
+def display(power_at):
+    """A 48-band display spectrum in dB from a function of each band's centre frequency."""
+    marks = np.geomspace(*DISPLAY, 49)
+    centres = np.sqrt(marks[:-1] * marks[1:])
+    return tuple((10 * np.log10(np.maximum(1e-12, [power_at(f) for f in centres]))).tolist())
+
+
+def test_default_edges_give_the_shares_the_scores_were_fitted_on():
+    bands = Bands(DEFAULT_EDGES)
+    assert bands.usable and bands.exact
+    for energy in (LOW_HEAVY, MID_HEAVY, EVEN):
+        low, mid = bands.shares(energy)
+        assert low == pytest.approx((energy[0] + energy[1]) / sum(energy), abs=1e-12)
+        assert mid == pytest.approx((energy[2] + energy[3] + energy[4]) / sum(energy), abs=1e-12)
+    assert bands.shares((0.0,) * 7) is None and bands.shares(()) is None
+
+
+def test_other_edges_are_read_by_their_frequencies_not_by_their_position():
+    # Three bands below 250 Hz, two up to 4 kHz, two above: still exact.
+    edges = (20, 60, 120, 250, 1000, 4000, 8000, 20000)
+    energy = (0.1, 0.2, 0.3, 0.15, 0.1, 0.1, 0.05)
+    bands = Bands(edges)
+    assert bands.usable and bands.exact
+    low, mid = bands.shares(energy)
+    assert low == pytest.approx(0.6) and mid == pytest.approx(0.25)
+    # Reading the same numbers by position, as if the edges were the default, is wrong.
+    assert (energy[0] + energy[1]) / sum(energy) == pytest.approx(0.3)
+    # The same sound described with either set of edges scores the same.
+    # 0.6 below 250 Hz, 0.25 up to 4 kHz, 0.15 above:
+    default_energy = (0.1, 0.5, 0.05, 0.1, 0.1, 0.1, 0.05)
+    playing = {"bass": (0.85, 2, 0.7), "vocals": (0.7, 0, 0.0)}
+    usual, other = Dominance(), Dominance(edges)
+    listen(usual, 3.0, playing, default_energy)
+    listen(other, 3.0, playing, energy)
+    assert other.scores == pytest.approx(usual.scores) and other.leader == usual.leader == "bass"
+
+
+def test_a_band_across_a_cutoff_is_divided_by_the_display_spectrum_or_not_at_all():
+    # [60, 400] lies across 250 Hz and [2000, 5000] across 4 kHz.
+    edges = (20, 60, 400, 800, 2000, 5000, 8000, 20000)
+    energy = (0.1, 0.3, 0.1, 0.1, 0.2, 0.1, 0.1)
+    bands = Bands(edges)
+    assert bands.usable and not bands.exact
+    # All of what is in those bands sits on the low side of each cutoff ...
+    low, mid = bands.shares(energy, display(lambda f: float(f < 250 or 2000 < f < 4000)), DISPLAY)
+    assert low == pytest.approx(0.1 + 0.3, abs=0.03) and mid == pytest.approx(0.1 + 0.1 + 0.2, abs=0.03)
+    # ... or on the high side ...
+    low, mid = bands.shares(energy, display(lambda f: float(250 < f < 2000 or f > 4000)), DISPLAY)
+    # (to within the display spectrum's own bands, each about a fifth of an octave wide)
+    assert low == pytest.approx(0.1, abs=0.03) and mid == pytest.approx(0.3 + 0.1 + 0.1, abs=0.07)
+    # ... or evenly per octave: each band is divided by octaves.
+    low, mid = bands.shares(energy, display(lambda f: 1.0), DISPLAY)
+    below = np.log2(250 / 60) / np.log2(400 / 60)
+    inside = np.log2(4000 / 2000) / np.log2(5000 / 2000)
+    assert low == pytest.approx(0.1 + 0.3 * below, abs=0.01)
+    assert mid == pytest.approx(0.3 * (1 - below) + 0.1 + 0.1 + 0.2 * inside, abs=0.01)
+    # Without a display spectrum such a band cannot be divided: no shares, nobody leads.
+    assert bands.shares(energy) is None and bands.shares(energy, (), DISPLAY) is None
+    dominance = Dominance(edges)
+    assert set(listen(dominance, 3.0, {"bass": (0.85, 2, 0.7)}, energy)) == {None}
+    assert sum(dominance.mix.values()) == 0.0 and all(v == 0.0 for v in dominance.scores.values())
+
+
+def test_unknown_or_unsuitable_edges_leave_the_glow_neutral():
+    for edges in (None, (), (100, 200, 250, 500, 2000, 4000, 6000, 24000), (20, 60, 250, 500, 2000, 3000, 4000, 5000)):
+        bands = Bands(edges)
+        assert not bands.usable and bands.shares(LOW_HEAVY) is None
+        dominance = Dominance(edges)
+        assert set(listen(dominance, 3.0, {"bass": (0.85, 2, 0.7)}, LOW_HEAVY)) == {None}
+    # A frame with another number of bands than the edges say is not guessed at.
+    assert Bands(DEFAULT_EDGES).shares((0.2, 0.3, 0.5)) is None
+
+
+def test_the_window_is_told_the_edges_for_live_capture_and_for_replay(window, tmp_path):
+    from gmv.app.controller import SessionController, Settings
+    from gmv.bus import EventBus
+
+    # Live: the controller hands the visualizer the edges of the session's own settings.
+    custom = (20, 60, 120, 250, 1000, 4000, 8000, 20000)
+    controller = SessionController(tmp_path)
+    controller.settings = Settings(band_edges=custom)
+    assert controller.describe()["band_edges"] == custom
+    window.attach(EventBus(), **controller.describe())
+    assert window.state.band_edges == custom and window.state.dominance.bands.edges == custom
+    # They stay through the resets a stream brings.
+    window.state.reset()
+    assert window.state.dominance.bands.edges == custom
+    # Replay passes what the recording's configuration says; a recording without one has
+    # none, and then nobody leads rather than the default being assumed.
+    window.attach(EventBus(), band_edges={}.get("band_edges"))
+    assert window.state.band_edges is None and not window.state.dominance.bands.usable
+    canvas = bass_led(window)
+    assert window.state.dominance.leader is None and canvas.glow_colour() == palette.SPECTRUM[1]
+    # Going back to the default edges is the fitted behaviour again.
+    window.attach(EventBus())
+    assert window.state.band_edges == tuple(DEFAULT_EDGES)
+    canvas = bass_led(window)
+    assert window.state.dominance.leader == "bass" and canvas.glow_colour() == palette.INSTRUMENTS["bass"]

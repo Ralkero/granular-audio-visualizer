@@ -19,7 +19,7 @@ from ..models import (
     MusicalEvent,
     Status,
 )
-from .dominance import Dominance
+from .dominance import DEFAULT_EDGES, Dominance
 from .intensity import MusicalIntensity
 from .lanes import LaneBoard, Track
 from .live import Live
@@ -136,6 +136,10 @@ class VisualState:
         self.session_id = None
         self.generation = 0
         self.live_epoch = 0  # grows each time the live states start afresh
+        # The edges ``band_energy`` is measured between: a setting of the analysis that
+        # the frames do not carry. Whoever knows it says so (``set_band_edges``); a
+        # state that is told nothing takes the analysis default. Kept across resets.
+        self.band_edges = tuple(DEFAULT_EDGES)
         self.marked = 0  # markers ever received; lets a drawing find the new ones
         self.reset()
 
@@ -164,7 +168,7 @@ class VisualState:
         # Which instrument is most prominent now (``dominance.Dominance``): for the colour
         # of the background glow. Kept here, not in a renderer, so it goes on whatever
         # is or is not drawn.
-        self.dominance = Dominance()
+        self.dominance = Dominance(self.band_edges)
         self._weights, self._weights_age = {}, 0
         self._silent_from = None
         self.latest = None
@@ -280,7 +284,14 @@ class VisualState:
                 if key in self.dominance.scores
             }
         self._weights_age += 1
-        self.dominance.step(frame.timestamp, frame.band_energy, frame.silence, self._weights)
+        self.dominance.step(
+            frame.timestamp,
+            frame.band_energy,
+            frame.silence,
+            self._weights,
+            frame.spectrum_db,
+            (frame.spectrum_low_hz, frame.spectrum_high_hz),
+        )
         level = min(1.0, max(0.0, (frame.loudness_dbfs + 60) / 60))
         self.frames.append(frame.timestamp, level, frame.dynamic_intensity, frame.onset_strength)
         if frame.spectrum_db:
@@ -303,6 +314,13 @@ class VisualState:
                 frame.instruments_active,
                 frame.activity_method,
             )
+
+    def set_band_edges(self, edges):
+        """Say which band edges the stream's ``band_energy`` uses; None when that is not
+        known (a recording without its configuration). The dominant-instrument scores
+        need them; without them nobody leads."""
+        self.band_edges = tuple(float(edge) for edge in edges) if edges else None
+        self.dominance.configure(self.band_edges)
 
     def _observe(self, segment, time):
         """Take note of a message of audio ``segment`` at audio ``time``. A segment newer than

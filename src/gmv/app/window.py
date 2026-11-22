@@ -902,6 +902,8 @@ class MainWindow(QWidget):
                 beat_tracker=session.configuration.get("experimental_beat_phase"),
                 activity_model=session.configuration.get("activity_model_path"),
                 instruments=session.configuration.get("instrument_analyzers") or (),
+                # As recorded; a recording without its configuration has none.
+                band_edges=session.configuration.get("band_edges"),
             )
             session.start()
         except Exception as exc:
