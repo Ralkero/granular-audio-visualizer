@@ -345,3 +345,162 @@ def test_drum_sparks_are_the_same_pattern_worked_out_once():
         assert np.array_equal(sparks(seed), np.random.default_rng(seed).random((18, 2)))
     assert sparks(77) is sparks(77) and not sparks(77).flags.writeable
     assert sparks.cache_info().maxsize == 128
+
+
+# -- ordering: which message tells of a new segment first -----------------------------------
+
+
+def with_guitar(stream, segment, frames):
+    """``play_segment`` with a guitar row per frame as well: all four instruments live."""
+    for index in range(frames):
+        play_segment(stream, segment, 1)
+        stream.state.consume(
+            activity(
+                stream.time - 0.02,
+                "guitar",
+                level=0.7,
+                flux=0.6 * (index % 10 == 0),
+                attack=0.6 * (index % 10 == 0),
+                segment=segment,
+            )
+        )
+
+
+def bass_row(time, segment, strength=0.8):
+    return activity(
+        time, "bass", level=0.6, energy=0.7, lead_s=0.08, attack=strength, flux=strength,
+        pulse=strength, segment=segment,
+    )  # fmt: skip
+
+
+def test_a_newer_row_before_its_frame_moves_every_instrument_on_once():
+    stream = Stream()
+    with_guitar(stream, 1, 60)
+    state = stream.state
+    assert set(state.live) == {"bass", "drums", "vocals", "guitar"}
+    epoch, generation, last = state.live_epoch, state.generation, stream.time
+    rows = len(state.activity["bass"])
+    # 2. The bass row of the next frame, already segment 2, before that frame.
+    state.consume(bass_row(last + HOP - 0.08, 2))
+    assert state.segment == 2 and state.live_epoch == epoch + 1
+    assert all(live.segment == 2 for live in state.live.values())
+    bass = present(state, "bass")
+    assert len(bass.hits) == 1 and len(bass.pulses) == 1
+    assert bass.origin == pytest.approx(last - 0.06)
+    assert all(state.live[key].time is None for key in ("drums", "vocals", "guitar"))
+    # 3. A segment 1 row, late, with a newer timestamp than that: refused before anything.
+    state.consume(bass_row(last + HOP - 0.07, 1, strength=1.0))
+    assert len(state.activity["bass"]) == rows + 1 and state.segment == 2
+    assert [hit.strength for hit in present(state, "bass").hits] == [pytest.approx(0.8)]
+    # 4. The frame of segment 2: no second fresh start; what segment 2 has stays.
+    stream.frame(2)
+    assert state.live_epoch == epoch + 1 and state.generation == generation
+    assert len(present(state, "bass").hits) == 1 and present(state, "bass").segment == 2
+    # 5. Segment 2 carries on normally.
+    stream.frame(2)
+    stream.bass(2, attack=0.6, pulse=0.6)
+    bass = present(state, "bass")
+    assert [round(hit.strength, 1) for hit in bass.hits] == [0.8, 0.6] and len(bass.pulses) == 2
+    # The history holds only the rows that were accepted, in order.
+    history = state.activity["bass"].since()
+    assert len(history) == rows + 2 and np.all(np.diff(history[:, COLUMN["time"]]) > 0)
+    assert history[:, COLUMN["attack"]].max() < 1.0
+
+
+def test_a_late_row_of_an_old_segment_is_refused_however_new_its_timestamp():
+    stream = Stream()
+    play_segment(stream, 1, 40)
+    play_segment(stream, 2, 40)
+    state = stream.state
+    bass = present(state, "bass")
+    before = (list(bass.hits), list(bass.pulses), bass.time, bass.origin, bass.segment)
+    rows, row_segment = len(state.activity["bass"]), dict(state._row_segment)
+    state.consume(bass_row(stream.time + 1.0, 1, strength=1.0))  # a second ahead of all
+    bass = present(state, "bass")
+    assert (list(bass.hits), list(bass.pulses), bass.time, bass.origin, bass.segment) == before
+    assert len(state.activity["bass"]) == rows and state._row_segment == row_segment
+    assert state.segment == 2 and state._newest < stream.time + 0.5
+    stream.frame(2)
+    stream.bass(2, attack=0.5)
+    assert len(state.activity["bass"]) == rows + 1
+    assert present(state, "bass").hits[-1].strength == 0.5
+
+
+def test_a_late_frame_of_an_old_segment_neither_moves_the_stream_back_nor_resets_it():
+    stream = Stream()
+    play_segment(stream, 1, 100)  # 1.0 .. 2.98 s
+    state = stream.state
+    last = stream.time
+    state.consume(bass_row(last + HOP - 0.08, 2))  # segment 2 begins, its frame not yet here
+    epoch, generation, latest = state.live_epoch, state.generation, state.latest
+    for when in (last + HOP, last - 0.1):  # late segment 1 frames, newer and older in time
+        state.consume(frame(when, segment=1), arrival=stream.clock + when)
+        assert state.latest is latest and state.segment == 2
+        assert state.generation == generation and state.live_epoch == epoch
+    assert present(state, "bass").segment == 2 and len(present(state, "bass").hits) == 1
+    stream.frame(2)  # the frame of segment 2 itself
+    assert state.latest.segment == 2
+    assert state.live_epoch == epoch and state.generation == generation
+    # A frame of an old segment far back in time is the timeline starting again (a replay
+    # played from the start): the existing full reset, once.
+    play_segment(stream, 1, 30, start=0.1)
+    assert state.generation == generation + 1 and state.live_epoch == epoch + 1
+    assert state.segment == 1 and state.activity["bass"].since()[0, COLUMN["time"]] < 0.2
+    bass = present(state, "bass")
+    assert bass.segment == 1 and bass.origin == pytest.approx(0.1 - 0.08, abs=1e-6)
+
+
+def test_one_instruments_row_moves_all_four_into_the_new_segment():
+    stream = Stream()
+    with_guitar(stream, 1, 60)
+    state = stream.state
+    for key in state.live:
+        assert present(state, key).recent(5.0) or present(state, key).level > 0.3
+    boundary = stream.time
+    state.consume(
+        activity(boundary - 0.04, "drums", attack=0.9, components=(("low", 0.9),), segment=2)
+    )
+    assert all(live.segment == 2 for live in state.live.values())
+    assert all(state.live[key].time is None for key in ("bass", "vocals", "guitar"))
+    with_guitar(stream, 2, 30)
+    for key, live in state.live.items():
+        live.advance(stream.time)
+        assert live.segment == 2 and live.origin >= boundary - 0.1, key
+        assert all(hit.time >= boundary - 0.1 for hit in live.hits), key
+    # A live state cannot be taken back by itself either.
+    bass = state.live["bass"]
+    before = (bass.time, list(bass.hits))
+    bass.feed(stream.time + 0.5, stream.time + 0.5, level=1.0, ring=1.0, attack=1.0, segment=1)
+    assert (bass.time, list(bass.hits)) == before and bass.segment == 2
+
+
+def test_rows_without_a_segment_never_move_the_stream():
+    stream = Stream()
+    state = stream.state
+    # Legacy rows before any frame: kept, and the first frame takes them over without a
+    # fresh start.
+    for index in range(10):
+        state.consume(activity(1.0 + index * HOP, "vocals", level=0.6, attack=0.5 * (index == 2)))
+    assert state.segment is None and state.live["vocals"].segment is None
+    epoch = state.live_epoch
+    stream.frame(3, time=1.0 + 10 * HOP)
+    assert state.segment == 3 and state.live_epoch == epoch
+    assert state.live["vocals"].segment == 3 and len(state.live["vocals"].hits) == 1
+    # Later legacy rows count as the current segment and change nothing about it.
+    stream.frame(3)
+    state.consume(activity(stream.time, "vocals", level=0.4))
+    assert state.segment == 3 and state.live_epoch == epoch
+    assert present(state, "vocals").time == pytest.approx(stream.time)
+    # An explicit older segment is still refused.
+    rows = len(state.activity["vocals"])
+    state.consume(activity(stream.time + 0.5, "vocals", level=1.0, segment=2))
+    assert len(state.activity["vocals"]) == rows and state.segment == 3
+    # A segment named by a row before any frame is the segment of the stream from then on.
+    early = Stream()
+    early.state.consume(bass_row(0.92, 5))
+    assert early.state.segment == 5
+    start = early.state.live_epoch
+    early.frame(5)
+    assert early.state.live_epoch == start and len(present(early.state, "bass").hits) == 1
+    early.state.consume(frame(early.time + HOP, segment=4), arrival=early.clock + early.time + HOP)
+    assert early.state.segment == 5 and early.state.latest.segment == 5

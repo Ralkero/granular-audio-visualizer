@@ -19,9 +19,10 @@ history, as they arrive (one owner of the data, no second analysis), and reduces
 **Segments.** A live state belongs to one audio segment (the capture stream's
 ``segment``: it changes at a gap or a format change, even when the timestamps carry on as
 if nothing happened). ``begin(segment)`` starts it afresh for a new one: every transient
-value goes, the pitch range stays. ``feed`` does the same if a row of a newer segment
-reaches it first. Deciding which rows are too old to be fed at all is the visual state's
-job, which knows the stream's current segment.
+value goes, the pitch range stays. Which segment the stream is in is the visual state's
+decision (``VisualState._observe``), taken for all instruments together; a live state
+never goes back to an older segment by itself (``feed`` ignores such a row) and, used on
+its own, starts afresh when a row of a newer one reaches it.
 
 **Phase.** ``phase(base, per_energy)`` is a running angle that advances by
 ``base + per_energy * energy`` radians per second of audio. It is an integral over the rows
@@ -111,7 +112,9 @@ class Live:
         if segment is not None:
             if self.segment is None:
                 self.segment = segment
-            elif segment != self.segment:
+            elif segment < self.segment:
+                return  # a segment that is over: never go back to it
+            elif segment > self.segment:
                 self.begin(segment)  # newer than anything seen: start afresh
         if self.time is not None and (time <= self.time or time - self.time > 0.5):
             if time <= self.time:

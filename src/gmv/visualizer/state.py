@@ -86,6 +86,10 @@ ACTIVITY = (
 BOUNDARY = {"": 0.0, "start": 1.0, "end": 2.0}
 COLUMN = {name: index for index, name in enumerate(ACTIVITY)}
 LEVELS = {1.0: "detected", 0.5: "candidate", 0.0: "absent"}
+# A feature frame of a segment older than the newest one seen, this far or more behind
+# the newest audio time seen, is the timeline starting again (a replay played from the
+# start); nearer than that it is a late frame of a segment that is over.
+RESTART_S = 2.0
 # Pitch range (MIDI notes) over which an instrument's live ``place`` runs.
 PITCH_RANGE = {"bass": (26.0, 56.0), "vocals": (45.0, 81.0)}
 
@@ -146,7 +150,11 @@ class VisualState:
         # instrument -> what it is doing now (``live.Live``), fed with the same rows.
         self.live = {}
         self.live_epoch += 1
-        self.segment = None  # audio segment of the newest feature frame
+        # The newest audio segment seen in any message that names one (feature frames and
+        # activity rows): the one authority on which segment the stream is in. It only
+        # moves forward, except at a full reset.
+        self.segment = None
+        self._newest = None  # newest audio time seen in an accepted frame or row
         self._row_segment = {}  # instrument -> segment of its newest history row
         self.music_start = None  # when sound last began after silence (or at all)
         # How intense the music is as a whole, 0..1, whatever is shown: ``musical.value``.
@@ -221,7 +229,12 @@ class VisualState:
     def _frame(self, frame, arrival):
         arrival = arrival or frame.published_monotonic or perf_counter()
         previous = self.latest
-        if previous is not None and frame.timestamp < previous.timestamp:
+        if self.segment is not None and frame.segment < self.segment:
+            if self._newest is not None and frame.timestamp > self._newest - RESTART_S:
+                return  # a late frame of a segment that is over: refused
+            self.reset()  # far back and an old segment: the timeline started again
+            previous = None
+        elif previous is not None and frame.timestamp < previous.timestamp:
             self.reset()  # the timeline restarted
             previous = None
         offset = arrival - frame.timestamp
@@ -250,15 +263,7 @@ class VisualState:
             ):
                 self.music_start = frame.timestamp
             self._silent_from = None
-        # A new audio segment (a gap or a format change in the capture, whether or not the
-        # timestamps jump): what the live states hold belongs to the old one. Only they
-        # start afresh; the history keeps every row. After a full reset (the timeline
-        # restarted) there is no segment to compare with, so this cannot happen twice.
-        if self.segment is not None and frame.segment != self.segment:
-            for live in self.live.values():
-                live.begin(frame.segment)
-            self.live_epoch += 1
-        self.segment = frame.segment
+        self._observe(frame.segment, frame.timestamp)
         self.musical.step(frame)
         level = min(1.0, max(0.0, (frame.loudness_dbfs + 60) / 60))
         self.frames.append(frame.timestamp, level, frame.dynamic_intensity, frame.onset_strength)
@@ -283,15 +288,38 @@ class VisualState:
                 frame.activity_method,
             )
 
+    def _observe(self, segment, time):
+        """Take note of a message of audio ``segment`` at audio ``time``. A segment newer than
+        the newest seen (a gap or a format change in the capture, whether or not the
+        timestamps jump) moves the whole stream on: every live state starts afresh in it,
+        together, whichever message told of it first. The history keeps every row. After
+        a full reset there is no segment to compare with, so it cannot happen twice."""
+        if self.segment is None:
+            for live in self.live.values():  # rows that came before any segment was known
+                if live.segment is None:
+                    live.segment = segment
+        elif segment > self.segment:
+            for live in self.live.values():
+                live.begin(segment)
+            self.live_epoch += 1
+        if self.segment is None or segment > self.segment:
+            self.segment = segment
+        self._newest = time if self._newest is None else max(self._newest, time)
+
     def _activity(self, message):
         # Rows logged before activity carried a segment stand for the current one.
         segment = message.segment if "segment" in message.model_fields_set else None
-        if segment is not None and self.segment is not None and segment < self.segment:
-            # A row of a segment that is over, arriving after the stream moved on. The engine
-            # never publishes one (each frame's rows follow it, and the analysis starts
-            # anew with a new segment); if one comes, it is late, like a row out of time
-            # order, and is refused. Rows of the old segment that came in order are kept.
-            return
+        if segment is not None:
+            if self.segment is not None and segment < self.segment:
+                # A row of a segment that is over, arriving after a message of a newer one.
+                # The engine never publishes one (each frame's rows follow it, and the
+                # analysis starts anew with a new segment). If one comes it is refused before
+                # it touches anything, whatever its timestamp; rows of the old segment that
+                # came in order are kept.
+                return
+            # A row of a newer segment than any frame so far is that segment beginning:
+            # its frame may simply not have arrived yet.
+            self._observe(segment, message.timestamp)
         track = self.activity.get(message.instrument)
         if track is None:
             track = self.activity[message.instrument] = Track(self.capacity, len(ACTIVITY))

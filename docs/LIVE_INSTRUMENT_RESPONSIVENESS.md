@@ -668,8 +668,9 @@ envelope (fed to the live state) carried over too.
 
 **Correction.**
 
-- *Detection.* `VisualState._frame` compares each feature frame's `segment` with the
-  current one (`VisualState.segment`). On a change every live state starts afresh
+- *Detection.* The visual state compares the `segment` of each feature frame, and of each
+  activity row that states one, with the newest seen (`VisualState.segment`; see "Segment
+  ordering" below). On a change every live state starts afresh
   (`Live.begin(segment)`), and `live_epoch` counts it. The audio-clock handling at a
   segment change is as before.
 - *What starts afresh*, all of it in `Live.reset()`: recent attacks, bass pulses, level,
@@ -689,8 +690,8 @@ envelope (fed to the live state) carried over too.
   anyway (out of order), it is refused, from the history as well as from the live state,
   the same way a row out of time order always has been: kept, it would block the current
   segment's next rows from the history. Rows of the old segment that arrived in order stay.
-  A row of a *newer* segment than the newest frame is accepted; its live state starts
-  afresh for it, and the frame that follows does not start it a second time.
+  A row of a *newer* segment than the newest frame is accepted and moves every live state
+  into that segment; the frame that follows starts nothing a second time.
 - *Restarted timeline.* When the timestamps go back, the existing full reset happens
   (history included). It also forgets the current segment, so a segment change in the same
   frame does not cause a second fresh start.
@@ -705,6 +706,54 @@ envelope (fed to the live state) carried over too.
 **In practice** the engine's analyzers start again at a new segment and need a few frames
 (bass 170 ms) before they report, so a live ring is absent for that moment and then
 appears from the new segment's own rows.
+
+## Segment ordering (follow-up)
+
+**Fault.** The stream's segment was learned from feature frames only, while each live
+state could also move itself to the segment of a row it was fed. A row of segment 2
+arriving before the frame of segment 2 moved the bass live state on; a late row of segment
+1 then still passed the visual state's check (which only knew segment 1) and moved the bass
+state back; the frame of segment 2 then started everything afresh a second time.
+
+**Contract now.**
+
+1. *Which messages can tell of a newer segment:* feature frames and activity rows that
+   state their segment. `VisualState.segment` is the newest segment seen in either; it
+   only moves forward, except at a full reset. `VisualState._observe` is the one place it
+   changes.
+2. *A newer row before its frame* is that segment beginning. Every live state, all four
+   instruments together, starts afresh in it (`live_epoch` grows once), the row is then
+   taken in as the first of its instrument in that segment, and the frame that follows
+   finds the stream already in its segment and starts nothing again.
+3. *A late row of an older segment* is refused before it touches anything: not added to
+   the history, not fed to a live state, no change to the segment, to the per-instrument
+   segment of the history rows or to their derived columns, and the current segment's
+   next rows are not blocked. This holds whatever its timestamp, even one newer than every
+   row received.
+4. *A late frame of an older segment* is refused the same way (it does not become the
+   newest frame and does not reset anything) when it is less than `RESTART_S` (2 s) behind
+   the newest audio time seen.
+5. *A restarted timeline* is still recognised: a frame of the same segment that goes back
+   in time, or a frame of an older segment 2 s or more behind the newest audio time seen
+   (a replay played again from its start within the same session), causes the existing
+   full reset, once. The engine numbers segments upwards for as long as a source runs and a
+   new Start is a new session, which resets everything regardless; out-of-order delivery
+   between frames and rows is at most a few milliseconds, far below 2 s.
+6. *Rows without a segment* (logged before the field existed) belong to whatever segment
+   is current and never move it. Rows of that kind received before any frame are kept;
+   the first frame then gives those live states its segment without starting them afresh.
+   Sessions in which everything is segment 0 never start afresh.
+7. *Live states on their own:* `Live.feed` ignores a row of a segment older than its own
+   and starts afresh for a newer one, so a live state cannot be taken back even if used
+   without the visual state.
+8. *History:* every row accepted in order stays, from every segment. Only refused rows
+   are missing, and they are refused before reaching it.
+
+**Limit.** A row of a restarted timeline that arrives before the frame announcing the
+restart, and names an older segment, is refused; the restart is recognised at that frame
+and later rows are taken in. At most a row per instrument is lost that way.
+
+Tests: `tests/test_live_segments.py`, the five tests after "ordering".
 
 ## The bass ring's flow
 
