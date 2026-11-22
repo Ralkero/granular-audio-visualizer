@@ -23,7 +23,8 @@ import review_data as rd  # noqa: E402
 
 def commands(config, approved=False, dry_run=False):
     """[(name, argv)] in the order they run. Both arms get the same settings."""
-    paths, python = config["paths"], config["python"]
+    paths = config["paths"]
+    python = str(Path(config["python"]).resolve())  # a relative interpreter path is not found on Windows
     common = [python, str(HERE / "finetune_review.py")]
     for key in ("jobs", "parts", "labels", "source", "init", "review", "runs", "weights-dir"):
         common += [f"--{key}", paths[key]]
