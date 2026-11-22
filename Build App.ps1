@@ -11,6 +11,7 @@ param([string]$GuitarModel = "", [string[]]$AlsoInclude = @())
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 $name = 'Granular Music Visualizer'
+if (Get-Process -Name $name -ErrorAction SilentlyContinue) { throw "Close $name before building: the build replaces its folder" }
 $helper = 'native/ProcessLoopback/bin/Release/net9.0-windows'
 if (-not (Test-Path "$helper/ProcessLoopback.exe")) { & "$PSScriptRoot/Build Process Capture.ps1" }
 # A private .NET runtime for the helper (official build, checked against Microsoft's
