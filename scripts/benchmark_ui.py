@@ -37,6 +37,12 @@ def main():
     parser.add_argument("--label", default="")
     parser.add_argument("--screen", default="", help="part of the name of the display to open on")
     parser.add_argument("--fps", type=float, default=0, help="0: the window's own choice")
+    parser.add_argument(
+        "--rings", default="live", choices=("live", "history"), help="radial instrument rings"
+    )
+    parser.add_argument(
+        "--plain-spectrum", action="store_true", help="do not colour the spectrum by intensity"
+    )
     args = parser.parse_args()
     app = application()
     session = ReplaySession(args.session)
@@ -46,6 +52,8 @@ def main():
     window.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
     place(app, window, args.screen, width, height)
     window.set_mode(args.mode)
+    window.set_intensity_colour(not args.plain_spectrum)
+    window.set_radial_rings(args.rings)
     if args.fps and hasattr(window, "set_frame_rate"):
         window.set_frame_rate(args.fps)
     shown = {name for name in args.sections.split(",") if name}

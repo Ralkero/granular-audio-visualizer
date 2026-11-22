@@ -35,6 +35,12 @@ class Activity:
     pitch_midi: float | None = None  # bass, vocals: the note, when there is one
     pitch_confidence: float = 0.0
     boundary: str = ""  # vocals: "start" / "end" of a phrase
+    # A faster reading that some analyzers have beside the one above, which describes the
+    # frame ``lead_frames`` frames *newer* than this message's own (bass: its pitch needs
+    # 170 ms and is back-dated; its energy does not and is not).
+    energy: float | None = None  # 0..1 against a reference with a long memory
+    pulse: float = 0.0  # 0, or the strength of a note onset in that newer frame
+    lead_frames: int = 0
 
 
 def analyzers():

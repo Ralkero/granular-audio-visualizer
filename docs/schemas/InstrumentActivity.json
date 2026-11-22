@@ -190,6 +190,33 @@
       "title": "Pitch Confidence",
       "type": "number"
     },
+    "energy": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Energy"
+    },
+    "pulse": {
+      "default": 0,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Pulse",
+      "type": "number"
+    },
+    "lead_s": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Lead S",
+      "type": "number"
+    },
     "boundary": {
       "default": "",
       "enum": [

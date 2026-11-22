@@ -17,7 +17,7 @@ from PySide6.QtGui import QFont, QPainter, QPen
 
 from ..state import COLUMN as C
 from ..strip import polygon
-from . import Layer
+from . import Layer, around, circle
 from .guitar import NEUTRAL, runs, tint
 
 LOW_MIDI, HIGH_MIDI = 26.0, 56.0
@@ -46,6 +46,64 @@ class BassLayer(Layer):
 
     def restart(self):
         self.last_pitch = (LOW_MIDI + HIGH_MIDI) / 2
+
+    def paint_live(self, painter, stage, live):
+        """One heavy ring that breathes. Its thickness is the energy of the low register
+        now; every note onset pushes it outwards and brightens it, and it falls back
+        between notes; it flows faster the more energy there is, so a held note keeps
+        moving; the note itself sets how far out the ring sits."""
+        colour = self.profile.colour
+        angles, sines, cosines = around(180)
+        height = stage.height
+        strength = min(1.5, self.intensity) * stage.gain
+        energy = live.energy * live.weight
+        swell = min(1.5, live.swell(0.16)) * live.weight
+        self.flow = getattr(self, "flow", 0.0) + live.dt * (0.5 + 3.0 * live.energy)
+        middle = (
+            stage.inner
+            + height * (0.42 + 0.14 * (live.place - 0.5))
+            + height * 0.15 * swell * strength
+        )
+        half = height * (0.035 + 0.24 * energy * strength) * (1.0 + 0.35 * swell)
+        wobble = height * (0.012 + 0.07 * energy) * strength
+        line = (
+            middle
+            + wobble * np.sin(3 * angles + self.flow)
+            + 0.5 * wobble * np.sin(5 * angles - 1.3 * self.flow)
+        )
+        lit = min(1.0, swell)
+        outer = np.clip(line + half, stage.inner, stage.outer)
+        inner = np.clip(line - half, stage.inner, stage.outer)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        opacity = min(1.0, 0.25 + live.weight)
+        edge = QPen(
+            tint(colour, NEUTRAL, 0.5, 0.7 * opacity)
+            if live.tentative
+            else tint(colour, "#ffffff", 0.2 + 0.45 * lit, (0.6 + 0.4 * lit) * opacity),
+            0,
+        )
+        if live.tentative:
+            edge.setStyle(Qt.PenStyle.DashLine)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+        else:
+            painter.setPen(Qt.PenStyle.NoPen)
+            # The fill is not antialiased (its edges are drawn over it, and they are).
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+            pale = not live.pitched  # no note could be read: paler, as in the history
+            painter.setBrush(
+                tint(colour, "#ffffff", 0.22 * lit, (0.3 if pale else 0.5) * opacity + 0.25 * lit)
+            )
+            painter.drawPolygon(
+                polygon(
+                    np.concatenate((stage.cx + outer * sines, (stage.cx + inner * sines)[::-1])),
+                    np.concatenate((stage.cy - outer * cosines, (stage.cy - inner * cosines)[::-1])),
+                )
+            )
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(edge)
+        painter.drawPolyline(circle(stage, outer, sines, cosines))
+        painter.drawPolyline(circle(stage, inner, sines, cosines))
 
     def paint_static(self, painter, rect, stage, state):
         painter.setFont(stage.font(10, QFont.Weight.DemiBold, 1.2))

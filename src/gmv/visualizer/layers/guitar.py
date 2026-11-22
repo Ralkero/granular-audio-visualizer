@@ -23,13 +23,17 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from .. import palette
 from ..state import COLUMN as C
 from ..strip import polygon
-from . import Layer
+from . import Layer, around, circle
 
 STRINGS = 6
 NEUTRAL = QColor(palette.NEUTRAL)
 # Waves per second of timeline for each string, low to high: only a look, like the gauge
 # of a string. The amplitude and where a wave restarts come from the analysis.
 WAVES = (7.0, 8.5, 10.5, 12.5, 15.0, 18.0)
+# Live ring: how many waves each string has round the circle (whole numbers, so the
+# string closes on itself) and how fast it swings, low to high. Only a look.
+NODES = (9, 11, 13, 16, 19, 23)
+SWING_HZ = (4.0, 4.8, 5.7, 6.7, 7.8, 9.0)
 BEAM_TOLERANCE = 0.35  # how far a gap may be from the repetition period and still be beamed
 BEAM_REGULARITY = 0.5
 
@@ -169,6 +173,49 @@ class GuitarLayer(Layer):
                 stage.surface.line(artist, before + lean / 2, top, before + lean / 2, rail)
                 artist.setPen(QPen(shade, 2.2))
                 stage.surface.line(artist, before + lean / 2, rail, x + lean / 2, rail)
+
+    def paint_live(self, painter, stage, live):
+        """Six strings as rings. A stroke sets the strings it covered swinging (a
+        standing wave, so they visibly vibrate in place) and flashes them; the swing
+        follows the ringing envelope down, slowly under a held chord, quickly after a
+        muted stroke. Each stroke starts the swing again."""
+        colour = self.profile.colour
+        angles, sines, cosines = around(240)
+        height = stage.height
+        strength = min(1.6, self.intensity) * stage.gain
+        last = live.last
+        since = max(0.0, live.t - last.time) if last is not None else 1e6
+        centre, spread = (last.centre, last.spread) if last is not None else (0.5, 1.0)
+        struck = last.strength if last is not None else 0.0
+        reach = 0.14 + 0.7 * spread
+        flash = struck * np.exp(-since / 0.11)
+        ring = live.ring * (0.55 + 0.45 * struck)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for string in range(STRINGS):
+            place = string / (STRINGS - 1)
+            radius = stage.inner + height * (0.12 + 0.76 * place)
+            part = float(np.exp(-(((place - centre) / reach) ** 2)))
+            swing = np.cos(2 * np.pi * SWING_HZ[string] * since)
+            wave = height * 0.07 * strength * ring * part * swing * np.sin(NODES[string] * angles)
+            # A held chord keeps a small, slow shimmer of its own.
+            wave = wave + height * 0.012 * strength * live.level * np.sin(
+                NODES[string] * angles + 2 * np.pi * 1.1 * live.t + string
+            )
+            lit = min(1.0, flash * part)
+            opacity = (0.5 + 0.5 * max(min(1.0, ring * part * 1.5), 0.35 * live.level)) * min(
+                1.0, live.weight * 1.2
+            )
+            pen = QPen(
+                tint(colour, NEUTRAL, 0.5, opacity * 0.8)
+                if live.tentative
+                else tint(colour, "#ffffff", 0.1 + 0.7 * lit, opacity),
+                0,  # one device pixel: wide antialiased curves this long cost milliseconds
+            )
+            if live.tentative:
+                pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.drawPolyline(circle(stage, radius + wave * live.weight, sines, cosines))
 
     def reading(self, state):
         """One line saying how the newest activity is being read, or ''."""

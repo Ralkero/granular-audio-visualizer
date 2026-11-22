@@ -267,6 +267,9 @@ class Analyzer:
                         pitch_midi=found.pitch_midi,
                         pitch_confidence=found.pitch_confidence,
                         boundary=found.boundary,
+                        energy=found.energy,
+                        pulse=found.pulse,
+                        lead_s=found.lead_frames * self.hop,
                     )
                 )
             self.instrument_ms = (perf_counter() - instruments_began) * 1000

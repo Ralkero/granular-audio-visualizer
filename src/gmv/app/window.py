@@ -267,6 +267,15 @@ class SettingsDrawer(QFrame):
         )
         self.frame_rate.currentIndexChanged.connect(self.apply_frame_rate)
         self.form.addRow("Frame rate", self.frame_rate)
+        self.intensity_colour = QCheckBox("Colour the spectrum by musical intensity")
+        self.intensity_colour.setChecked(True)
+        self.intensity_colour.setToolTip(
+            "The spectrum keeps its indigo in quiet passages and turns towards a dark red as "
+            "the music as a whole gets louder and fuller. Instrument colours never change. "
+            "Only the drawing: nothing about the analysis."
+        )
+        self.intensity_colour.toggled.connect(self.view.set_intensity_colour)
+        self.form.addRow(self.intensity_colour)
         self.form.addRow(row(self.reset, self.fullscreen))
 
     def apply_frame_rate(self):
@@ -295,6 +304,17 @@ class SettingsDrawer(QFrame):
             lambda: self.view.set_spectrum_place(self.spectrum_place.currentData())
         )
         self.form.addRow("Whole-mix spectrum", self.spectrum_place)
+        self.radial_rings = Combo()
+        self.radial_rings.addItem("Live: each instrument as it plays now", "live")
+        self.radial_rings.addItem("History: the last six seconds, swept by a hand", "history")
+        self.radial_rings.setToolTip(
+            "How the instrument rings of the Radial view are drawn. The timeline and the "
+            "detail lanes show the history either way."
+        )
+        self.radial_rings.currentIndexChanged.connect(
+            lambda: self.view.set_radial_rings(self.radial_rings.currentData())
+        )
+        self.form.addRow("Radial rings", self.radial_rings)
         self.reset_layout = QPushButton("Reset layout")
         self.reset_layout.setToolTip(
             "Show the timeline, hide the details and notes, and size everything automatically."
@@ -554,6 +574,8 @@ class SettingsDrawer(QFrame):
             "sections": self.view.layout_state(),
             "analysis_process": self.own_process.isChecked(),
             "frame_rate": self.frame_rate.currentData(),
+            "intensity_colour": self.intensity_colour.isChecked(),
+            "radial_rings": self.radial_rings.currentData(),
         }
 
     def restore(self, saved):
@@ -578,6 +600,10 @@ class SettingsDrawer(QFrame):
         )
         self.view.restore_layout(saved.get("sections"))
         self.own_process.setChecked(bool(saved.get("analysis_process", True)))
+        self.intensity_colour.setChecked(bool(saved.get("intensity_colour", True)))
+        self.radial_rings.setCurrentIndex(
+            max(0, self.radial_rings.findData(saved.get("radial_rings", "live")))
+        )
         self.frame_rate.setCurrentIndex(
             max(0, self.frame_rate.findData(saved.get("frame_rate", "auto")))
         )

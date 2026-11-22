@@ -12,6 +12,10 @@ instrument analyzer looks at samples as well as at the shared spectrum.
 * ``level``: how much periodic low-register sound there is, against its recent peak.
 * ``attack``: a new note (the pitch settled at least a semitone away) or the same note
   struck again (its level rose sharply while it stayed periodic).
+* ``energy`` and ``pulse``: a faster reading beside those, from the newest 46 ms alone and
+  not back-dated (``lead_frames``): how strong the low register is against its loudest of
+  the last half minute, and note onsets found as a rise out of a dip, whatever the pitch.
+  This is what a live picture of the bass moves with; the pitch follows 60 to 80 ms later.
 
 It follows the lowest periodic sound in the centre of the mix. That is usually the bass; it
 can be a low guitar riff, a synthesizer or a tuned kick. Whether a bass is playing is the
@@ -31,6 +35,12 @@ LOW_HZ, HIGH_HZ = 38.0, 135.0  # just under E1 to just over C3
 WINDOW_S = 0.17
 CONFIDENT = 0.55  # periodicity needed to name a note at default sensitivity
 HEAVY = 0.25  # weight below which the low register is too faint to be a bass note
+# The fast path: energy and note onsets from the newest 46 ms, not the 170 ms pitch window.
+ENERGY_MEMORY_S = 30.0  # how long the loudest low register is remembered as the reference
+ENERGY_RANGE_DB = 36.0  # energy 0..1 covers this much below the reference
+OF_THE_MIX = 0.2  # the reference is never below this share of the whole mix's own peak
+PULSE_RISE_DB = 5.0  # rise over the lowest of the last 120 ms that makes a note onset
+PULSE_GAP_S = 0.09
 LOW_MIDI, HIGH_MIDI = 26.0, 56.0  # display range of ``centre``
 
 
@@ -78,6 +88,41 @@ class BassPitch:
         self.previous_loud = 0.0
         self.since_attack = 1e6
         self.repetition.reset()
+        self.long = self.long_whole = 0.0  # slow references of the fast path
+        self.recent = [0.0] * 6  # low-register level of the six frames before (120 ms)
+        self.since_pulse = 1e6
+        self.rising = False
+
+    def _fast(self, newest, whole, quiet, scale):
+        """(energy 0..1, pulse strength or 0) of the newest frame alone.
+
+        Energy is the low register against the loudest it has been in the last half minute
+        (and never less than a share of the whole mix's loudest), so playing quietly is
+        small and a build grows. A pulse is that register rising clearly above the lowest
+        it has been in the last 120 ms: a note that is struck again at the same pitch and
+        the same level still dips before it comes back, and the dip is what is measured.
+        Nothing here waits for the pitch."""
+        fade = float(np.exp(-self.hop / ENERGY_MEMORY_S))
+        self.long = max(newest, self.long * fade)
+        self.long_whole = max(whole, self.long_whole * fade)
+        reference = max(self.long, OF_THE_MIX * self.long_whole)
+        energy, pulse = 0.0, 0.0
+        if not quiet and reference > 1e-12 and newest > 0:
+            energy = min(1.0, max(0.0, 1.0 + 20.0 * np.log10(newest / reference) / ENERGY_RANGE_DB))
+            lowest = max(min(self.recent), reference * 10 ** (-ENERGY_RANGE_DB / 20))
+            rise = 20.0 * np.log10(newest / lowest)
+            self.since_pulse += self.hop
+            risen = rise >= PULSE_RISE_DB * scale and energy > 0.12
+            # Once per rise: the frame in which it first clears the bar. It can do so again
+            # only after it has been back under it (the dip has left the last 120 ms).
+            if risen and not self.rising and self.since_pulse >= PULSE_GAP_S:
+                pulse = float(min(1.0, (0.3 + 0.7 * energy) * min(1.0, rise / (2 * PULSE_RISE_DB))))
+                self.since_pulse = 0.0
+            self.rising = risen
+        else:
+            self.rising = False
+        self.recent = self.recent[1:] + [newest]
+        return float(energy), pulse
 
     def _pitch(self):
         """(MIDI note or None, periodicity 0..1, rms) of the samples held now."""
@@ -129,7 +174,9 @@ class BassPitch:
         loud = 0.0 if quiet else self.loudness.step(rms)
         # Struck again: the low register of the shared spectrum (which sees 46 ms, not
         # 170) clearly above where it was in the three frames before.
-        newest = float(np.abs(spectrum[self.low, : min(2, spectrum.shape[1])].sum(axis=1)).sum())
+        magnitude = np.abs(spectrum[:, : min(2, spectrum.shape[1])].sum(axis=1))
+        newest = float(magnitude[self.low].sum())
+        energy, pulse = self._fast(newest, float(magnitude.sum()), quiet, scale)
         self.top = max(newest, self.top * float(np.exp(-self.hop / 2.0)))
         struck = self.top > 0 and (newest - max(self.hops)) / self.top > 0.18 * scale
         self.hops = self.hops[1:] + [newest]
@@ -177,4 +224,7 @@ class BassPitch:
             basis="mono",
             pitch_midi=note,
             pitch_confidence=clarity if not quiet else 0.0,
+            energy=energy,
+            pulse=pulse,
+            lead_frames=self.delay_frames,
         )

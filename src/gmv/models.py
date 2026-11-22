@@ -204,6 +204,14 @@ class InstrumentActivity(Message):
     # how periodic or harmonic the sound was (0..1) whether or not a pitch is given.
     pitch_midi: float | None = None
     pitch_confidence: float = Field(default=0, ge=0, le=1)
+    # A faster reading some analyzers give beside the fields above. It describes the moment
+    # ``timestamp + lead_s``, newer than the rest of the message: the bass's pitch needs
+    # 170 ms of audio and is back-dated, its energy and note onsets are not. ``energy`` is
+    # 0..1 against a reference that remembers about half a minute, so quiet playing is
+    # small and a build grows; ``pulse`` is 0 or the strength of a note onset there.
+    energy: float | None = Field(default=None, ge=0, le=1)
+    pulse: float = Field(default=0, ge=0, le=1)
+    lead_s: float = Field(default=0, ge=0)
     # Vocals: "start" where a phrase begins, "end" where it has ended.
     boundary: Literal["", "start", "end"] = ""
     confidence_interpretation: str = "uncalibrated_activity_from_mixed_audio"

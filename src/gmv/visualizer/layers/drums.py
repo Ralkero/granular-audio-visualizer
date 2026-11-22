@@ -29,7 +29,75 @@ SHADES = palette.DRUM_REGIONS  # three shades of the drums' own colour
 RAYS = [(math.cos(a), math.sin(a)) for a in np.linspace(0, 2 * math.pi, 8, endpoint=False)]
 
 
+# Live ring: how long each region's impact lasts, in seconds.
+LIFE = {"low": 0.5, "mid": 0.2, "high": 0.13}
+SPOKES = 28
+
+
 class DrumsLayer(Layer):
+    def paint_live(self, painter, stage, live):
+        """Every hit is an impact that happens and is gone, and any number overlap.
+        ``low``: a heavy ring that swells outwards and thins, slowly. ``mid``: a sharp
+        burst of rays all the way round, quickly gone. ``high``: a light scatter of
+        sparks at the outer edge, gone almost at once. Size and brightness are the
+        strength of the hit. Between hits there is only a faint circle."""
+        height = stage.height
+        strength = min(1.5, self.intensity) * stage.gain
+        shown = min(1.0, live.weight * 1.2)
+        hollow = live.tentative
+        cx, cy = stage.cx, stage.cy
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        rest = stage.inner + height * 0.2
+        painter.setPen(QPen(tint(self.profile.colour, NEUTRAL, 0.3, 0.16 * shown), 1))
+        painter.drawEllipse(QPointF(cx, cy), rest, rest)
+        regions = ("low", "mid") if self.style == "low and mid" else ("low", "mid", "high")
+        for age, hit in live.recent(max(LIFE.values())):
+            for name in regions:
+                power = getattr(hit, name)
+                progress = age / LIFE[name]
+                if power <= 0 or progress >= 1:
+                    continue
+                fade = (1.0 - progress) ** 1.6
+                shade = SHADES[name]
+                colour = (
+                    tint(shade, NEUTRAL, 0.6, 0.7 * fade * shown)
+                    if hollow
+                    else tint(shade, "#ffffff", 0.1 + 0.5 * power * fade, fade * shown)
+                )
+                if name == "low":
+                    out = 1.0 - (1.0 - progress) ** 2  # fast at first, then slowing
+                    radius = rest + height * (0.05 + 0.55 * out) * min(1.2, 0.6 + 0.5 * power * strength)
+                    width = (1.0 + height * 0.16 * power * strength * (1.0 - progress)) * (0.5 if hollow else 1.0)
+                    painter.setPen(QPen(colour, width))
+                    painter.drawEllipse(QPointF(cx, cy), min(radius, stage.outer - width / 2), min(radius, stage.outer - width / 2))
+                elif name == "mid":
+                    centre = stage.inner + height * (0.5 + 0.08 * progress)
+                    reach = height * (0.12 + 0.26 * power * strength) * (0.7 + 0.3 * progress)
+                    turn = (hit.time * 7.3) % (2 * math.pi / SPOKES)  # each hit sits a little differently
+                    painter.setPen(QPen(colour, (1.2 + 1.6 * power) * max(1.0, stage.scale)))
+                    lines = []
+                    for spoke in range(SPOKES):
+                        angle = turn + 2 * math.pi * spoke / SPOKES
+                        sin, cos = math.sin(angle), math.cos(angle)
+                        a, b = max(stage.inner, centre - reach), min(stage.outer, centre + reach)
+                        lines.append(QLineF(cx + a * sin, cy - a * cos, cx + b * sin, cy - b * cos))
+                    painter.drawLines(lines)
+                else:
+                    seed = int(hit.time * 1000) & 0xFFFF
+                    spots = np.random.default_rng(seed).random((18, 2))
+                    angle = 2 * math.pi * spots[:, 0]
+                    radius = stage.outer - height * (0.04 + 0.16 * spots[:, 1]) + height * 0.05 * progress
+                    radius = np.minimum(radius, stage.outer)
+                    size = (1.0 + 1.8 * power * strength) * max(1.0, stage.scale) * (1.0 - 0.5 * progress)
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(colour)
+                    for x, y in zip(
+                        (cx + radius * np.sin(angle)).tolist(), (cy - radius * np.cos(angle)).tolist(), strict=True
+                    ):
+                        painter.drawEllipse(QPointF(x, y), size, size)
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+
     def paint_static(self, painter, rect, stage, state):
         painter.setFont(stage.font(10, QFont.Weight.DemiBold, 1.2))
         painter.setPen(tint(self.profile.colour, "#ffffff", 0.1, 0.95))

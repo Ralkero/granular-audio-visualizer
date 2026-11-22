@@ -39,7 +39,7 @@ Logging is enabled by default. Audio recording is disabled. The optional debug s
 
 ## Instrument layers (experimental)
 
-The main view is the selected visualizer, Radial or Spectrum Bars, with the instruments drawn inside it: a ring each round the radial spectrum, or a strip each across the bars. Each layer is drawn from its own analysis of one instrument, with its own picture and its own colour, not from the spectrum:
+The main view is the selected visualizer, Radial or Spectrum Bars, with the instruments drawn inside it: a ring each round the radial spectrum, or a strip each across the bars. In Radial the rings are live: each is a fixed object that moves with what its instrument is playing now (strings that swing, a bass ring that pulses, vocal strands, drum impacts); the history of what was played stays in the timeline and the lanes, and Settings can switch the rings back to a six-second history. Each layer is drawn from its own analysis of one instrument, with its own picture and its own colour, not from the spectrum:
 
 | Layer | Picture | State |
 |---|---|---|
@@ -53,6 +53,7 @@ Each instrument's lane shows the same activity in more detail.
 - Every layer joins a fast analysis of articulation (every 20 ms) with a slower judgement of whether the instrument is present: the recognition model for guitar, the frame-wise activity model (`activity_v2`) for drums, bass and vocals. While that judgement says "absent" the layer is empty.
 - **Top bar**: a button per instrument, in its colour, shows or hides its layer while analysis runs; Timeline, Details and Notes show or hide the sections under the visualizer (drag a section's upper edge to resize it).
 - **Settings → Instrument layers**: sensitivity (what the analysis reports), intensity (how strongly it is drawn; the analysis is not affected) and style per layer, the whole-mix spectrum (dimmed, full or hidden), and Reset layout.
+- The main spectrum (Radial and Spectrum Bars) keeps its indigo in quiet passages and turns towards a dark red as the music as a whole gets louder and fuller; instrument colours are not affected. Settings → Visualizer turns it off. How it is measured, and what has not been validated by eye: [docs/MUSICAL_INTENSITY.md](docs/MUSICAL_INTENSITY.md).
 - Performance measurements and what was changed: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 - None of this is source separation. On MoisesDB stems, removing an instrument from a mix leaves 12% (drums), 5% (bass) and 0% (vocals) of what its layer shows, but that is mostly the activity model's doing: on their own the analyzers follow short broadband hits, whatever is low and periodic, and the centre of the mix. Design, measurements and limits: [docs/INSTRUMENT_LAYERS.md](docs/INSTRUMENT_LAYERS.md).
 

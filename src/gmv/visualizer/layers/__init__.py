@@ -29,6 +29,9 @@ Adding a visualizer mode: a surface, and a ``Stage`` per layer from the mode's g
 
 import math
 from dataclasses import dataclass
+from functools import lru_cache
+
+import numpy as np
 
 from PySide6.QtCore import QRectF
 
@@ -37,6 +40,23 @@ from ..strip import Strip, Sweep
 from .surface import Linear, Polar
 
 GAP = 0.06  # share of a ring left empty ahead of "now"
+
+
+@lru_cache(maxsize=8)
+def around(count):
+    """(angles, sines, cosines) of ``count`` + 1 points once round a circle from the top,
+    the last on the first, so a polyline through them closes."""
+    angles = np.linspace(0.0, 2 * math.pi, count + 1)
+    return angles, np.sin(angles), np.cos(angles)
+
+
+def circle(stage, radii, sines, cosines):
+    """A closed curve round the stage's centre at ``radii`` (one per angle), kept inside
+    the instrument's own ring."""
+    from ..strip import polygon
+
+    radii = np.clip(radii, stage.inner, stage.outer)
+    return polygon(stage.cx + radii * sines, stage.cy - radii * cosines)
 
 
 @dataclass(frozen=True)
@@ -60,7 +80,13 @@ class Stage:
     ``height`` is the band's thickness and ``per_second`` its length per second, in pixels,
     in both kinds."""
 
-    def __init__(self, now, seconds, scale, generation, font, *, rect=None, ring=None):
+    def __init__(
+        self, now, seconds, scale, generation, font, *, rect=None, ring=None, live=False, gain=1.0
+    ):
+        # ``live``: a polar stage is drawn as a fixed, animated object from the
+        # instrument's present state instead of as a history swept by a hand.
+        # ``gain``: how much larger everything moves in intense music, about 0.5..1.
+        self.live, self.gain = live and ring is not None, gain
         self.now, self.seconds = now, seconds
         self.scale, self.generation, self.font = scale, generation, font
         self.rect, self.ring = rect, ring
@@ -120,6 +146,12 @@ class Layer:
         """The same rows in the detailed lane, between ``top`` and ``bottom``."""
         raise NotImplementedError
 
+    def paint_live(self, painter, stage, live):
+        """Draw the instrument as it is now, in its ring (``stage.inner`` to
+        ``stage.outer`` round ``stage.cx``, ``stage.cy``), from ``live`` (``live.Live``,
+        already advanced to this frame). Called every frame; nothing is kept."""
+        raise NotImplementedError
+
     def reading(self, state):
         """One line saying how the newest activity is being read, or ''."""
         return ""
@@ -132,6 +164,15 @@ class Layer:
         judgement changes, or the layer's style or intensity do."""
         track = self.rows(state)
         if track is None or stage.now is None:
+            return
+        if stage.live:
+            live = state.live.get(self.key)
+            if live is None or live.time is None:
+                return
+            weights, tentative = state.attribution(self.key, (live.time,))
+            live.advance(stage.now, float(weights[0]), bool(tentative[0]))
+            if live.weight > 0.02:
+                self.paint_live(painter, stage, live)
             return
         key = (
             stage.generation,

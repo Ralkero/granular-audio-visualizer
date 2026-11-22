@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from . import layers as layer_registry
 from . import palette
+from .intensity import tint
 from .perf import Timings
 from .state import ROWS, SpectrumDisplay, VisualState
 from .strip import Strip, polygon
@@ -39,6 +40,9 @@ TEXT, DIM, FAINT = QColor("#e8ebf4"), QColor("#8089a0"), QColor("#262b3a")
 PREDICTED = QColor(palette.PREDICTED)  # reserved for predictions; no instrument has it
 CONTEXT = QColor(palette.CONTEXT)
 SPECTRUM = palette.SPECTRUM  # whole mix: low, middle, high frequencies
+INTENSE = palette.INTENSE  # the same, when the music as a whole is most intense
+BAR_STRIPE = 3  # pixels of width a bar has in its cached picture
+HEAT_STEPS = 24  # the colouring moves in this many steps; each has its colours cached
 CONDITIONS = {
     "idle": ("IDLE", "#6b7280"),
     "waiting": ("WAITING", "#f5c451"),
@@ -88,6 +92,24 @@ def round_pen(color, width):
 def spectrum_color(position):
     low, middle, high = SPECTRUM
     return mix(low, middle, position * 2) if position < 0.5 else mix(middle, high, position * 2 - 1)
+
+
+def spectrum_colors(count, share=0.0):
+    """The colours of ``count`` spectrum bars, low to high, ``share`` of the way from the
+    neutral palette to the intense one. At 0 they are exactly the neutral colours."""
+    neutral = [spectrum_color(i / max(1, count - 1)) for i in range(count)]
+    if share <= 0:
+        return neutral
+    low, middle, high = INTENSE
+    colours = []
+    for index, colour in enumerate(neutral):
+        position = index / max(1, count - 1)
+        if position < 0.5:
+            intense = mix(low, middle, position * 2)
+        else:
+            intense = mix(middle, high, position * 2 - 1)
+        colours.append(mix(colour, intense, min(1.0, share)))
+    return colours
 
 
 def automatic_rate(refresh):
@@ -155,8 +177,15 @@ class Canvas(canvas_base()):
         self.painted = 0
         self.show_stats = False
         self._background = None
-        self._colors = []
+        self._colors = {}
         self._cache = {}
+        # Colouring of the spectrum by the intensity of the music as a whole: how far it
+        # is coloured now (0 neutral .. 1), and whether it is coloured at all.
+        self.heat = 0.0
+        self.colour_by_intensity = True
+        # Radial instrument rings: live objects drawn from each instrument's present
+        # state (the default), or the six-second history swept by a hand.
+        self.radial_live = True
         self.static = False  # True while the rarely-changing picture is being drawn
         self.ring_offset = 0.0
         edges = np.linspace(0, 2 * np.pi, 97)
@@ -187,6 +216,8 @@ class Canvas(canvas_base()):
         rate = 0.03 if target > self.level else 0.25
         self.level += (target - self.level) * (1 - math.exp(-dt / rate))
         self.intensity += (intensity - self.intensity) * (1 - math.exp(-dt / 0.2))
+        heat = tint(state.musical.value) if running and self.colour_by_intensity else 0.0
+        self.heat += (heat - self.heat) * (1 - math.exp(-dt / 0.12))
         self.peak_level = max(self.level, self.peak_level - 0.25 * dt)
         self.flash *= math.exp(-dt / 0.14)
         self.pulse *= math.exp(-dt / 0.22)
@@ -436,10 +467,13 @@ class Canvas(canvas_base()):
             for layer, (low, high) in zip(active, bands, strict=True):
                 stage = layer_registry.Stage(
                     self.now, RING_SECONDS, self.scale, state.generation, self.font,
-                    ring=(cx, cy, low, high),
+                    ring=(cx, cy, low, high), live=self.radial_live,
+                    gain=0.55 + 0.45 * state.musical.value,
                 )  # fmt: skip
                 with self.perf.measure("layer " + layer.key):
                     layer.paint_stage(painter, stage, state)
+            if self.radial_live:
+                return  # live rings have no timeline, so no hand
             # The hand: where "now" is on the rings.
             angle = 2 * math.pi * (self.now % RING_SECONDS) / RING_SECONDS
             sin, cos = math.sin(angle), math.cos(angle)
@@ -579,10 +613,21 @@ class Canvas(canvas_base()):
                 note,
             )
 
+    @property
+    def heat_step(self):
+        """The colouring in whole steps: every bar takes the same step, so the spectrum
+        changes colour as one thing, and each step's colours are worked out once."""
+        return round(self.heat * HEAT_STEPS)
+
     def colors(self, count):
-        if len(self._colors) != count:
-            self._colors = [spectrum_color(i / max(1, count - 1)) for i in range(count)]
-        return self._colors
+        """The bars' colours for the music's present intensity."""
+        key = (count, self.heat_step)
+        colours = self._colors.get(key)
+        if colours is None:
+            if len(self._colors) > 2 * HEAT_STEPS + 2:
+                self._colors.clear()
+            colours = self._colors[key] = spectrum_colors(count, key[1] / HEAT_STEPS)
+        return colours
 
     def cached(self, name, key, build):
         """Pictures that only change with the window size are drawn once and reused."""
@@ -626,21 +671,23 @@ class Canvas(canvas_base()):
                 )
         painter.setOpacity(1.0)
 
-    def bar_pictures(self, count, slot, bar, reach):
-        """Every bar at full height, plain and brightened; frames copy the part they need."""
+    def bar_pictures(self, count, reach):
+        """Every bar at full height, plain and brightened; frames copy the part they need.
+        A bar is the same all the way across, so three pixels of width each are enough (the
+        middle one is copied, stretched), which keeps one pair per colour step small."""
         ratio = self.devicePixelRatioF()
         pictures = []
         for whiten in (0.12, 0.8):
-            picture = QPixmap(math.ceil(count * slot * ratio), math.ceil(reach * ratio))
+            picture = QPixmap(count * BAR_STRIPE, math.ceil(reach * ratio))
             picture.fill(Qt.GlobalColor.transparent)
             artist = QPainter(picture)
-            artist.scale(ratio, ratio)
+            artist.scale(1, ratio)
             artist.setPen(Qt.PenStyle.NoPen)
             for index, colour in enumerate(self.colors(count)):
                 fill = QLinearGradient(0, 0, 0, reach)
                 fill.setColorAt(0, mix(colour, "#ffffff", whiten))
                 fill.setColorAt(1, alpha(mix(colour, "#ffffff", whiten / 2), 0.45))
-                artist.fillRect(QRectF(index * slot + (slot - bar) / 2, 0, bar, reach), fill)
+                artist.fillRect(QRectF(index * BAR_STRIPE, 0, BAR_STRIPE, reach), fill)
             artist.end()
             pictures.append(picture)
         return pictures
@@ -663,13 +710,13 @@ class Canvas(canvas_base()):
             )
             return
         plain, bright = self.cached(
-            "bars",
-            (count, round(slot, 3), round(reach), ratio),
-            lambda: self.bar_pictures(count, slot, bar, reach),
+            f"bars {self.heat_step}",  # each colour step keeps its pair: drawn once
+            (count, round(reach), ratio),
+            lambda: self.bar_pictures(count, reach),
         )
         caps, mirrors = self.cached(
             "bar colours",
-            count,
+            (count, self.heat_step),
             lambda: (
                 [alpha(c, 0.85) for c in self.colors(count)],
                 [alpha(c, 0.09) for c in self.colors(count)],
@@ -683,12 +730,7 @@ class Canvas(canvas_base()):
         for index, tall in enumerate(heights):
             x = left + index * slot
             target = QRectF(x, base - tall, bar, tall)
-            source = QRectF(
-                (index * slot + (slot - bar) / 2) * ratio,
-                (reach - tall) * ratio,
-                bar * ratio,
-                tall * ratio,
-            )
+            source = QRectF(index * BAR_STRIPE + 1, (reach - tall) * ratio, 1, tall * ratio)
             painter.drawPixmap(target, plain, source)
             if flashing:
                 painter.setOpacity(min(1.0, self.flash * tall / reach))
@@ -803,7 +845,7 @@ class Canvas(canvas_base()):
         ys[:, 1], ys[:, 2] = far * sin - half * cos, far * sin + half * cos
         plain, bright = self.cached(
             "spoke colours",
-            count,
+            (count, self.heat_step),
             lambda: tuple(
                 [mix(c, "#ffffff", whiten) for c in self.colors(count) + self.colors(count)[::-1]]
                 for whiten in (0.0, 0.45)
@@ -1299,6 +1341,21 @@ class VisualizerWindow(QWidget):
         if place in ("beside", "behind", "hidden"):
             self.canvas.spectrum_place = place
             self.canvas.update()
+
+    def set_radial_rings(self, kind):
+        """How the instrument rings of the radial view are drawn: "live" (fixed objects
+        animated by what each instrument is doing now) or "history" (the last six
+        seconds, swept by a hand). The timeline and the lanes keep their history either
+        way."""
+        if kind in ("live", "history"):
+            self.canvas.radial_live = kind == "live"
+            self.canvas.update()
+
+    def set_intensity_colour(self, enabled):
+        """Whether the spectrum reddens with the intensity of the music as a whole. Only
+        how it is drawn: the intensity is still worked out, the analysis is untouched."""
+        self.canvas.colour_by_intensity = bool(enabled)
+        self.canvas.update()
 
     def set_shown(self, key, shown):
         (self.canvas.hidden.discard if shown else self.canvas.hidden.add)(key)

@@ -82,6 +82,7 @@ None of these identify an instrument by themselves: pitch candidates describe th
 - `instrument`, `method` (guitar: `guitar_articulation_v1`), `basis` (guitar: `stereo` or `mono`).
 - `level`, `flux`, `attack` (0 unless an attack is placed at this frame), `regularity`, `centre`, `spread`: 0 to 1, uncalibrated. `rate_hz` is null when the articulation does not repeat.
 - Optional, instrument-specific (absent in sessions logged before they existed): `components` (drums: hit strength per region, `low` / `mid` / `high`), `pitch_midi` and `pitch_confidence` (bass, vocals), `boundary` (vocals: `start` / `end` of a phrase).
+- Optional, a faster reading beside the fields above (bass; absent or `null` elsewhere and in sessions logged before it existed): `energy` (0 to 1, the low register against its loudest of the last half minute), `pulse` (0, or the strength of a note onset) and `lead_s`. These three describe the moment `timestamp + lead_s`, newer than the rest of the message: the pitch needs 170 ms of audio and is back-dated, the energy and the onsets are not.
 - It is instrument-oriented activity derived from the mixed audio, not an isolated instrument signal, and it does not say the instrument is present. Presence is `InstrumentEstimate`.
 - Logged to `advanced_analysis/instrument_activity.jsonl` as well as `messages.jsonl`. Schema 1.0 has no such message.
 - `AnalysisConfig.instrument_sensitivity`: pairs of analyzer name and sensitivity (0 to 1, 0.5 when not listed).

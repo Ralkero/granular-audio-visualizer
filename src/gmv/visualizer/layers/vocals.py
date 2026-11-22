@@ -18,14 +18,82 @@ from PySide6.QtGui import QFont, QPainter, QPen
 
 from ..state import COLUMN as C
 from ..strip import polygon
-from . import Layer
+from . import Layer, around, circle
 from .guitar import NEUTRAL, runs, tint
 
 LOW_MIDI, HIGH_MIDI = 45.0, 81.0
 STRANDS = (-1.0, -0.55, 0.0, 0.55, 1.0)
 
 
+# Live ring: each strand's place across the ribbon (-1 inner .. 1 outer), its number of
+# waves round the circle, how fast they travel (radians a second) and where they start.
+LIVE_STRANDS = (
+    (-1.0, 3, 0.9, 0.0),
+    (-0.36, 5, -0.6, 1.7),
+    (0.36, 4, 0.75, 3.1),
+    (1.0, 6, -0.5, 4.4),
+)
+
+
 class VocalsLayer(Layer):
+    def paint_live(self, painter, stage, live):
+        """Strands round the ring that open with the voice and close when it stops. How
+        far they open is the level now, with a bloom where a phrase begins; the whole
+        ribbon moves outwards with a higher note; the strands drift past one another
+        all the while a voice sounds. Without a readable pitch they are dotted."""
+        colour = self.profile.colour
+        angles, sines, cosines = around(180)
+        height = stage.height
+        strength = min(1.5, self.intensity) * stage.gain
+        bloom = sum(
+            hit.strength * np.exp(-age / 0.35) for age, hit in live.recent(2.0) if hit.start
+        )
+        opened = min(1.3, live.level * (1.0 + 0.6 * bloom)) * live.weight
+        middle = stage.inner + height * (0.5 + 0.3 * (live.place - 0.5))
+        reach = height * 0.42 * opened * strength
+        curl = height * 0.09 * opened * strength
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        lines = []
+        for place, waves, speed, phase in LIVE_STRANDS:
+            lines.append(
+                middle
+                + place * reach
+                + curl * np.sin(waves * angles + speed * live.t + phase)
+                + 0.5 * curl * np.sin(2 * angles - 0.4 * live.t + phase)
+            )
+        opacity = min(1.0, 0.2 + live.weight)
+        if opened > 0.03 and not live.tentative:
+            outer = np.clip(lines[-1], stage.inner, stage.outer)
+            inner = np.clip(lines[0], stage.inner, stage.outer)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+            painter.setBrush(tint(colour, "#ffffff", 0.1, (0.07 + 0.12 * min(1.0, opened)) * opacity))
+            painter.drawPolygon(
+                polygon(
+                    np.concatenate((stage.cx + outer * sines, (stage.cx + inner * sines)[::-1])),
+                    np.concatenate((stage.cy - outer * cosines, (stage.cy - inner * cosines)[::-1])),
+                )
+            )
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        for index, line in enumerate(lines):
+            edge = index in (0, len(lines) - 1)
+            pen = QPen(
+                tint(colour, NEUTRAL, 0.5, 0.6 * opacity)
+                if live.tentative
+                else tint(
+                    colour,
+                    "#ffffff",
+                    0.15 + 0.4 * min(1.0, bloom),
+                    (0.3 + 0.6 * min(1.0, opened) if edge else 0.2 + 0.5 * min(1.0, opened)) * opacity,
+                ),
+                0,
+            )
+            if not live.pitched or live.tentative:
+                pen.setStyle(Qt.PenStyle.DotLine)
+            painter.setPen(pen)
+            painter.drawPolyline(circle(stage, line, sines, cosines))
+
     def __init__(self, profile):
         super().__init__(profile)
         self.place = 0.5  # eased height of the ribbon, carried from slice to slice

@@ -86,6 +86,7 @@ def test_every_instrument_has_one_colour_everywhere():
 def test_each_instrument_is_drawn_inside_the_selected_visualizer_in_its_own_colour(window, mode):
     canvas = window.canvas
     canvas.info["instruments"] = ALL
+    window.set_radial_rings("history")  # this is about the history pictures
     window.set_mode(mode)
     play_band(window)
     window.grab()
@@ -137,6 +138,7 @@ def test_radial_puts_rings_round_the_spectrum_and_bars_puts_strips_across_it(win
     canvas = window.canvas
     canvas.info["instruments"] = ALL
     play_band(window)
+    window.set_radial_rings("history")
     window.set_mode("radial")
     window.grab()
     rings = [layer.sweep.pixmap for layer in canvas.layers.values()]
@@ -162,6 +164,7 @@ def test_switching_modes_and_resizing_keep_the_history(window):
     play_band(window)
     before = {key: track.since().copy() for key, track in window.state.activity.items()}
     generation = window.state.generation
+    window.set_radial_rings("history")
     for mode in ("radial", "bars", "radial", "bars"):
         window.set_mode(mode)
         window.grab()

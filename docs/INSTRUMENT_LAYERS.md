@@ -92,9 +92,16 @@ The instruments are not panels beside the visualizer. They are drawn inside whic
 is selected, over its whole-mix spectrum:
 
 - **Radial.** The spectrum keeps the inner half of the radius. Round it, each instrument has
-  a ring: vocals outermost, then guitar, bass, and drums next to the spectrum. Time runs
-  clockwise, one turn every 6 s. Nothing rotates: a hand marks "now", each ring keeps what
-  was drawn until the hand comes round again, and the part just ahead of the hand is empty.
+  a ring: vocals outermost, then guitar, bass, and drums next to the spectrum. Each ring is
+  a fixed object animated by what its instrument is doing now (live rings, the default):
+  six guitar strings that swing when struck and die away, a bass ring that swells with
+  every note and breathes with the low register's energy, vocal strands that open with the
+  voice and move with its pitch, drum impacts that happen and are gone. There is no
+  timeline in them; what happened over time is in the timeline and the detail lanes. See
+  [LIVE_INSTRUMENT_RESPONSIVENESS.md](LIVE_INSTRUMENT_RESPONSIVENESS.md).
+  Settings → Instrument layers → Radial rings → History brings back the earlier picture:
+  time running clockwise, one turn every 6 s, a hand marking "now", each ring keeping what
+  was drawn until the hand comes round again.
 - **Spectrum Bars.** Each instrument has a strip across the field the bars rise in, top to
   bottom in the same order, showing the last 4 s scrolling to the left, with the bars
   (dimmed by default) behind them.
@@ -137,7 +144,9 @@ instruments (default), at full brightness, or hidden.
 | Drums | `#ff8a5b` orange | layer (three shades of it for low, mid, high), lane, button, settings |
 
 The whole-mix spectrum is a muted indigo to lavender, and predicted beats are lime, so
-neither can be taken for an instrument.
+neither can be taken for an instrument. In intense passages the spectrum, and only the
+spectrum, turns towards a dark red ([MUSICAL_INTENSITY.md](MUSICAL_INTENSITY.md)); the
+instrument colours above never change.
 
 ### Controls and sections
 

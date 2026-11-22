@@ -19,7 +19,9 @@ from ..models import (
     MusicalEvent,
     Status,
 )
+from .intensity import MusicalIntensity
 from .lanes import LaneBoard, Track
+from .live import Live
 
 # event_type -> (timeline row, plain description). Anything else lands in "changes" under
 # its own name, drawn by its evidence kind, so new event types show up without code here.
@@ -84,6 +86,8 @@ ACTIVITY = (
 BOUNDARY = {"": 0.0, "start": 1.0, "end": 2.0}
 COLUMN = {name: index for index, name in enumerate(ACTIVITY)}
 LEVELS = {1.0: "detected", 0.5: "candidate", 0.0: "absent"}
+# Pitch range (MIDI notes) over which an instrument's live ``place`` runs.
+PITCH_RANGE = {"bass": (26.0, 56.0), "vocals": (45.0, 81.0)}
 
 
 @dataclass(frozen=True)
@@ -138,7 +142,12 @@ class VisualState:
         self.board.clear()
         self.activity = {}  # instrument -> Track of ACTIVITY rows
         self.activity_info = {}  # instrument -> {"method": ..., "basis": ...}
+        # instrument -> what it is doing now (``live.Live``), fed with the same rows.
+        self.live = {}
         self.music_start = None  # when sound last began after silence (or at all)
+        # How intense the music is as a whole, 0..1, whatever is shown: ``musical.value``.
+        # Any visualizer mode may read it.
+        self.musical = MusicalIntensity()
         self._silent_from = None
         self.latest = None
         self.spectrum = None
@@ -238,6 +247,7 @@ class VisualState:
             ):
                 self.music_start = frame.timestamp
             self._silent_from = None
+        self.musical.step(frame)
         level = min(1.0, max(0.0, (frame.loudness_dbfs + 60) / 60))
         self.frames.append(frame.timestamp, level, frame.dynamic_intensity, frame.onset_strength)
         if frame.spectrum_db:
@@ -300,6 +310,31 @@ class VisualState:
             message.pitch_confidence,
             *(dict(message.components).get(name, 0.0) for name in ("low", "mid", "high")),
             BOUNDARY[message.boundary],
+        )
+        live = self.live.get(message.instrument)
+        if live is None:
+            live = self.live[message.instrument] = Live(
+                *PITCH_RANGE.get(message.instrument, (0.0, 1.0))
+            )
+        parts = dict(message.components)
+        live.feed(
+            message.timestamp,
+            self.latest.timestamp if self.latest is not None else message.timestamp,
+            level=message.level,
+            ring=ring,
+            attack=message.attack,
+            centre=message.centre,
+            spread=message.spread,
+            pitch=message.pitch_midi,
+            low=parts.get("low", 0.0),
+            mid=parts.get("mid", 0.0),
+            high=parts.get("high", 0.0),
+            boundary=message.boundary,
+            rate_hz=message.rate_hz,
+            regularity=message.regularity,
+            energy=message.energy,
+            pulse=message.pulse,
+            lead=message.lead_s,
         )
 
     def attribution(self, key, times):
