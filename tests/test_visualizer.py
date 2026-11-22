@@ -450,3 +450,51 @@ def test_live_engine_feeds_the_window_and_the_session_replays_with_original_time
     assert window.state.replayed and window.canvas.condition == "stopped"
     replayed = [mark.time for mark in window.state.markers if mark.kind == "onset"]
     assert replayed == pytest.approx(live_onsets)  # audio timestamps, not replay arrival times
+
+
+def test_a_lane_fed_twice_a_second_is_drawn_while_it_arrives(window):
+    """Recognition reports far less often than the window repaints. Its lane must still fill
+    in live, not only when the whole picture is drawn again."""
+    from time import sleep
+
+    from gmv.models import InstrumentEstimate
+    from gmv.visualizer.strip import Strip
+
+    def inked(pixmap):
+        image = pixmap.toImage()
+        return sum(
+            image.pixelColor(x, y).alpha() > 0
+            for x in range(0, image.width(), 2)
+            for y in range(0, image.height(), 2)
+        )
+
+    bus = EventBus()
+    window.attach(bus, source="test", recognition_model="model.json")
+    began, due = perf_counter(), 0.5
+    while (now := perf_counter() - began) < 1.7:
+        bus.publish(frame(now, published_monotonic=perf_counter()))
+        if now >= due:
+            bus.publish(
+                InstrumentEstimate(
+                    session_id="s",
+                    source="synthetic",
+                    timestamp=due - 0.5,
+                    detected_monotonic=0,
+                    interval_end=due,
+                    backend="fake",
+                    backend_version="1",
+                    available=True,
+                    scores=(("guitar", 0.9),),
+                    states=(("guitar", "detected"),),
+                )
+            )
+            due += 0.5
+        window.tick()
+        window.grab()
+        sleep(0.02)
+    canvas = window.canvas
+    assert len(canvas.state.board.history["guitar"]) == 3
+    live = inked(canvas.lane_strip.pixmap)
+    canvas.lane_strip = Strip()  # the same history drawn in one go
+    window.grab()
+    assert live > 0 and live == pytest.approx(inked(canvas.lane_strip.pixmap), rel=0.05)

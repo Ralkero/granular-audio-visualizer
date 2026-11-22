@@ -106,6 +106,7 @@ class Canvas(QWidget):
         ]
         self.lane_strip, self.level_strip, self.mark_strip = Strip(), Strip(), Strip()
         self.note_strip = Strip()
+        self._lane_drawn = {}  # lane -> time of its last row already on the lane strip
         self._notes_until, self._attack_count, self._new_attacks = 0.0, 0, 0
         self._attack_seen = False
         self.setMinimumSize(720, 480)
@@ -959,10 +960,16 @@ class Canvas(QWidget):
         _, start, _ = self.axis(area)
 
         def draw(artist, to_x, since, _height):
+            if since is None:
+                self._lane_drawn = {}
             for index, (lane, live) in enumerate(lanes):
-                rows = history[lane.key].since(start if since is None else since) if live else ()
+                # Each lane continues from its own last drawn row: detectors report at
+                # different rates (frames every 20 ms, recognition twice a second), so the
+                # time of the last paint says nothing about what a lane still has to draw.
+                rows = history[lane.key].since(self._lane_drawn.get(lane.key, start)) if live else ()
                 if len(rows) < 2:
                     continue
+                self._lane_drawn[lane.key] = rows[-1, 0]
                 bottom = (index + 1) * lane_height - 2
                 xs = to_x(rows[:, 0])
                 ys = bottom - np.maximum(0.03, rows[:, 1]) * (lane_height - 7)
