@@ -6,10 +6,11 @@ it the recognition model attributes to the instrument (``VisualState.attribution
 draws it in its own visual language. Layers do not read the whole-mix spectrum and do not
 read each other.
 
-``PROFILES`` is the design contract: the character each instrument is meant to have. A
-profile with a ``renderer`` is implemented; one without is a plan, and nothing is drawn for
-it. There is deliberately no generic fallback renderer: an instrument without its own
-analysis source and its own picture is not shown at all.
+``profiles()`` is the design contract: the character each instrument has and what its
+analyzer provides. Every instrument has its own ``Layer`` subclass and its own picture.
+There is deliberately no generic renderer: an instrument is never drawn with another
+instrument's picture in a different colour, and one without its own analysis source is not
+drawn at all.
 
 Adding an instrument:
 
@@ -36,6 +37,7 @@ class Profile:
     signals: str  # what its analyzer has to provide for that identity
     renderer: type | None = None
     styles: tuple[tuple[str, str], ...] = ()  # (key, title); the first is the default
+    weight: float = 1.0  # share of the layers' height, relative to the other layers
 
 
 class Stage:
@@ -73,6 +75,10 @@ class Layer:
 
     # -- to implement --------------------------------------------------------------------
 
+    def restart(self):
+        """The history strip is about to be drawn again from its start: forget whatever a
+        renderer carries from one slice to the next."""
+
     def paint_static(self, painter, rect, stage, state):
         """Labels and backgrounds: drawn into the rarely-changing picture."""
 
@@ -100,6 +106,8 @@ class Layer:
         key = (stage.generation, state.board.judgement, self.style, round(self.intensity, 3))
 
         def draw(artist, to_x, since, height):
+            if since is None:
+                self.restart()
             first = stage.start if since is None or self.drawn_until is None else self.drawn_until
             rows = track.since(first)
             if len(rows) < 2:
@@ -115,7 +123,10 @@ class Layer:
 
 
 def profiles():
+    from .bass import BassLayer
+    from .drums import DrumsLayer
     from .guitar import GuitarLayer
+    from .vocals import VocalsLayer
 
     return {
         profile.key: profile
@@ -124,9 +135,13 @@ def profiles():
                 "vocals",
                 "Vocals",
                 "#f472b6",
-                "Organic, flowing, phrase-oriented: a ribbon that swells and bends with a "
-                "phrase and closes between phrases.",
-                "Voiced level and pitch contour of the lead voice, phrase boundaries.",
+                "Organic, flowing, phrase-oriented: strands that open with a phrase, bend with "
+                "its pitch and close between phrases.",
+                "Level of the centre in the voice's range, pitch contour where there is one, "
+                "phrase starts and ends.",
+                renderer=VocalsLayer,
+                styles=(("ribbon", "Ribbon"), ("strands", "Strands only")),
+                weight=1.0,
             ),
             Profile(
                 "guitar",
@@ -137,22 +152,28 @@ def profiles():
                 "Attacks, ringing level, repetition rate, where in the range a stroke sat.",
                 renderer=GuitarLayer,
                 styles=(("strings", "Strings"), ("strokes", "Strokes")),
+                weight=1.25,
             ),
             Profile(
                 "bass",
                 "Bass",
                 "#7ad7f5",
-                "Deep, heavy, flowing: one broad, slow wave whose weight follows the note "
-                "and whose height follows the pitch.",
-                "Low-register note level and pitch, note changes.",
+                "Deep, heavy, flowing: one broad ribbon whose height is the note and whose "
+                "thickness is its weight; it moves in steps and holds.",
+                "Low-register pitch, weight of the periodic low sound, new and repeated notes.",
+                renderer=BassLayer,
+                weight=0.9,
             ),
             Profile(
                 "drums",
                 "Drums",
                 "#f87171",
-                "Sharp, percussive, impact-driven: bursts that hit and are gone, placed by "
-                "the part of the kit.",
-                "Hit times and strengths per kit region (low, mid, high).",
+                "Sharp, percussive, impact-driven: marks that hit and are gone, a different "
+                "mark and height for each region of the kit's range.",
+                "Hit times and strengths in three regions (low, mid, high).",
+                renderer=DrumsLayer,
+                styles=(("all", "All regions"), ("low and mid", "Low and mid only")),
+                weight=1.0,
             ),
         )
     }
@@ -165,12 +186,24 @@ def build():
     }
 
 
-def slots(rect, count, gap):
-    """Equal horizontal bands of ``rect`` for ``count`` layers, top to bottom."""
-    if not count:
+SHARE = {1: 0.5, 2: 0.62, 3: 0.72}  # of the main area, by number of layers; more: 0.8
+
+
+def share(count):
+    """How much of the main area the layers take while the spectrum is shown below them."""
+    return SHARE.get(count, 0.8)
+
+
+def slots(rect, layers, gap):
+    """A horizontal band of ``rect`` for each layer, top to bottom, sized by the weight of
+    its profile: an instrument whose picture needs room (six strings) gets more than one
+    that does not."""
+    if not layers:
         return []
-    height = (rect.height() - gap * (count - 1)) / count
-    return [
-        QRectF(rect.left(), rect.top() + index * (height + gap), rect.width(), height)
-        for index in range(count)
-    ]
+    weights = [layer.profile.weight for layer in layers]
+    unit = (rect.height() - gap * (len(layers) - 1)) / sum(weights)
+    bands, top = [], rect.top()
+    for weight in weights:
+        bands.append(QRectF(rect.left(), top, rect.width(), unit * weight))
+        top += unit * weight + gap
+    return bands

@@ -7,7 +7,8 @@ per-channel spectrum the analyzer already computed) and must stay cheap; anythin
 belongs in its own worker with a bounded queue, publishing the same message.
 
 ``ANALYZERS`` is the registry. To add an instrument: write a class with ``key``, ``method``,
-``delay_s``, ``sensitivity``, ``reset()`` and ``step(spectrum, quiet) -> Activity | None``,
+``delay_s``, ``sensitivity``, ``reset()`` and ``step(spectrum, quiet, samples) -> Activity |
+None`` (``samples`` are the frame's new samples, for the rare analyzer that needs them),
 and register it here. Nothing else in the engine changes.
 
 Fast activity says *what is happening*; it does not say *which instrument*. ``combine``
@@ -30,12 +31,24 @@ class Activity:
     centre: float  # 0..1: where in the instrument's range the articulation sat (low to high)
     spread: float  # 0..1: how much of the range it covered (single note to full chord)
     basis: str = ""  # which signal the analyzer could use, when it has more than one
+    components: tuple = ()  # drums: (("low", s), ("mid", s), ("high", s)) hit strengths
+    pitch_midi: float | None = None  # bass, vocals: the note, when there is one
+    pitch_confidence: float = 0.0
+    boundary: str = ""  # vocals: "start" / "end" of a phrase
 
 
 def analyzers():
+    from .bass import BassPitch
+    from .drums import DrumImpacts
     from .guitar import GuitarArticulation
+    from .vocals import VocalContour
 
-    return {"guitar": GuitarArticulation}
+    return {
+        "guitar": GuitarArticulation,
+        "drums": DrumImpacts,
+        "bass": BassPitch,
+        "vocals": VocalContour,
+    }
 
 
 def build(names, rate, size, hop_s, sensitivity=None):

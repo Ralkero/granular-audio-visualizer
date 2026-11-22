@@ -235,7 +235,14 @@ class Analyzer:
             instruments_began = perf_counter()
             for instrument in self.instruments:
                 instrument.sensitivity = self.sensitivity.get(instrument.key, 0.5)
-                found = instrument.step(spectrum, is_quiet)
+                # What the frame-wise activity model says about this instrument in this
+                # frame, for analyzers that shape their output by it; None without one.
+                instrument.present = (
+                    instrument.key in instruments_active
+                    if self.activity is not None and instrument.key in self.activity.labels
+                    else None
+                )
+                found = instrument.step(spectrum, is_quiet, audio[-self.hop_samples :])
                 if found is None:
                     continue
                 back = found.delay_frames * self.hop
@@ -259,6 +266,10 @@ class Analyzer:
                         centre=found.centre,
                         spread=found.spread,
                         basis=found.basis,
+                        components=found.components,
+                        pitch_midi=found.pitch_midi,
+                        pitch_confidence=found.pitch_confidence,
+                        boundary=found.boundary,
                     )
                 )
             self.instrument_ms = (perf_counter() - instruments_began) * 1000

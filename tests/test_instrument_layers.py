@@ -375,7 +375,8 @@ def test_two_instruments_are_drawn_at_once_each_from_its_own_activity(window):
     # Each layer read its own instrument's rows, and they are not the same picture.
     assert len(window.state.activity["pulse"]) == len(window.state.activity["guitar"])
     assert guitar.strip.pixmap.toImage() != pulse.strip.pixmap.toImage()
-    assert guitar.strip.pixmap.height() == pulse.strip.pixmap.height()  # equal shares
+    # Room by weight: the guitar's profile asks for a quarter more than a plain one.
+    assert guitar.strip.pixmap.height() > pulse.strip.pixmap.height()
     # Hiding one leaves the other drawing, with the room to itself.
     shared = guitar.strip.pixmap.height()
     window.set_layer("pulse", enabled=False)
@@ -415,7 +416,7 @@ def test_intensity_and_style_change_the_picture_and_never_the_activity(window):
     # And the analysis has no way to be told the intensity: its only knob is sensitivity.
     assert "intensity" not in AnalysisConfig.model_fields
     assert set(layer_registry.profiles()) >= {"guitar", "bass", "drums", "vocals"}
-    assert [key for key, p in layer_registry.profiles().items() if p.renderer] == ["guitar"]
+    assert all(p.renderer for p in layer_registry.profiles().values())
 
 
 def test_the_layer_is_drawn_as_activity_arrives_and_redrawn_when_judgement_changes(window):

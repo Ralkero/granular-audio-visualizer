@@ -108,7 +108,7 @@ class GuitarArticulation:
         self.rate_hz, self.regularity = None, 0.0
         self.basis = "stereo"
 
-    def step(self, spectrum, quiet=False):
+    def step(self, spectrum, quiet=False, samples=None):
         """Take the complex spectrum of one frame, shape (bins, channels); return the
         ``Activity`` of the frame before it, or None for the very first frame."""
         left = spectrum[:, 0]

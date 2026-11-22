@@ -39,11 +39,20 @@ Logging is enabled by default. Audio recording is disabled. The optional debug s
 
 ## Instrument layers (experimental)
 
-The main view is a composition of instrument layers beside the whole-mix spectrum. Each layer is drawn from its own analysis of one instrument, not from the spectrum. **Guitar is the first and so far only layer**: six strings that are struck, ring and die away, a stroke for every attack, and a beam joining strokes that repeat at a steady rate. The Guitar lane shows the same activity in more detail.
+The main view is a composition of instrument layers beside the whole-mix spectrum. Each layer is drawn from its own analysis of one instrument, with its own picture, not from the spectrum:
 
-- The guitar layer combines two things: a fast analysis of articulation, every 20 ms, mostly from the stereo difference signal (where rhythm guitars usually are), and the slower recognition model, which decides whether any of it is shown. While the model says guitar is absent the layer is empty; before it has judged, the layer is pale and dashed.
-- **Settings → Instrument layers**: show or hide the layer, its sensitivity (what the analysis reports), its intensity (how strongly it is drawn; the analysis is not affected), its style, and where the whole-mix spectrum goes (below, behind or hidden).
-- It is not an isolated guitar signal. In a stereo mix it recovers about 71% of the guitar stem's attacks (MoisesDB, 40 songs), and it cannot tell a guitar from another panned instrument playing at the same time. On mono material it is much weaker. Design, measurements and limits: [docs/INSTRUMENT_LAYERS.md](docs/INSTRUMENT_LAYERS.md).
+| Layer | Picture | State |
+|---|---|---|
+| Vocals | strands that open with a phrase, follow its pitch and close between phrases | experimental |
+| Guitar | six strings that are struck, ring and die away; strokes, beamed when they repeat | accepted by the owner |
+| Bass | one broad ribbon whose height is the note and whose thickness is its weight | experimental |
+| Drums | marks that hit and are gone: a disc (low), a burst of rays (mid), a spark (high) | experimental |
+
+Each instrument's lane shows the same activity in more detail.
+
+- Every layer joins a fast analysis of articulation (every 20 ms) with a slower judgement of whether the instrument is present: the recognition model for guitar, the frame-wise activity model (`activity_v2`) for drums, bass and vocals. While that judgement says "absent" the layer is empty.
+- **Settings → Instrument layers**: for each layer, show or hide, sensitivity (what the analysis reports), intensity (how strongly it is drawn; the analysis is not affected) and style; and where the whole-mix spectrum goes (below, behind or hidden).
+- None of this is source separation. On MoisesDB stems, removing an instrument from a mix leaves 12% (drums), 5% (bass) and 0% (vocals) of what its layer shows, but that is mostly the activity model's doing: on their own the analyzers follow short broadband hits, whatever is low and periodic, and the centre of the mix. Design, measurements and limits: [docs/INSTRUMENT_LAYERS.md](docs/INSTRUMENT_LAYERS.md).
 
 ## Fresh development checkout
 

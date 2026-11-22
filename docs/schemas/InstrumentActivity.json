@@ -153,6 +153,53 @@
       "title": "Basis",
       "type": "string"
     },
+    "components": {
+      "default": [],
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "type": "array"
+      },
+      "title": "Components",
+      "type": "array"
+    },
+    "pitch_midi": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pitch Midi"
+    },
+    "pitch_confidence": {
+      "default": 0,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Pitch Confidence",
+      "type": "number"
+    },
+    "boundary": {
+      "default": "",
+      "enum": [
+        "",
+        "start",
+        "end"
+      ],
+      "title": "Boundary",
+      "type": "string"
+    },
     "confidence_interpretation": {
       "default": "uncalibrated_activity_from_mixed_audio",
       "title": "Confidence Interpretation",

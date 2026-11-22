@@ -1,16 +1,17 @@
 # Instrument layers
 
-**Status: first phase. Guitar is the one implemented layer; it is experimental.** The main
-view is now a composition of instrument layers beside the whole-mix spectrum. Each layer is
-drawn from its own analysis of one instrument. Bass, drums and vocals have a design profile
-and no layer yet: nothing is drawn for an instrument without its own analysis source.
+**Status: two phases. Guitar (phase 1) is accepted by the owner. Drums, bass and vocals
+(phase 2) are implemented and experimental; the owner has not yet judged them.** The main
+view is a composition of four instrument layers beside the whole-mix spectrum. Each layer
+is drawn from its own analysis of one instrument and has its own picture.
 
-What has and has not been checked is in [Validation](#validation). The short version: the
-analysis and drawing are tested on synthetic audio, measured on MoisesDB stems, and
-corrected against a captured recording of the practical test case, whose fast opening strum
-is now found and drawn as a repeating figure. With the full band playing, that recording
-gives no stroke pattern, and whether the layer is convincing to watch is the owner's
-judgement, not yet given.
+What has and has not been checked is in [Validation](#validation-phase-1-guitar) and
+[Phase 2 validation](#phase-2-validation). The short version for phase 2: each analyzer is
+tested on synthetic instruments and measured on MoisesDB stems with the instrument present,
+removed and alone. With the activity model deciding what is shown, removing an instrument
+leaves a small fraction of its picture. On their own the three analyzers are not instrument-specific
+(they follow short broadband hits in the centre, whatever is low and periodic, and the
+centre); that is stated with numbers below and not hidden.
 
 ## Design
 
@@ -20,6 +21,11 @@ judgement, not yet given.
 |---|---|---|---|
 | Recognition model (`gmv.recognition`) | whether guitar is present | 10 s of context, twice a second, late | `InstrumentEstimate` |
 | Fast instrument analyzer (`gmv.instruments`) | what is being articulated right now | every 20 ms frame, one frame late | `InstrumentActivity` |
+
+For drums, bass and vocals the presence judgement comes from the frame-wise activity model
+(`activity_v2`, in `FeatureFrame.instruments_active`) instead of the recognition model. It
+judges every frame as it comes, so there is no warm-up and no tentative start; without that
+model loaded, those three layers are drawn tentatively throughout.
 
 Neither can do the other's job. The recognition model cannot see a single stroke. The fast
 analyzer cannot tell a guitar from another panned, articulated instrument (measured below).
@@ -50,7 +56,20 @@ was changed.
 - `attack`: the strength of an attack placed at this frame, else 0;
 - `rate_hz`, `regularity`: whether the articulation repeats, and how fast;
 - `centre`, `spread`: where in the instrument's band the articulation sat and how wide;
-- `basis`: which signal the analyzer could use (guitar: `stereo` or `mono`).
+- `basis`: which signal the analyzer could use (guitar: `stereo` or `mono`; drums and
+  vocals: `centre` or `mono`).
+
+Phase 2 added fields for what the common ones cannot say, rather than giving guitar's fields
+other meanings. They are optional, so sessions logged before them still parse:
+
+- `components`: drums only. The strength of a hit placed at this frame in each region, as
+  `(("low", s), ("mid", s), ("high", s))`. Regions of the spectrum, not kit pieces.
+- `pitch_midi`, `pitch_confidence`: bass and vocals. The note as a fractional MIDI number
+  when there is one, else null; and how periodic or harmonic the sound was either way.
+- `boundary`: vocals only. `"start"` where a phrase begins, `"end"` where it has ended.
+
+For bass, `attack` is a new note or the same note struck again. For vocals it marks a
+phrase start. `level` is what each layer's weight or opening is drawn from.
 
 It is published on the engine's EventBus like every other message, logged to
 `advanced_analysis/instrument_activity.jsonl` and replayed with its original timestamps.
@@ -58,15 +77,21 @@ It is published on the engine's EventBus like every other message, logged to
 ### Where it enters
 
 Analyzers run inside the existing analysis pass (`Analyzer.process`), on the per-channel
-FFT that pass already computes. There is no second capture path, no second FFT and no new
-thread. `AnalysisConfig.instrument_analyzers` names them; the application always runs every
+FFT that pass already computes. There is no second capture path and no new thread. One
+analyzer needs more than that FFT: the bass keeps 170 ms of low-passed, thinned samples of
+its own (about 500), because 46 ms cannot tell low notes apart. The pass also hands each
+analyzer the activity model's judgement for its instrument in that frame; the vocal
+analyzer uses it to end phrases. `AnalysisConfig.instrument_analyzers` names them; the application always runs every
 registered analyzer. An analyzer that would be expensive belongs in its own worker with a
 bounded queue (as recognition has) and publishes the same message.
 
 ### Composition
 
-`gmv.visualizer.layers`: a `Layer` per implemented profile. The canvas gives the active
-layers equal horizontal bands of the main area and each layer paints only its own band:
+`gmv.visualizer.layers`: a `Layer` subclass per instrument. The canvas stacks the active
+layers top to bottom (vocals, guitar, bass, drums) and gives each a band sized by the
+weight of its profile: the six strings get the most room, the bass ribbon the least. With
+the spectrum shown below them, the layers take 50% of the main area for one layer, 62% for
+two, 72% for three and 80% for four. Each layer paints only its own band:
 
 - `paint_static`: label and background, in the rarely redrawn picture;
 - `paint_history`: activity rows into a scrolling strip. Only rows that arrived since the
@@ -108,15 +133,15 @@ Settings, composition, lane, logging and replay follow from the registries.
 
 ### Profiles
 
-| Instrument | Character to aim for | What its analyzer has to provide | State |
+| Instrument | Picture | What its analyzer provides | State |
 |---|---|---|---|
-| Guitar | Articulated, string-like: strings that are struck, ring and die away; strokes for picking and strumming, beamed when they repeat | Attacks, ringing level, repetition rate, where a stroke sat | implemented, experimental |
-| Bass | Deep, heavy, flowing: one broad slow wave whose weight follows the note and whose height follows the pitch | Low-register note level and pitch, note changes | planned |
-| Drums | Sharp, percussive, impact-driven: bursts that hit and are gone, placed by the part of the kit | Hit times and strengths per kit region | planned |
-| Vocals | Organic, flowing, phrase-oriented: a ribbon that swells and bends with a phrase and closes between phrases | Voiced level and pitch contour, phrase boundaries | planned |
+| Vocals | Strands that open with a phrase, bend with its pitch and close between phrases | Level of the centre in the voice's range, pitch contour where there is one, phrase starts and ends | experimental |
+| Guitar | Strings that are struck, ring and die away; strokes, beamed when they repeat | Attacks, ringing level, repetition rate, where a stroke sat | accepted by the owner |
+| Bass | One broad ribbon: its height is the note, its thickness the weight; it moves in steps and holds | Low-register pitch, weight of the periodic low sound, new and repeated notes | experimental |
+| Drums | Marks that hit and are gone: a disc (low), a burst of rays (mid), a spark (high) | Hit times and strengths in three regions | experimental |
 
-There is no generic fallback renderer, on purpose: a second instrument drawn with the first
-one's picture in another colour is what this phase is meant to end.
+There is no generic renderer, on purpose: an instrument drawn with another one's picture in
+a different colour is what these layers exist to end.
 
 ## Guitar
 
@@ -187,7 +212,194 @@ apply the attribution weight, because the band underneath already shows the judg
 The wave frequency of each string is a fixed look, like a string's gauge. Everything else
 that changes on screen is a column of the activity history.
 
-## Validation
+## Drums, bass and vocals (phase 2)
+
+All three work on the centre of the stereo image where they can: per bin, |L+R|/2 less
+|L-R|/2. A kick, a snare, a bass and a lead voice are in the middle and survive; what is
+panned to one side cancels. Two different takes left and right (double-tracked guitars)
+cancel only on average, so some of them remains.
+
+### Drums (`drum_impacts_v1`)
+
+A hit is a sudden gain that covers a whole region at once and is gone again. Three regions:
+`low` 40 to 140 Hz and `mid` 180 Hz to 2.5 kHz from the centre, `high` 6 to 14 kHz from the
+whole image (overheads are stereo). A gain is measured against the region's own recent peak,
+with a floor tied to the whole mix so that a nearly empty region cannot hit.
+
+- `mid`, `high`: the gain must be spread evenly over the region's bins. A chord or a note
+  raises a few partials and is discounted.
+- `low`: too few bins for that. A gain counts in full only with a click between 1.5 and
+  5 kHz in the same frames, and the region must have given back a third of the gain 60 ms
+  later. A kick does both; a bass note does neither. Hence three frames of delay, and a
+  soft kick with no click is missed.
+
+**Picture.** One mark per hit, nothing joined and nothing ringing: a disc with a ring at the
+bottom for `low`, a burst of rays in the middle for `mid`, a spark at the top for `high`;
+size and brightness are the strength. The lane has a tick per hit in the third of the lane
+that belongs to its region. A style shows low and mid only.
+
+### Bass (`bass_pitch_v1`)
+
+The pitch is the period of the low-passed (180 Hz) signal, by autocorrelation over 170 ms,
+between E1 and C3. A note is named when the low register is periodic enough and heavy
+enough against the whole mix; a new note must hold for 60 ms. During a kick the register is
+briefly aperiodic and the last note is held, not replaced. `attack` is a new note, or the
+same note struck again (the low register of the shared spectrum clearly above the three
+frames before). `level` is periodic low sound against the recent peak and the whole mix.
+
+**Picture.** A broad ribbon. Height is the note, in steps; thickness is the weight; a new
+or struck note is a bright edge across it. Where no note can be read it stays at the last
+note and is drawn paler. The lane draws the note as a stepped line with a tick per attack.
+
+### Vocals (`vocal_contour_v1`)
+
+On the centre between 150 Hz and 4 kHz: the pitch (A2 to A5) whose harmonic series explains
+the spectral peaks best, preferring one near the pitch before. Its confidence is the share
+of all peak strength, up to the top of that series, that lies on the series: one voice
+explains most of it, a dense mix does not. `level` is the centre's loudness between 300 Hz
+and 3.4 kHz against the whole mix, in full when pitched and at a third when not.
+
+A phrase is centre sound *while the activity model reports a voice in that frame*. In a
+full band the centre is never empty, so without the model's judgement a phrase would never
+end. There is no lyric or speech recognition, and clean and harsh vocals are not told
+apart: harsh vocals simply have no pitch and are drawn from level alone.
+
+**Picture.** Five strands that open with the level and close to nothing between phrases, so
+a phrase is a leaf shape. The ribbon's height is the pitch contour, eased so it glides;
+without a pitch it drifts to the middle and the strands are dotted. A small circle marks a
+phrase start, a tick its end. The lane draws the level and the phrase boundaries.
+
+## Phase 2 validation
+
+### Automated (17 tests, `tests/test_instrument_layers_phase2.py`; 266 in the suite)
+
+Synthetic instruments (`tests/synth_instruments.py`): kick, snare, hi-hat, bass notes, a
+sung line with vibrato, a wide pad, and phase 1's two-take guitar.
+
+- **Drums.** Kicks, snares and hi-hats are each found in their own region, on the audio
+  timeline; a snare is never a low hit. Strummed guitar, bass notes, a held bass note, a
+  sung phrase and a pad: no more than a fifth become low hits, and played alone fewer than
+  half of the strums leave any mark (in a mix far fewer). Taking the kit out of a synthetic
+  band removes at least 70% of the hit strength.
+- **Bass.** E1, A1, D2 and G2 are read within half a semitone and each new note is an
+  attack; higher notes sit higher. A held note stays one note for 3.4 s; a note repeated
+  four times a second is struck again at least 9 times in 12. Kicks alone give no note and
+  no attack. With the bass in a mix its notes are read through the kit; without it, less
+  than a third as often.
+- **Vocals.** A held note is continuous and pitched within three quarters of a semitone;
+  two phrases give start, end, start, end; a line rising five semitones moves the contour
+  up by that much. A guitar or a pad panned to one side is no phrase and no level. Removing
+  the voice from a mix halves the level at least. With the activity model's judgement:
+  no phrase while it says nobody sings, and a phrase per stretch in which it says so.
+- **Guitar is unchanged.** Its source file is byte-identical to the accepted one apart from
+  one unused parameter (checksum in the test), its output on a fixed signal has a recorded
+  checksum, and it is the same whether or not the other analyzers run beside it.
+- **Together.** Four layers are drawn at once by four different renderers, each from its
+  own rows, with pictures that differ pairwise; bands are sized by weight; it works with
+  the spectrum beside, behind or hidden, in bars and radial. Hiding or dimming one layer
+  leaves the others' pictures and all activity values untouched. Each lane is handed the
+  same rows as its layer. Settings build show, sensitivity, intensity and (where there is
+  one) style for every layer from the registry. Older messages without the new fields parse.
+- **Engine.** Four analyzers in one pass on a synthetic band: no dropped blocks, bounded
+  queue, every message logged and back-dated by its analyzer's own delay.
+
+### Measured on stems (MoisesDB, 29 songs with all three stems, 30 s each from 0:45)
+
+`scripts/diagnose_layers.py`. Each run is reduced to what its layer would draw: drums, hit
+strength per minute; bass and vocals, mean level. "Raw" is the analyzer alone; "shown"
+multiplies each frame by the activity model's judgement, which is what the application
+displays. Medians over songs.
+
+| | Drums | Bass | Vocals |
+|---|---|---|---|
+| Raw, instrument removed / full mix | 0.55 | 0.73 | 0.48 |
+| **Shown, instrument removed / full mix** | **0.12** | **0.05** | **0.00** |
+| Shown, stem alone / full mix | 1.08 | 1.18 | 1.03 |
+| Shown, stem with one competitor / full mix | 1.16 | 0.96 | 1.02 |
+
+How closely the reading of the full mix follows the reading of the clean stem:
+
+| | |
+|---|---|
+| Drum hits of the stem also found in the mix | 0.81 |
+| Drum hits in the mix that match a stem hit | 0.77 |
+| Bass: frames with a note on the stem / of those, a note in the mix / of those, the same note | 0.95 / 1.00 / 0.80 |
+| Vocals: frames with a pitch on the stem / of those, a pitch in the mix / of those, the same pitch | 0.57 / 0.69 / 0.76 |
+| Vocals: correlation of level in the mix with level on the stem | 0.69 |
+| Bass: correlation of level in the mix with level on the stem | 0.64 |
+
+Read together:
+
+- **None of the three is instrument-specific on its own.** With the instrument's stem taken
+  out, the raw output is still 0.55 (drums), 0.73 (bass) and 0.48 (vocals) of what
+  it was. For drums the remainder is bass plucks, consonants and sibilants that are short
+  and broadband in the centre; for bass, other periodic low sound; for vocals, whatever
+  else is in the centre.
+- **What makes them a drum, a bass and a vocal layer is the activity model.** As shown,
+  they fall to 0.12, 0.05 and 0.00.
+- **When the instrument is present, the reading follows it.** 81% of the drum stem's hits
+  are found in the mix; the bass note read in the mix is the stem's note 80% of the
+  time; the vocal pitch, where one is given, is the stem's 76% of the time.
+- The reference is the same analyzer on the clean stem, not human annotation, and removing
+  a stem from a multitrack is cleaner than any real "without".
+
+### Measured on local recordings and live
+
+Nine 20 s excerpts from the owner's collection (three dense band passages with vocals, two
+instrumentals, two soundtrack pieces without a band, two quieter songs), analysed offline:
+
+- Dense band: 2 to 4 low hits and 1.5 to 3 mid hits a second; a bass note read 99 to 100%
+  of the time, between about D#1 and A#1; vocals pitched 41 to 47% of the time. The activity
+  model reports vocals almost continuously there, so each 20 s was one long phrase.
+- Soundtrack without a band: the activity model reports bass 4 to 7% and vocals 2 to 5% of
+  the time, so those layers stay empty although the raw analyzers find notes and a centre.
+- One instrumental: the model reports vocals 45% of the time and five phrases are drawn.
+  That is the activity model's false alarm, shown as it is.
+- All four analyzers together: 0.49 ms per frame at the median on stems; on these
+  recordings 0.83 ms median, 1.15 ms at the 95th percentile.
+
+Live (system loopback, the window drawing, all four analyzers, a 5 s test pattern):
+
+| | |
+|---|---|
+| Instrument analysis per frame | 0.75 ms median, 3.9 ms p95 |
+| Analysis pass in total per frame | 3.2 ms median, 10.6 ms p95 (hop 20 ms) |
+| Published after the sound: vocals / guitar / drums / bass | 35 / 55 / 95 / 115 ms (median) |
+| Newest drawn row behind the display's "now" | 34 ms median, 43 ms p95 |
+| Paint, four layers | 3.1 ms mean; 6.6 ms at 2560 x 1440 from a file |
+| Dropped capture blocks, native packets, window messages | 0, 0, 0 |
+| Capture queue high-water | 4 of 16 |
+
+The drums are 60 ms later than the guitar because a low hit is confirmed by its decay; the
+bass 80 ms because its window is long. Each message is back-dated by its own delay, so the
+layers stay aligned on the timeline; they simply appear at slightly different distances
+from its newest edge.
+
+### Not done (phase 2)
+
+- Nobody has watched the three new layers against music and judged them. The pictures were
+  rendered from real recordings to check that they draw and differ, no more.
+- No listening comparison of hits, notes or phrases against what is heard.
+- The activity model was used as it is. Its vocal judgement has false alarms on
+  instrumentals and holds through gaps in dense music; improving that means retraining it,
+  which this phase did not do.
+
+### Limitations (phase 2)
+
+- Drums: about half of the low and a third to a half of the mid hits of a stem are found in
+  a full mix; a soft kick without a click is missed; a bass pluck or a hard consonant can
+  be a mid hit while drums are playing. Regions are not kit pieces.
+- Bass: follows the lowest periodic sound in the mix. While the model says "bass", a low
+  guitar riff or a tuned kick can be drawn as bass notes. Nothing above C3; octave errors
+  happen.
+- Vocals: the centre is not only the voice. While the model says "vocals", a centred
+  guitar solo, a snare or a synthesizer contributes to level and sometimes to pitch. Harsh
+  vocals have no pitch. Phrases are only as good as the activity model's frames.
+- On a mono recording nothing can be taken out of the centre; `basis` says `mono`.
+- Better separation of these instruments from each other needs source separation or
+  retrained models, neither of which is in this phase.
+
+## Validation (phase 1, guitar)
 
 ### Automated (16 tests, `tests/test_instrument_layers.py`; 249 in the suite)
 
@@ -319,11 +531,11 @@ gave 2 to 7.5 strokes a second.
 
 | Area | Files |
 |---|---|
-| Analyzer and combination rule | `src/gmv/instruments/__init__.py`, `guitar.py` |
+| Analyzers and combination rule | `src/gmv/instruments/__init__.py`, `guitar.py`, `drums.py`, `bass.py`, `vocals.py`, `common.py` |
 | Message, configuration | `src/gmv/models.py`, `contract.py`, `schema_export.py`, `docs/schemas/` |
 | Engine | `src/gmv/dsp.py`, `engine.py`, `session.py`, `evaluation/detect.py` |
 | Visual state | `src/gmv/visualizer/state.py`, `lanes.py` |
-| Layers | `src/gmv/visualizer/layers/__init__.py`, `guitar.py`, `window.py` |
+| Layers | `src/gmv/visualizer/layers/__init__.py`, `guitar.py`, `drums.py`, `bass.py`, `vocals.py`; `visualizer/window.py` |
 | Settings | `src/gmv/app/controller.py`, `window.py` |
-| Diagnostic | `scripts/diagnose_instrument_activity.py` |
-| Tests | `tests/test_instrument_layers.py`, `tests/conftest.py` |
+| Diagnostics | `scripts/diagnose_instrument_activity.py` (guitar), `scripts/diagnose_layers.py` (drums, bass, vocals) |
+| Tests | `tests/test_instrument_layers.py`, `tests/test_instrument_layers_phase2.py`, `tests/synth_instruments.py`, `tests/conftest.py` |

@@ -73,7 +73,15 @@ ACTIVITY = (
     "struck_centre",
     "struck_spread",
     "gap",
+    # Instrument-specific, NaN or 0 where an instrument has none:
+    "pitch",  # MIDI note, NaN when unpitched
+    "pitch_confidence",
+    "low",  # drums: hit strength per region at this frame
+    "mid",
+    "high",
+    "boundary",  # vocals: 1 phrase start, 2 phrase end
 )
+BOUNDARY = {"": 0.0, "start": 1.0, "end": 2.0}
 COLUMN = {name: index for index, name in enumerate(ACTIVITY)}
 LEVELS = {1.0: "detected", 0.5: "candidate", 0.0: "absent"}
 
@@ -288,6 +296,10 @@ class VisualState:
             centre,
             spread,
             gap,
+            np.nan if message.pitch_midi is None else message.pitch_midi,
+            message.pitch_confidence,
+            *(dict(message.components).get(name, 0.0) for name in ("low", "mid", "high")),
+            BOUNDARY[message.boundary],
         )
 
     def attribution(self, key, times):
@@ -298,7 +310,10 @@ class VisualState:
         times = np.asarray(times, dtype=float)
         judged = self.board.judged_at(key, times)
         start = self.music_start if self.music_start is not None else 0.0
-        warming = times < start + (self.board.context_s or 10.0)
+        # Only a context model warms up; a frame detector judges each frame as it comes.
+        warming = (times < start + (self.board.context_s or 10.0)) & (
+            self.board.owner.get(key) == "recognition"
+        )
         weights = np.empty(len(times))
         tentative = np.zeros(len(times), dtype=bool)
         cases = [(np.isnan(judged), None, False)]

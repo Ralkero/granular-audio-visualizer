@@ -93,3 +93,26 @@ def run_instruments(audio, rate, config=None, sensitivity=None):
             found.extend(analyzer.instrument_activity)
             times.append(analyzer.instrument_ms)
     return found, times
+
+
+def run_layers(audio, rate, config, sensitivity=None):
+    """Feature frames and ``InstrumentActivity`` messages over decoded audio from one
+    ``Analyzer`` pass, as the engine produces them. With an activity model in ``config`` the
+    frames carry its presence judgement, which is what decides how much of each
+    instrument's fast activity is shown. Returns (frames, messages, per-frame instrument
+    analysis times in ms)."""
+    analyzer = Analyzer(rate, audio.shape[1], config, "evaluation", "evaluation", sensitivity)
+    assembler = WindowAssembler(config)
+    frames, found, times = [], [], []
+    step = round(rate * config.capture_ms / 1000)
+    for pos in range(0, len(audio), step):
+        chunk = audio[pos : pos + step]
+        block = AudioBlock(
+            chunk.astype("<f4").tobytes(), len(chunk), rate, chunk.shape[1], pos / rate, pos / rate, 0
+        )
+        for window, start, mono, _reset in assembler.push(block):
+            frame, _ = analyzer.process(window, start, mono, block, live=False)
+            frames.append(frame)
+            found.extend(analyzer.instrument_activity)
+            times.append(analyzer.instrument_ms)
+    return frames, found, times

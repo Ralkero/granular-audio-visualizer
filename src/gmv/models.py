@@ -196,6 +196,16 @@ class InstrumentActivity(Message):
     centre: float = Field(default=0.5, ge=0, le=1)
     spread: float = Field(default=0, ge=0, le=1)
     basis: str = ""
+    # Instrument-specific information; empty or None for instruments that have none.
+    # Drums: the strength of a hit placed at this frame in each region, as
+    # (("low", s), ("mid", s), ("high", s)). They are regions, not kit pieces.
+    components: tuple[tuple[str, float], ...] = ()
+    # Bass, vocals: the pitch as a MIDI note number (fractional), when there is one, and
+    # how periodic or harmonic the sound was (0..1) whether or not a pitch is given.
+    pitch_midi: float | None = None
+    pitch_confidence: float = Field(default=0, ge=0, le=1)
+    # Vocals: "start" where a phrase begins, "end" where it has ended.
+    boundary: Literal["", "start", "end"] = ""
     confidence_interpretation: str = "uncalibrated_activity_from_mixed_audio"
 
 

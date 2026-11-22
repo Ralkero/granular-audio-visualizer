@@ -214,7 +214,7 @@ class Canvas(QWidget):
         stage = QRectF(spectrum)
         show_spectrum = not active or self.spectrum_place != "hidden"
         if active and self.spectrum_place == "beside":
-            tall = round(spectrum.height() * min(0.72, 0.38 + 0.12 * len(active)))
+            tall = round(spectrum.height() * layer_registry.share(len(active)))
             stage.setHeight(tall - gap)
             spectrum.setTop(spectrum.top() + tall)
         gutter = round(150 * self.scale)
@@ -319,7 +319,7 @@ class Canvas(QWidget):
         ]
 
     def draw_layers(self, painter, rect, active):
-        slots = layer_registry.slots(rect, len(active), 8 * self.scale)
+        slots = layer_registry.slots(rect, active, 6 * self.scale)
         for layer, slot in zip(active, slots, strict=True):
             stage = layer_registry.Stage(
                 slot, self.now, self.stage_seconds, self.scale, self.state.generation, self.font
