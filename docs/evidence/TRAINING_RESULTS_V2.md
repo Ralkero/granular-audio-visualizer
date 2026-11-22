@@ -1,8 +1,9 @@
 # Second training experiment with the owner's recordings: results
 
-**Status: run once, as planned. No model was produced or installed.** `guitar_mn10_v1`
-remains the model the application starts with. The ten sets of fold weights are local
-intermediate files, not a model. The plan and its fixed rules are in
+**Status: run once, as planned.** `guitar_mn10_v1` remains the model the application
+starts with. The ten sets of fold weights are local intermediate files, not a model. One
+final set of weights, `guitar_mn10_rv2`, was trained afterwards on the owner's decision
+(last section); it is experimental and not the default. The plan and its fixed rules are in
 [TRAINING_PLAN_V2.md](TRAINING_PLAN_V2.md); what was checked beforehand is in
 [PRE_TRAINING_VALIDATION_V2.md](PRE_TRAINING_VALIDATION_V2.md).
 
@@ -130,7 +131,55 @@ score more cautiously, and with the shipped thresholds unchanged they trade some
 - The folds share one library and one annotator. The intervals reflect variation between
   groups of that library, not between libraries.
 
+## Final weights: `guitar_mn10_rv2` (experimental, not the default)
+
+After these results the owner chose arm H, because H+A showed no improvement over it, and
+authorised one full-data run. `guitar_mn10_rv2` is for listening comparisons in the
+application; it is local only and is selected by hand.
+
+- **Data.** All 385 human-confirmed excerpts, weight 1.0: 223 of the pilot batch (159
+  guitar, 64 guitar-free) and 162 of the queue (121 / 41); 34 leakage groups. No automatic
+  candidate of any class, none of the 14 intermittent answers. The MoisesDB part is the one
+  arm H used: 115 songs, artist fold 0 (45 songs) still kept out.
+- **Settings.** Those of arm H, unchanged: 500 steps, batch 16, learning rate 5e-5 (ten
+  times that for the output layer), 40% of clips from the owner's recordings, 15% silenced
+  lead-ins, the same sampling and loss. Clips drawn: 4,819 MoisesDB, 1,591 guitar and
+  1,590 guitar-free from the owner's recordings.
+- **Seeds.** `SeedSequence([20261122, 5, stream])`, a stream set no fold run used
+  (`finetune_review.py --final`).
+- **Record.** Start: `guitar_mn10_ft_all.pt`, SHA-256 `eb009fa0…29df`. Result:
+  `guitar_mn10_rv2.pt`, SHA-256 `8a6d7d37…1fa2`; ONNX `09def728…7ca9`. Code commit
+  `0d1ba3c`, no uncommitted changes. 14 minutes of training, 31 with the control scoring.
+- **Export.** Same pathway and input/output contract as `guitar_mn10_v1` (log-mel in, four
+  labels out, 10 s context, 0.5 s hop, identical front end). Largest score difference
+  between the checkpoint and the ONNX model through the application's backend: 2.4e-06 on
+  120 real contexts.
+- **Thresholds.** Those of `guitar_mn10_v1`, copied unchanged for all four labels
+  (guitar: detected 0.926, candidate 0.627). They were not calibrated for this model.
+
+The only data this model can still be measured on is the MoisesDB control fold, which is a
+retention check (the starting model had trained on it):
+
+| | AUC | Recall at 5% FA | Detected: recall / FPR | Candidate: recall / FPR |
+|---|---|---|---|---|
+| `guitar_mn10_v1` | 0.986 | 0.935 | 0.749 / 0.002 | 0.898 / 0.022 |
+| `guitar_mn10_rv2` | 0.980 | 0.913 | 0.673 / 0.002 | 0.858 / 0.017 |
+
+As in the fold runs, AUC stays within the 0.01 margin and **recall at the shipped
+"detected" threshold is lower (0.749 to 0.673)**: with unchanged thresholds this model is
+more cautious on that material.
+
+What is and is not known about it:
+
+- It has trained on every reviewed excerpt, so no figure on the owner's recordings can be
+  given for it. The estimate for its recipe is arm H above (AUC +0.021 on unseen groups).
+  That is an estimate for the recipe, not a measurement of these weights.
+- It loads and runs through the application's engine beside the analysis, and the settings
+  drawer switches between it and `guitar_mn10_v1`. Nobody has yet listened to it.
+- `guitar_mn10_v1`'s files are byte-identical to before, and it remains what a packaged
+  build starts with.
+
 ## Not done
 
-No final weights were trained on all data, no `guitar_mn10_rv2` exists, and no default
-changed. Each of these needs the owner's separate approval, as the plan states.
+No default changed and no threshold was calibrated. Promoting `guitar_mn10_rv2`, or
+calibrating thresholds for it, needs the owner's separate approval.

@@ -27,6 +27,7 @@ milestone, because the web service gave the same data without touching the colle
 |---|---|---|---|---|---|
 | `guitar_mn10_v1` (this project) | local; SHA-256 `28384c43…373c0d1d` | this repository | EfficientAT `mn10_as` (AudioSet) fine-tuned on MoisesDB mixes | recogniser timelines | non-commercial, share-alike (CC BY-NC-SA 4.0) because of MoisesDB |
 | `guitar_mn10_rv1` (this project) | local only | this repository | as above plus 223 excerpts of the owner's recordings | not used for evidence: it has seen the reviewed excerpts | local only |
+| `guitar_mn10_rv2` (this project) | local only | this repository | as `guitar_mn10_v1` plus 385 human-confirmed excerpts of the owner's recordings | experimental alternative for listening; not used for evidence: it has seen every reviewed excerpt | local only |
 | PANNs CNN14 `DecisionLevelMax` | Zenodo 3987831, `Cnn14_DecisionLevelMax_mAP=0.385.pth`, MD5 `70539c43…03a82c5a`, SHA-256 `dd3b4043…abdd142` | `panns-inference` 0.1.1 (MIT), `torchlibrosa` 0.1.0 | AudioSet | second audio model, frame-wise | weights CC BY 4.0 (Zenodo record): attribution to Kong et al. 2020 |
 | HTDemucs six-source (`htdemucs_6s`, 5c90dfd2) | local; SHA-256 `34c22ccb…f9a02ddd` | `demucs` 4.1.0 (MIT) | MUSDB18-HQ plus 800 songs internal to its authors | guitar-stem level as supporting evidence | weights released with the MIT-licensed repository; the authors describe the guitar and piano outputs as experimental |
 
@@ -71,7 +72,7 @@ Attribution:
   fingerprint, no path, no listening history.
 - What stays in ignored folders (`research-local/`, `review-local/`): identities, credits
   matched to recordings, timelines, label candidates, review queue, excerpts, labels.
-- Weights trained on these recordings (`guitar_mn10_rv1`) are local only.
+- Weights trained on these recordings (`guitar_mn10_rv1`, `guitar_mn10_rv2`) are local only.
 
 ## Implications for a release
 

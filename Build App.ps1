@@ -5,7 +5,7 @@
 #
 #   .\"Build App.ps1"                                  # no guitar recognition model
 #   .\"Build App.ps1" -GuitarModel guitar_mn10_v1      # start with this model switched on
-#   .\"Build App.ps1" -GuitarModel guitar_mn10_v1 -AlsoInclude guitar_mn10_rv1
+#   .\"Build App.ps1" -GuitarModel guitar_mn10_v1 -AlsoInclude guitar_mn10_rv1, guitar_mn10_rv2
 #                                  # further models copied in, to choose in the settings drawer
 param([string]$GuitarModel = "", [string[]]$AlsoInclude = @())
 $ErrorActionPreference = 'Stop'
