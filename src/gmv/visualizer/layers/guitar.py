@@ -17,15 +17,16 @@ Nothing is animated on its own: with no activity rows there is no picture.
 """
 
 import numpy as np
-from PySide6.QtCore import QLineF, QPointF, QRectF, Qt
+from PySide6.QtCore import QLineF, QPointF, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 
+from .. import palette
 from ..state import COLUMN as C
 from ..strip import polygon
 from . import Layer
 
 STRINGS = 6
-NEUTRAL = QColor("#9aa6c4")
+NEUTRAL = QColor(palette.NEUTRAL)
 # Waves per second of timeline for each string, low to high: only a look, like the gauge
 # of a string. The amplitude and where a wave restarts come from the analysis.
 WAVES = (7.0, 8.5, 10.5, 12.5, 15.0, 18.0)
@@ -81,7 +82,6 @@ class GuitarLayer(Layer):
 
     def paint_static(self, painter, rect, stage, state):
         colour = QColor(self.profile.colour)
-        painter.fillRect(rect, tint(colour, "#000000", 0.0, 0.035))
         painter.setFont(stage.font(10, QFont.Weight.DemiBold, 1.2))
         painter.setPen(tint(colour, "#ffffff", 0.1, 0.95))
         painter.drawText(
@@ -110,12 +110,13 @@ class GuitarLayer(Layer):
             artist.setPen(Qt.PenStyle.NoPen)
             for a, b, faint in runs(pale):
                 b = min(len(xs), b + 1)
-                artist.setBrush(tint(colour, NEUTRAL, 0.6 if faint else 0.0, 0.16 if faint else 0.3))
-                artist.drawPolygon(
-                    polygon(
-                        np.concatenate((xs[a:b], xs[a:b][::-1])),
-                        np.concatenate((middle - half[a:b], (middle + half[a:b])[::-1])),
-                    )
+                artist.setBrush(
+                    tint(colour, NEUTRAL, 0.6 if faint else 0.0, 0.16 if faint else 0.3)
+                )
+                stage.surface.polygon(
+                    artist,
+                    np.concatenate((xs[a:b], xs[a:b][::-1])),
+                    np.concatenate((middle - half[a:b], (middle + half[a:b])[::-1])),
                 )
             artist.setBrush(Qt.BrushStyle.NoBrush)
         else:
@@ -130,13 +131,15 @@ class GuitarLayer(Layer):
                 for a, b, faint in runs(pale):
                     b = min(len(xs), b + 1)
                     pen = QPen(
-                        tint(colour, NEUTRAL, 0.65, 0.45) if faint else tint(colour, "#ffffff", 0.0, 0.8),
+                        tint(colour, NEUTRAL, 0.65, 0.45)
+                        if faint
+                        else tint(colour, "#ffffff", 0.0, 0.8),
                         1,
                     )
                     if faint:
                         pen.setStyle(Qt.PenStyle.DashLine)
                     artist.setPen(pen)
-                    artist.drawPolyline(polygon(xs[a:b], line[a:b]))
+                    stage.surface.polyline(artist, xs[a:b], line[a:b])
         # Strokes and beams. The first row was drawn with the slice before this one.
         lean = spacing * 0.3
         for row, weight, faint in zip(rows[1:], weights[1:], tentative[1:], strict=True):
@@ -158,14 +161,14 @@ class GuitarLayer(Layer):
             pen = QPen(shade, 1.0 + 2.4 * attack * min(1.5, self.intensity))
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             artist.setPen(pen)
-            artist.drawLine(QLineF(x - lean / 2, bottom, x + lean / 2, top))
+            stage.surface.line(artist, x - lean / 2, bottom, x + lean / 2, top)
             if beamed(row):
                 before = float(to_x(row[0] - row[C["gap"]]))
                 artist.setPen(QPen(shade, 1))
-                artist.drawLine(QLineF(x + lean / 2, top, x + lean / 2, rail))
-                artist.drawLine(QLineF(before + lean / 2, top, before + lean / 2, rail))
+                stage.surface.line(artist, x + lean / 2, top, x + lean / 2, rail)
+                stage.surface.line(artist, before + lean / 2, top, before + lean / 2, rail)
                 artist.setPen(QPen(shade, 2.2))
-                artist.drawLine(QLineF(before + lean / 2, rail, x + lean / 2, rail))
+                stage.surface.line(artist, before + lean / 2, rail, x + lean / 2, rail)
 
     def reading(self, state):
         """One line saying how the newest activity is being read, or ''."""
@@ -194,36 +197,6 @@ class GuitarLayer(Layer):
             parts.append("mono source: weaker analysis")
         return "  ·  ".join(parts)
 
-    def paint_live(self, painter, rect, stage, state):
-        track = self.rows(state)
-        if track is None:
-            return
-        row = track.last
-        weights, _ = state.attribution(self.key, row[:1])
-        # The newest edge of the strings glows with what is ringing right now.
-        glow = float(row[C["ring"]] * weights[0]) * min(1.0, self.intensity)
-        if glow > 0.02 and stage.now - row[0] < 0.5:
-            x = rect.left() + (row[0] - stage.start) * stage.per_second
-            painter.fillRect(
-                QRectF(x, rect.top() + rect.height() * 0.16, 3, rect.height() * 0.74),
-                tint(self.profile.colour, "#ffffff", 0.5, 0.25 + 0.75 * glow),
-            )
-        text = self.reading(state)
-        if text:
-            painter.setFont(stage.font(11))
-            painter.setPen(tint(NEUTRAL, "#ffffff", 0.0, 0.9))
-            painter.drawText(
-                # Along the bottom edge: the top belongs to the beams.
-                QRectF(
-                    rect.left(),
-                    rect.bottom() - 20 * stage.scale,
-                    rect.width() - 10 * stage.scale,
-                    20 * stage.scale,
-                ),
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                text,
-            )
-
     def paint_lane(self, artist, to_x, rows, top, bottom):
         """Detail lane: the ringing envelope as a line and every attack as a tick. The lane's
         filled band underneath is the recognition model's judgement, so nothing is hidden
@@ -238,5 +211,7 @@ class GuitarLayer(Layer):
         for x, row in zip(xs[1:].tolist(), rows[1:], strict=True):
             attack = row[C["attack"]]
             if attack > 0:
-                artist.setPen(QPen(tint("#ffffff", self.profile.colour, 0.15, 0.95), 2 if beamed(row) else 1))
+                artist.setPen(
+                    QPen(tint("#ffffff", self.profile.colour, 0.15, 0.95), 2 if beamed(row) else 1)
+                )
                 artist.drawLine(QLineF(x, bottom - 1, x, bottom - 1 - (0.3 + 0.7 * attack) * tall))

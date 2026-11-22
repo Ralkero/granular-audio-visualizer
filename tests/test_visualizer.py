@@ -370,21 +370,30 @@ def test_a_stalled_window_never_blocks_the_publisher(window):
     publish_music(bus, 120.0)  # 6000 frames plus events while the window is not refreshing
     assert perf_counter() - began < 5
     assert window.subscription.dropped > 0 and len(window.subscription) <= 2048
+    # One frame takes in a bounded share of the backlog, in order, and leaves the rest
+    # queued; a few frames later the window has caught up. Nothing is skipped.
     window.tick()
+    first = window.state.latest.timestamp
+    assert 0 < len(window.subscription) < 2048 and first < 119.98
+    ticks = 1
+    while len(window.subscription) and ticks < 20:
+        window.tick()
+        assert window.state.latest.timestamp >= first
+        ticks += 1
     # Only the newest messages survived, and the display continues from them.
-    assert window.state.latest.timestamp == pytest.approx(119.98)
+    assert ticks <= 8 and window.state.latest.timestamp == pytest.approx(119.98)
     assert window.canvas.info["dropped"] == window.subscription.dropped
 
 
 def test_the_refresh_timer_slows_down_when_nothing_is_arriving(window):
-    window.timer.start(16)
+    window.timer.start(4)
     window.tick()
     assert window.timer.interval() == 250
     bus = EventBus()
     window.attach(bus)
     publish_music(bus, 0.5)
     window.tick()
-    assert window.timer.interval() == 16
+    assert window.timer.interval() <= 16
     # Silence: nothing arrives and the spectrum has died away, but the history is still
     # scrolling, so the refresh rate must not drop.
     later = perf_counter() + 5
@@ -451,6 +460,7 @@ def test_a_lane_fed_twice_a_second_is_drawn_while_it_arrives(window):
         )
 
     bus = EventBus()
+    window.set_section("details", shown=True)
     window.attach(bus, source="test", recognition_model="model.json")
     began, due = perf_counter(), 0.5
     while (now := perf_counter() - began) < 1.7:

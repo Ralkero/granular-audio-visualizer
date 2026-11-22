@@ -7,6 +7,7 @@ oldest messages and the display carries on from the newest.
 
 import math
 from collections import deque
+from contextlib import contextmanager
 
 import numpy as np
 from time import perf_counter
@@ -28,13 +29,15 @@ from PySide6.QtWidgets import (
 )
 
 from . import layers as layer_registry
+from . import palette
+from .perf import Timings
 from .state import ROWS, SpectrumDisplay, VisualState
 from .strip import Strip, polygon
 
 TEXT, DIM, FAINT = QColor("#e8ebf4"), QColor("#8089a0"), QColor("#262b3a")
-PREDICTED = QColor("#ffb454")  # amber is reserved for predictions
-CONTEXT = QColor("#8e86c9")
-SPECTRUM = ("#5b6cff", "#22d3ee", "#9ef0c9")  # low, middle, high frequencies
+PREDICTED = QColor(palette.PREDICTED)  # reserved for predictions; no instrument has it
+CONTEXT = QColor(palette.CONTEXT)
+SPECTRUM = palette.SPECTRUM  # whole mix: low, middle, high frequencies
 CONDITIONS = {
     "idle": ("IDLE", "#6b7280"),
     "waiting": ("WAITING", "#f5c451"),
@@ -44,6 +47,20 @@ CONDITIONS = {
 }
 AHEAD = 0.08  # share of the time axis kept to the right of "now" for predictions
 QUEUE = 2048
+FRAME_S = 1 / 60  # the cadence frames are drawn at
+ACTIVE_MS = 16  # the longest the timer sleeps while frames are being drawn
+DRAIN_S = 0.006  # most time one frame may spend taking in messages
+DRAIN_MOST = 1024  # and most messages
+SECTIONS = ("timeline", "details", "notes")
+DEFAULT_SECTIONS = {"timeline": True, "details": False, "notes": False}
+MIN_MAIN, MIN_SECTION = 260, 56  # smallest useful heights, before scaling
+RADIAL_SPECTRUM = 0.5  # share of the radius the spectrum keeps when instrument rings are shown
+RING_SECONDS = 6.0  # one turn of the instrument rings
+
+
+@contextmanager
+def _untimed(_name):
+    yield
 
 
 def mix(a, b, t):
@@ -92,13 +109,25 @@ class Canvas(QWidget):
         # instrument from its own activity history; none reads the whole-mix spectrum.
         self.layers = layer_registry.build()
         self.stage_seconds = 4.0  # how much time the layers show; short, so strokes separate
-        self.spectrum_place = "beside"  # beside | behind | hidden, while layers are shown
+        # The whole-mix spectrum while layers are shown: beside (as it is), behind (dimmed)
+        # or hidden. The names are those of saved settings; all three share one area now.
+        self.spectrum_place = "behind"
+        # Sections under the main visualizer: shown or not, and a height the user chose by
+        # dragging its upper edge (None: sized automatically).
+        self.sections = {
+            name: {"shown": on, "height": None} for name, on in DEFAULT_SECTIONS.items()
+        }
+        self._edges, self._heights, self._drag = {}, {}, None
+        self.setMouseTracking(True)
         self.level = self.intensity = self.flash = self.pulse = 0.0
         self.peak_level = 0.0
         self.rings = []  # [age_s, strength, predicted]
         self.now = None
         self.condition = "idle"
         self.paint_ms = deque(maxlen=240)
+        # Rolling timings of every part of a paint, in ms (see ``perf.Timings``).
+        self.perf = Timings()
+        self._last_paint = None
         self.painted = 0
         self.show_stats = False
         self._background = None
@@ -189,34 +218,61 @@ class Canvas(QWidget):
         self.scale = max(0.85, min(1.6, height / 900))
         margin = round(28 * self.scale)
         header = round(58 * self.scale)
-        rows = [row for row in ROWS if row[0] not in self.hidden and self.row_in_use(row[0])]
+        sections = self.sections
+        rows = (
+            [row for row in ROWS if row[0] not in self.hidden and self.row_in_use(row[0])]
+            if sections["timeline"]["shown"]
+            else []
+        )
         # A lane is live when a detector fills it or an instrument analyzer does.
-        lanes = [
-            (lane, live or (lane.key in self.layers and lane.key in self.state.activity))
-            for lane, live in self.state.board.lanes()
-            if lane.key not in self.hidden
-        ]
+        lanes = (
+            [
+                (lane, live or (lane.key in self.layers and lane.key in self.state.activity))
+                for lane, live in self.state.board.lanes()
+                if lane.key not in self.hidden
+            ]
+            if sections["details"]["shown"]
+            else []
+        )
+        notes = (
+            sections["notes"]["shown"]
+            and self.state.pitch_method is not None
+            and "notes" not in self.hidden
+        )
         body = height - header - margin
-        timeline_h = round(min(body * 0.20, (26 * len(rows) + 26) * self.scale)) if rows else 0
-        lanes_h = round(min(body * 0.26, (26 * len(lanes) + 26) * self.scale)) if lanes else 0
-        notes = self.state.pitch_method is not None and "notes" not in self.hidden
-        notes_h = round(min(body * 0.14, 110 * self.scale)) if notes else 0
         gap = round(18 * self.scale)
+        wanted = {
+            "timeline": round(min(body * 0.20, (26 * len(rows) + 26) * self.scale)) if rows else 0,
+            "details": round(min(body * 0.30, (26 * len(lanes) + 26) * self.scale)) if lanes else 0,
+            "notes": round(min(body * 0.14, 110 * self.scale)) if notes else 0,
+        }
+        present = [
+            name
+            for name, on in (("timeline", bool(rows)), ("details", bool(lanes)), ("notes", notes))
+            if on
+        ]
+        least = MIN_SECTION * self.scale
+        for name in present:
+            if sections[name]["height"]:
+                wanted[name] = max(least, sections[name]["height"])
+        # The main visualizer keeps a useful height: sections give way, the lowest first.
+        over = sum(wanted[n] for n in present) - (body - MIN_MAIN * self.scale - gap * len(present))
+        for name in reversed(present):
+            if over <= 0:
+                break
+            less = min(over, max(0.0, wanted[name] - least))
+            wanted[name] -= less
+            over -= less
+        timeline_h, lanes_h, notes_h = wanted["timeline"], wanted["details"], wanted["notes"]
         spectrum = QRectF(
             margin,
             header,
             width - 2 * margin,
-            body - timeline_h - lanes_h - notes_h - gap * (bool(rows) + bool(lanes) + notes),
+            body - timeline_h - lanes_h - notes_h - gap * len(present),
         )
-        # Instrument layers share the main area with the whole-mix spectrum: above it,
-        # over it (the spectrum dimmed behind them) or instead of it.
+        # Instrument layers are drawn inside the selected visualizer, over its spectrum.
         active = self.active_layers()
-        stage = QRectF(spectrum)
         show_spectrum = not active or self.spectrum_place != "hidden"
-        if active and self.spectrum_place == "beside":
-            tall = round(spectrum.height() * layer_registry.share(len(active)))
-            stage.setHeight(tall - gap)
-            spectrum.setTop(spectrum.top() + tall)
         gutter = round(150 * self.scale)
         top = spectrum.bottom() + gap
         timeline = QRectF(margin, top, width - 2 * margin, timeline_h)
@@ -228,29 +284,43 @@ class Canvas(QWidget):
         )
         bottom = note_block.bottom() if notes else lane_block.bottom()
         axis = QRectF(margin + gutter, top, width - 2 * margin - gutter, bottom - top)
+        # Where each section's upper edge is: the handle that resizes it.
+        blocks = {"timeline": timeline, "details": lane_block, "notes": note_block}
+        self._edges = {name: blocks[name].top() - gap / 2 for name in present}
+        self._heights = {name: wanted[name] for name in present}
 
         def everything(painter):
             self.draw_header(painter, QRectF(margin, 0, width - 2 * margin, header))
+            timed = self.perf.measure if not self.static else _untimed
             if show_spectrum:
-                if not self.static:
-                    self.draw_glow(painter, spectrum)
-                if self.mode == "radial":
+                with timed("spectrum"):
                     if not self.static:
-                        self.draw_radial(painter, spectrum)
-                else:
-                    self.draw_bars(painter, spectrum)
+                        self.draw_glow(painter, spectrum)
+                    if self.mode == "radial":
+                        if not self.static:
+                            self.draw_radial(painter, spectrum)
+                    else:
+                        self.draw_bars(painter, spectrum)
             if active:
-                if self.spectrum_place == "behind" and not self.static:
-                    painter.fillRect(spectrum, QColor(5, 6, 10, 165))  # the spectrum steps back
-                self.draw_layers(painter, stage, active)
+                if show_spectrum and self.spectrum_place == "behind" and not self.static:
+                    painter.fillRect(spectrum, QColor(5, 6, 10, 150))  # the spectrum steps back
+                with timed("layers"):
+                    self.draw_layers(painter, spectrum, active)
+            if self.static:
+                painter.setPen(QPen(alpha(DIM, 0.45), 2))
+                for y in self._edges.values():  # a grip on each section's upper edge
+                    painter.drawLine(QPointF(width / 2 - 22, y), QPointF(width / 2 + 22, y))
             if self.now is None and self.static:
                 self.draw_idle(painter, spectrum)
             if rows:
-                self.draw_timeline(painter, timeline, rows)
+                with timed("timeline"):
+                    self.draw_timeline(painter, timeline, rows)
             if lanes:
-                self.draw_lanes(painter, lane_block, lanes)
+                with timed("details"):
+                    self.draw_lanes(painter, lane_block, lanes)
             if notes:
-                self.draw_notes(painter, note_block)
+                with timed("notes"):
+                    self.draw_notes(painter, note_block)
             if (rows or lanes or notes) and self.now is not None:
                 self.draw_now(painter, axis)
 
@@ -288,6 +358,7 @@ class Canvas(QWidget):
             len(self.display.values) if self.display.values is not None else 0,
             tuple(layer.key for layer in active),
             self.spectrum_place,
+            tuple(sorted(self._edges.items())),
         )
         still = self.cached("still", key, still_picture)
         painter = QPainter(self)
@@ -306,6 +377,10 @@ class Canvas(QWidget):
             )
         painter.end()
         self.paint_ms.append((perf_counter() - began) * 1000)
+        self.perf.add("paint", self.paint_ms[-1])
+        if self._last_paint is not None:
+            self.perf.add("frame interval", (began - self._last_paint) * 1000)
+        self._last_paint = began
         self.painted += 1
 
     def active_layers(self):
@@ -318,19 +393,88 @@ class Canvas(QWidget):
             and (layer.key in self.state.activity or layer.key in self.info["instruments"])
         ]
 
+    def radial_geometry(self, rect):
+        """Centre and full radius of the radial visualizer in ``rect``."""
+        centre = rect.center()
+        return centre.x(), centre.y(), min(rect.width(), rect.height()) / 2 - 4
+
     def draw_layers(self, painter, rect, active):
-        slots = layer_registry.slots(rect, active, 6 * self.scale)
+        """Every active instrument inside the selected visualizer: a ring each round the
+        radial spectrum, or a strip each across the bars. The mode only decides where the
+        bands are; what is drawn in them is each layer's own business."""
+        state = self.state
+        if self.mode == "radial":
+            if self.static or self.now is None:
+                return
+            cx, cy, reach = self.radial_geometry(rect)
+            inner = reach * RADIAL_SPECTRUM + 8 * self.scale
+            bands = layer_registry.rings(inner, reach, active, 5 * self.scale)
+            for layer, (low, high) in zip(active, bands, strict=True):
+                stage = layer_registry.Stage(
+                    self.now, RING_SECONDS, self.scale, state.generation, self.font,
+                    ring=(cx, cy, low, high),
+                )  # fmt: skip
+                with self.perf.measure("layer " + layer.key):
+                    layer.paint_stage(painter, stage, state)
+            # The hand: where "now" is on the rings.
+            angle = 2 * math.pi * (self.now % RING_SECONDS) / RING_SECONDS
+            sin, cos = math.sin(angle), math.cos(angle)
+            painter.setPen(QPen(alpha(TEXT, 0.6), 1))
+            painter.drawLine(
+                QPointF(cx + inner * sin, cy - inner * cos),
+                QPointF(cx + reach * sin, cy - reach * cos),
+            )
+            return
+        # Bars: the strips lie across the field the bars rise in.
+        field = QRectF(
+            rect.left(), rect.top() + 4, rect.width() - 22 * self.scale, rect.height() * 0.86 - 10
+        )
+        slots = layer_registry.slots(field, active, 5 * self.scale)
         for layer, slot in zip(active, slots, strict=True):
             stage = layer_registry.Stage(
-                slot, self.now, self.stage_seconds, self.scale, self.state.generation, self.font
+                self.now, self.stage_seconds, self.scale, state.generation, self.font, rect=slot
             )
             if self.static:
-                layer.paint_static(painter, slot, stage, self.state)
+                layer.paint_static(painter, slot, stage, state)
             elif self.now is not None:
                 painter.save()
                 painter.setClipRect(slot)
-                layer.paint_stage(painter, slot, stage, self.state)
+                with self.perf.measure("layer " + layer.key):
+                    layer.paint_stage(painter, stage, state)
                 painter.restore()
+
+    # -- sections --------------------------------------------------------------------------
+
+    def edge_at(self, y):
+        """The section whose upper edge is at ``y`` (within a few pixels), or None."""
+        for name, edge in self._edges.items():
+            if abs(y - edge) <= 6:
+                return name
+        return None
+
+    def mouseMoveEvent(self, event):
+        y = event.position().y()
+        if self._drag is not None:
+            name, start_y, start_height = self._drag
+            self.sections[name]["height"] = max(
+                MIN_SECTION * self.scale, start_height + start_y - y
+            )
+            self.update()
+        else:
+            self.setCursor(
+                Qt.CursorShape.SizeVerCursor if self.edge_at(y) else Qt.CursorShape.ArrowCursor
+            )
+
+    def mousePressEvent(self, event):
+        name = self.edge_at(event.position().y())
+        if name is not None and event.button() == Qt.MouseButton.LeftButton:
+            self._drag = (name, event.position().y(), self._heights[name])
+        else:
+            super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag = None
+        super().mouseReleaseEvent(event)
 
     def row_in_use(self, row):
         # The delayed-context row only appears once such analysis has produced something.
@@ -585,7 +729,9 @@ class Canvas(QWidget):
         count = len(values) if values is not None else 48
         centre = rect.center()
         cx, cy = centre.x(), centre.y()
-        outer = min(rect.width(), rect.height()) * 0.54
+        # With instrument rings round it, the spectrum keeps the inner half of the radius.
+        reach = self.radial_geometry(rect)[2]
+        outer = reach * (RADIAL_SPECTRUM if self.active_layers() else 1.07)
         inner = outer * (0.27 + 0.07 * self.level + 0.03 * self.pulse)
         reach = outer - inner - 10
         bar = max(2.0, math.pi * inner / count * 0.62)
@@ -926,7 +1072,7 @@ class Canvas(QWidget):
         step = area.height() / 50
         tall = max(3.0, step * 1.5)
         wide = max(2.0, per_second * 0.02 + 0.5)
-        neutral, guitar = QColor("#9aa6c4"), QColor("#f5c451")
+        neutral, guitar = QColor(palette.NEUTRAL), QColor(palette.INSTRUMENTS["guitar"])
         maybe_guitar = mix(neutral, guitar, 0.45)
         attacks = list(state.note_attacks)
 
@@ -934,7 +1080,8 @@ class Canvas(QWidget):
             first = start if since is None else self._notes_until
             rows = state.notes.since(first)
             artist.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-            levels = np.maximum(rows[:, 3], state.board.level_at("guitar", rows[:, 0]))
+            judged = np.nan_to_num(state.board.judged_at("guitar", rows[:, 0]))
+            levels = np.maximum(rows[:, 3], judged)
             for (time, midi, score, _), level in zip(rows.tolist(), levels.tolist(), strict=True):
                 y = height - (midi - 39) * step
                 colour = guitar if level >= 1 else maybe_guitar if level > 0 else neutral
@@ -952,7 +1099,7 @@ class Canvas(QWidget):
             self._attack_count = 0
         self._new_attacks = len(attacks) - self._attack_count if self._attack_seen else 0
         # A late guitar estimate changes the colour of notes already drawn: draw them again.
-        key = (state.generation, guitar_known, state.board.revision)
+        key = (state.generation, guitar_known, state.board.judged.get("guitar", 0))
         if self.note_strip.key is None or self.note_strip.key[0] != key:
             self._notes_until = start
         self.note_strip.paint(painter, area, start, per_second, key, state.note_serial, draw)
@@ -1085,9 +1232,9 @@ class VisualizerWindow(QWidget):
         layout.addWidget(self.canvas)
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self.timer.timeout.connect(self.tick)
-        self.last_tick = perf_counter()
-        self.timer.start(16)
+        self.timer.timeout.connect(self.poll)
+        self.last_tick = self.next_frame = perf_counter()
+        self.timer.start(ACTIVE_MS)
 
     # -- display options -----------------------------------------------------------------------
 
@@ -1175,7 +1322,7 @@ class VisualizerWindow(QWidget):
             instruments=tuple(instruments),
             dropped=0,
         )
-        self.timer.start(16)
+        self.timer.start(ACTIVE_MS)
 
     def detach(self):
         if self.subscription is not None:
@@ -1183,22 +1330,89 @@ class VisualizerWindow(QWidget):
             self.bus.unsubscribe(self.subscription)
         self.bus = self.subscription = None
 
+    def poll(self):
+        """Timer slot. Frames are due on a fixed 60 Hz grid; the timer is set to wake just
+        when the next one is. A wake-up that comes early goes back to sleep for the rest; one
+        that comes late (the analysis thread held the interpreter, Windows ran something
+        else) draws at once and the grid is kept, so lateness does not accumulate."""
+        clock = perf_counter()
+        if self.timer.interval() < 250 and clock < self.next_frame - 0.0007:
+            self.timer.start(max(1, int((self.next_frame - clock) * 1000)))
+            return
+        # After a long stall, start the grid again from now instead of catching up.
+        self.next_frame = max(self.next_frame + FRAME_S, clock - FRAME_S / 2)
+        self.tick()
+
     def tick(self):
+        """One frame: take in messages (bounded), advance the animation, ask for a paint."""
         clock = perf_counter()
         dt, self.last_tick = min(0.25, clock - self.last_tick), clock
+        perf = self.canvas.perf
+        perf.add("tick interval", dt * 1000)
         if self.subscription is not None:
-            for _ in range(QUEUE):
+            perf.add("backlog", len(self.subscription))
+            drained = 0
+            # Every message is taken in, in order; none is skipped. A burst is spread over
+            # frames instead of holding this one up: the rest stays queued for the next.
+            while drained < DRAIN_MOST:
                 message = self.subscription.get(timeout=0)
                 if message is None:
                     break
                 self.state.consume(message)
+                drained += 1
+                if drained % 32 == 0 and perf_counter() - clock > DRAIN_S:
+                    perf.count("frames that left messages queued")
+                    break
+            perf.add("messages per tick", drained)
+            perf.add("consume", (perf_counter() - clock) * 1000)
             self.canvas.info["dropped"] = self.dropped + self.subscription.dropped
         self.canvas.advance(dt, clock)
         self.canvas.update()
-        # Nothing arriving and nothing moving: check a few times a second instead of 60.
-        interval = 250 if self.canvas.settled() else 16
+        perf.add("tick", (perf_counter() - clock) * 1000)
+        # Nothing arriving and nothing moving: check a few times a second instead.
+        if self.canvas.settled():
+            interval = 250
+        else:  # until the next frame is due
+            interval = max(1, min(ACTIVE_MS, int((self.next_frame - perf_counter()) * 1000)))
         if self.timer.interval() != interval:
             self.timer.start(interval)
+
+    # -- sections and layout -------------------------------------------------------------------
+
+    def set_section(self, name, *, shown=None, height=None):
+        """Show or hide a section under the main visualizer, or set its height in pixels
+        (0 or None: automatic). A hidden section is not painted at all."""
+        section = self.canvas.sections[name]
+        if shown is not None:
+            section["shown"] = bool(shown)
+        if height is not None:
+            section["height"] = float(height) or None
+        self.canvas.update()
+
+    def layout_state(self):
+        """What is worth remembering about the layout."""
+        return {name: dict(values) for name, values in self.canvas.sections.items()}
+
+    def restore_layout(self, saved):
+        for name in SECTIONS:
+            values = (saved or {}).get(name)
+            if isinstance(values, dict):
+                self.set_section(
+                    name,
+                    shown=values.get("shown", DEFAULT_SECTIONS[name]),
+                    height=values.get("height") or 0,
+                )
+
+    def reset_layout(self):
+        for name, shown in DEFAULT_SECTIONS.items():
+            self.set_section(name, shown=shown, height=0)
+
+    def performance(self):
+        """Rolling timings of message intake and painting (see ``perf.Timings``)."""
+        report = self.canvas.perf.stats()
+        if self.subscription is not None:
+            report["dropped by this window"] = self.dropped + self.subscription.dropped
+        return report
 
     def closeEvent(self, event):
         self.detach()
@@ -1208,5 +1422,5 @@ class VisualizerWindow(QWidget):
     def showEvent(self, event):
         self.last_tick = perf_counter()
         if not self.timer.isActive():
-            self.timer.start(16)
+            self.timer.start(ACTIVE_MS)
         super().showEvent(event)

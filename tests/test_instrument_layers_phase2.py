@@ -479,6 +479,7 @@ def test_each_lane_is_handed_the_same_rows_as_its_layer(window, monkeypatch):
 
         monkeypatch.setattr(layer, "paint_history", stage)
         monkeypatch.setattr(layer, "paint_lane", lane)
+    window.set_section("details", shown=True)
     play_band(window, seconds=3.0)
     window.grab()
     for key, where in seen.items():

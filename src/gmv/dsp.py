@@ -189,17 +189,14 @@ class Analyzer:
             spectrum_db = tuple(
                 np.round(10 * np.log10(np.maximum(band_power * energy_scale, 1e-12)), 1).tolist()
             )
-        contrast = tuple(
-            float(
-                10
-                * np.log10(
-                    (np.quantile(power[m], 0.9) + 1e-20) / (np.quantile(power[m], 0.1) + 1e-20)
-                )
-            )
-            if np.any(m)
-            else 0.0
-            for m in self.masks
-        )
+        contrast = []
+        for mask in self.masks:  # both quantiles of a band from one partial sort
+            if mask.any():
+                low, high = np.quantile(power[mask], (0.1, 0.9))
+                contrast.append(float(10 * np.log10((high + 1e-20) / (low + 1e-20))))
+            else:
+                contrast.append(0.0)
+        contrast = tuple(contrast)
         flux = (
             float(np.maximum(magnitude - self.prev, 0).sum() / max(magnitude.sum(), 1e-12))
             if self.prev is not None

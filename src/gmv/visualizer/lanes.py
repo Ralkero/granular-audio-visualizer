@@ -98,6 +98,8 @@ class LaneBoard:
         # Grows when a lane's committed level changes (or first appears): what was drawn
         # with the level held from the estimate before is then no longer right.
         self.judgement = 0
+        # The same per lane: a change for one instrument concerns that instrument only.
+        self.judged = {}
         self.context_s = 0.0  # how much audio the recognition model listens to
 
     def register(self, lane):
@@ -124,6 +126,7 @@ class LaneBoard:
             track.append(time - 0.02, 0.0, 0.0)
         if not len(track) or track.last[2] != level:
             self.judgement += 1
+            self.judged[key] = self.judged.get(key, 0) + 1
         track.append(time, min(1.0, max(0.0, float(score))), level)
         return key
 

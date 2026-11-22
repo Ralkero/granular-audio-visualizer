@@ -339,6 +339,7 @@ def test_the_layer_and_the_guitar_lane_draw_the_same_attacks(window, monkeypatch
 
     monkeypatch.setattr(layer, "paint_history", stage)
     monkeypatch.setattr(layer, "paint_lane", lane)
+    window.set_section("details", shown=True)
     strokes = np.arange(0.5, 3.4, 0.2)
     play(window, 3.5, strokes, [(end, "detected") for end in np.arange(0.5, 3.51, 0.5)])
     window.grab()

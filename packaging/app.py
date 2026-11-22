@@ -66,6 +66,24 @@ def self_check(report):
         result["recognition_ms"] = metrics.get("recognition_processing_ms")
         result["frames_drawn"] = len(window.view.canvas.paint_ms)
         result["engine_error"] = str(window.controller.engine.error or "")
+        # The unified view: both modes, every instrument off and on, every section.
+        try:
+            view = window.view
+            for mode in ("radial", "bars"):
+                view.set_mode(mode)
+                for control in (*window.chips.values(), *window.section_buttons.values()):
+                    control.click()
+                    app.processEvents()
+                    view.grab()
+                    control.click()
+                    app.processEvents()
+            result["ui_exercise"] = "ok"
+            result["layers_active"] = [layer.key for layer in view.canvas.active_layers()]
+            timings = view.performance()
+            result["paint_ms"] = timings.get("paint")
+            result["frame_interval_ms"] = timings.get("frame interval")
+        except Exception as exc:
+            result["ui_exercise"] = f"failed: {exc}"
         # live capture of the default output while a quiet tone plays on it
         devices, applications, error = discover()
         result["output_devices"], result["audio_applications"] = len(devices), len(applications)

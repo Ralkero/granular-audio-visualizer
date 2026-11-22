@@ -270,8 +270,8 @@ class SettingsDrawer(QFrame):
         )
         self.spectrum_place = Combo()
         for key, title in (
-            ("beside", "Below the instruments"),
-            ("behind", "Behind the instruments, dimmed"),
+            ("behind", "Dimmed behind the instruments"),
+            ("beside", "Full brightness"),
             ("hidden", "Hidden"),
         ):
             self.spectrum_place.addItem(title, key)
@@ -279,6 +279,11 @@ class SettingsDrawer(QFrame):
             lambda: self.view.set_spectrum_place(self.spectrum_place.currentData())
         )
         self.form.addRow("Whole-mix spectrum", self.spectrum_place)
+        self.reset_layout = QPushButton("Reset layout")
+        self.reset_layout.setToolTip(
+            "Show the timeline, hide the details and notes, and size everything automatically."
+        )
+        self.form.addRow(self.reset_layout)
         self.layer_controls = {}
         for key, layer in self.view.canvas.layers.items():
             shown = QCheckBox(f"Show the {layer.profile.title.lower()} layer")
@@ -521,6 +526,7 @@ class SettingsDrawer(QFrame):
             "show_beats": self.show_beats.isChecked(),
             "spectrum_place": self.spectrum_place.currentData(),
             "layers": self.layer_settings(),
+            "sections": self.view.layout_state(),
         }
 
     def restore(self, saved):
@@ -541,8 +547,9 @@ class SettingsDrawer(QFrame):
         self.window.setCurrentIndex(max(0, self.window.findData(saved.get("window", 15))))
         self.show_beats.setChecked(bool(saved.get("show_beats", True)))
         self.spectrum_place.setCurrentIndex(
-            max(0, self.spectrum_place.findData(saved.get("spectrum_place", "beside")))
+            max(0, self.spectrum_place.findData(saved.get("spectrum_place", "behind")))
         )
+        self.view.restore_layout(saved.get("sections"))
         for key, values in (saved.get("layers") or {}).items():
             controls = self.layer_controls.get(key)
             if controls is None or not isinstance(values, dict):
@@ -550,7 +557,9 @@ class SettingsDrawer(QFrame):
             controls["shown"].setChecked(bool(values.get("shown", True)))
             controls["sensitivity"].setValue(int(values.get("sensitivity", 50)))
             controls["intensity"].setValue(int(values.get("intensity", 100)))
-            controls["style"].setCurrentIndex(max(0, controls["style"].findData(values.get("style"))))
+            controls["style"].setCurrentIndex(
+                max(0, controls["style"].findData(values.get("style")))
+            )
 
 
 class MainWindow(QWidget):
@@ -582,6 +591,12 @@ class MainWindow(QWidget):
         self.drawer_open = False
         self.drawer.close_button.clicked.connect(lambda: self.show_settings(False))
         self.drawer.engine_changed.connect(self.settings_changed)
+        self.drawer.reset_layout.clicked.connect(self.reset_layout)
+        # A layer's button in the top bar and its checkbox in Settings are one switch.
+        for key, chip in self.chips.items():
+            box = self.drawer.layer_controls[key]["shown"]
+            chip.toggled.connect(box.setChecked)
+            box.toggled.connect(chip.setChecked)
         self.drawer.sensitivity_changed.connect(self.controller.set_sensitivity)
         self.drawer.refresh_requested.connect(self.refresh_sources)
         self.drawer.fullscreen.clicked.connect(self.toggle_fullscreen)
@@ -608,6 +623,7 @@ class MainWindow(QWidget):
             except (TypeError, ValueError):
                 pass
             self.apply_build_defaults()
+        self.sync_layout_controls()
         self.poller = QTimer(self)
         self.poller.timeout.connect(self.poll)
         self.poller.start(250)
@@ -632,9 +648,61 @@ class MainWindow(QWidget):
         self.toggle.clicked.connect(self.start_or_stop)
         self.settings_button = QPushButton("Settings")
         self.settings_button.clicked.connect(lambda: self.show_settings(not self.drawer_open))
+        # One button per instrument, in its colour: a click shows or hides its layer. Then
+        # one per section under the visualizer. All of it works while analysis runs.
+        self.chips, self.section_buttons = {}, {}
+        for key, layer in self.view.canvas.layers.items():
+            chip = QPushButton(layer.profile.title, objectName="chip")
+            chip.setCheckable(True)
+            chip.setChecked(True)
+            chip.setCursor(Qt.CursorShape.PointingHandCursor)
+            colour = layer.profile.colour
+            chip.setStyleSheet(
+                f"QPushButton#chip {{ border: 1px solid {colour}; color: {colour}; border-radius: 11px;"
+                " padding: 3px 12px; background: transparent; }"
+                f"QPushButton#chip:checked {{ background: {colour}; color: #0a0c13; font-weight: 600; }}"
+                "QPushButton#chip:!checked { border-color: #3a4055; color: #8089a0; }"
+            )
+            chip.setToolTip(
+                f"Show or hide the {layer.profile.title.lower()} layer. Its analysis keeps running."
+            )
+            line.addWidget(chip)
+            self.chips[key] = chip
+        line.addSpacing(10)
+        for name, title in (("timeline", "Timeline"), ("details", "Details"), ("notes", "Notes")):
+            button = QPushButton(title, objectName="section")
+            button.setCheckable(True)
+            button.setToolTip(
+                f"Show or hide the {title.lower()} section. Drag its upper edge to resize it."
+            )
+            button.toggled.connect(lambda on, name=name: self.view.set_section(name, shown=on))
+            line.addWidget(button)
+            self.section_buttons[name] = button
+        line.addSpacing(10)
         for widget in (self.apply, self.toggle, self.settings_button):
             line.addWidget(widget)
         return bar
+
+    def show_readings(self):
+        """Each instrument button's tooltip says how its layer reads the music right now."""
+        for key, chip in self.chips.items():
+            layer = self.view.canvas.layers[key]
+            reading = layer.reading(self.view.state)
+            chip.setToolTip(
+                f"{layer.profile.title}: {reading or 'no activity yet'}. "
+                "Click to show or hide this layer; its analysis keeps running."
+            )
+
+    def sync_layout_controls(self):
+        """Top-bar buttons follow the view (after restoring settings or a reset)."""
+        for name, button in self.section_buttons.items():
+            button.blockSignals(True)
+            button.setChecked(self.view.canvas.sections[name]["shown"])
+            button.blockSignals(False)
+
+    def reset_layout(self):
+        self.view.reset_layout()
+        self.sync_layout_controls()
 
     # -- settings drawer -----------------------------------------------------------------------
 
@@ -781,6 +849,7 @@ class MainWindow(QWidget):
     # -- keeping the interface current -----------------------------------------------------------
 
     def poll(self):
+        self.show_readings()
         controller, drawer = self.controller, self.drawer
         running, replaying = controller.running, controller.replaying
         if replaying is not None and replaying.error:
@@ -848,6 +917,10 @@ class MainWindow(QWidget):
 
 
 def application():
+    # Analysis and drawing are separate threads of one interpreter. Letting them hand over
+    # every millisecond (the default is five) keeps a busy analysis frame from holding up
+    # a paint, and a paint from holding up analysis.
+    sys.setswitchinterval(0.001)
     app = QApplication.instance() or QApplication(sys.argv)
     app.setOrganizationName("GranularMusicVisualizer")
     app.setApplicationName("Granular Music Visualizer")

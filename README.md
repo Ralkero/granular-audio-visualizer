@@ -39,7 +39,7 @@ Logging is enabled by default. Audio recording is disabled. The optional debug s
 
 ## Instrument layers (experimental)
 
-The main view is a composition of instrument layers beside the whole-mix spectrum. Each layer is drawn from its own analysis of one instrument, with its own picture, not from the spectrum:
+The main view is the selected visualizer, Radial or Spectrum Bars, with the instruments drawn inside it: a ring each round the radial spectrum, or a strip each across the bars. Each layer is drawn from its own analysis of one instrument, with its own picture and its own colour, not from the spectrum:
 
 | Layer | Picture | State |
 |---|---|---|
@@ -51,7 +51,9 @@ The main view is a composition of instrument layers beside the whole-mix spectru
 Each instrument's lane shows the same activity in more detail.
 
 - Every layer joins a fast analysis of articulation (every 20 ms) with a slower judgement of whether the instrument is present: the recognition model for guitar, the frame-wise activity model (`activity_v2`) for drums, bass and vocals. While that judgement says "absent" the layer is empty.
-- **Settings → Instrument layers**: for each layer, show or hide, sensitivity (what the analysis reports), intensity (how strongly it is drawn; the analysis is not affected) and style; and where the whole-mix spectrum goes (below, behind or hidden).
+- **Top bar**: a button per instrument, in its colour, shows or hides its layer while analysis runs; Timeline, Details and Notes show or hide the sections under the visualizer (drag a section's upper edge to resize it).
+- **Settings → Instrument layers**: sensitivity (what the analysis reports), intensity (how strongly it is drawn; the analysis is not affected) and style per layer, the whole-mix spectrum (dimmed, full or hidden), and Reset layout.
+- Performance measurements and what was changed: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 - None of this is source separation. On MoisesDB stems, removing an instrument from a mix leaves 12% (drums), 5% (bass) and 0% (vocals) of what its layer shows, but that is mostly the activity model's doing: on their own the analyzers follow short broadband hits, whatever is low and periodic, and the centre of the mix. Design, measurements and limits: [docs/INSTRUMENT_LAYERS.md](docs/INSTRUMENT_LAYERS.md).
 
 ## Fresh development checkout

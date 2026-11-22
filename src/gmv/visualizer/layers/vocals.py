@@ -13,7 +13,7 @@ strands are pale.
 """
 
 import numpy as np
-from PySide6.QtCore import QLineF, QPointF, QRectF, Qt
+from PySide6.QtCore import QLineF, QPointF, Qt
 from PySide6.QtGui import QFont, QPainter, QPen
 
 from ..state import COLUMN as C
@@ -34,7 +34,6 @@ class VocalsLayer(Layer):
         self.place = 0.5
 
     def paint_static(self, painter, rect, stage, state):
-        painter.fillRect(rect, tint(self.profile.colour, "#000000", 0.0, 0.03))
         painter.setFont(stage.font(10, QFont.Weight.DemiBold, 1.2))
         painter.setPen(tint(self.profile.colour, "#ffffff", 0.1, 0.95))
         painter.drawText(
@@ -71,11 +70,10 @@ class VocalsLayer(Layer):
         if self.style != "strands":
             artist.setPen(Qt.PenStyle.NoPen)
             artist.setBrush(tint(colour, "#ffffff", 0.0, 0.16))
-            artist.drawPolygon(
-                polygon(
-                    np.concatenate((xs, xs[::-1])),
-                    np.concatenate((middle - opening, (middle + opening)[::-1])),
-                )
+            stage.surface.polygon(
+                artist,
+                np.concatenate((xs, xs[::-1])),
+                np.concatenate((middle - opening, (middle + opening)[::-1])),
             )
         artist.setBrush(Qt.BrushStyle.NoBrush)
         for offset in STRANDS:
@@ -94,16 +92,16 @@ class VocalsLayer(Layer):
                 if pale:
                     pen.setStyle(Qt.PenStyle.DotLine)
                 artist.setPen(pen)
-                artist.drawPolyline(polygon(xs[a:b], line[a:b]))
+                stage.surface.polyline(artist, xs[a:b], line[a:b])
         for index in range(1, len(rows)):
             kind = rows[index, C["boundary"]]
             if kind and weights[index] > 0:
                 x, y = xs[index], middle[index]
                 artist.setPen(QPen(tint(colour, "#ffffff", 0.7, 0.95), 1.4))
                 if kind == 1:
-                    artist.drawEllipse(QPointF(x, y), height * 0.045, height * 0.045)
+                    stage.surface.ellipse(artist, x, y, height * 0.045)
                 else:
-                    artist.drawLine(QLineF(x, y - height * 0.06, x, y + height * 0.06))
+                    stage.surface.line(artist, x, y - height * 0.06, x, y + height * 0.06)
         self.place = float(place[-1])
 
     def reading(self, state):
@@ -120,22 +118,6 @@ class VocalsLayer(Layer):
                 "pitched" if np.isfinite(row[C["pitch"]]) else "no clear pitch: level only"
             )
         return "  ·  ".join(parts)
-
-    def paint_live(self, painter, rect, stage, state):
-        text = self.reading(state)
-        if text:
-            painter.setFont(stage.font(11))
-            painter.setPen(tint(NEUTRAL, "#ffffff", 0.0, 0.9))
-            painter.drawText(
-                QRectF(
-                    rect.left(),
-                    rect.bottom() - 20 * stage.scale,
-                    rect.width() - 10 * stage.scale,
-                    20 * stage.scale,
-                ),
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                text,
-            )
 
     def paint_lane(self, artist, to_x, rows, top, bottom):
         """Detail lane: the level as a line, and the phrase boundaries as ticks (a start

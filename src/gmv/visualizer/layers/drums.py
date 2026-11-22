@@ -16,21 +16,21 @@ are absent nothing is drawn; without a judgement the marks are hollow and pale.
 import math
 
 import numpy as np
-from PySide6.QtCore import QLineF, QPointF, QRectF, Qt
+from PySide6.QtCore import QLineF, QPointF, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 
+from .. import palette
 from ..state import COLUMN as C
 from . import Layer
 from .guitar import NEUTRAL, tint
 
 ROWS = (("low", 0.76), ("mid", 0.47), ("high", 0.17))  # region, height in the band (0 top)
-SHADES = {"low": "#f87171", "mid": "#fca5a5", "high": "#fde68a"}
+SHADES = palette.DRUM_REGIONS  # three shades of the drums' own colour
 RAYS = [(math.cos(a), math.sin(a)) for a in np.linspace(0, 2 * math.pi, 8, endpoint=False)]
 
 
 class DrumsLayer(Layer):
     def paint_static(self, painter, rect, stage, state):
-        painter.fillRect(rect, tint(self.profile.colour, "#000000", 0.0, 0.03))
         painter.setFont(stage.font(10, QFont.Weight.DemiBold, 1.2))
         painter.setPen(tint(self.profile.colour, "#ffffff", 0.1, 0.95))
         painter.drawText(
@@ -38,7 +38,7 @@ class DrumsLayer(Layer):
             self.profile.title.upper(),
         )
 
-    def mark(self, artist, name, x, y, size, strength, opacity, hollow):
+    def mark(self, surface, artist, name, x, y, size, strength, opacity, hollow):
         """One impact of region ``name`` centred on (x, y)."""
         shade = SHADES[name]
         colour = (
@@ -52,24 +52,25 @@ class DrumsLayer(Layer):
             artist.setBrush(
                 Qt.BrushStyle.NoBrush if hollow else tint(shade, "#ffffff", 0.1, opacity * 0.75)
             )
-            artist.drawEllipse(QPointF(x, y), radius, radius)
+            surface.ellipse(artist, x, y, radius)
             artist.setBrush(Qt.BrushStyle.NoBrush)
             artist.setPen(QPen(tint(shade, "#ffffff", 0.2, opacity * 0.45), 1))
-            artist.drawEllipse(QPointF(x, y), radius * 1.55, radius * 1.55)
+            surface.ellipse(artist, x, y, radius * 1.55)
         elif name == "mid":
             reach = size * (0.5 + 1.0 * strength)
             artist.setPen(QPen(colour, 1.0 + 1.2 * strength))
-            artist.drawLines(
+            surface.lines(
+                artist,
                 [
-                    QLineF(x + 0.25 * reach * c, y + 0.25 * reach * s, x + reach * c, y + reach * s)
+                    (x + 0.25 * reach * c, y + 0.25 * reach * s, x + reach * c, y + reach * s)
                     for c, s in RAYS
-                ]
+                ],
             )
         else:
             reach = size * (0.3 + 0.5 * strength)
             artist.setPen(QPen(colour, 1.0))
-            artist.drawLine(QLineF(x, y - reach, x, y + reach))
-            artist.drawLine(QLineF(x - reach * 0.6, y, x + reach * 0.6, y))
+            surface.line(artist, x, y - reach, x, y + reach)
+            surface.line(artist, x - reach * 0.6, y, x + reach * 0.6, y)
 
     def paint_history(self, artist, to_x, rows, weights, tentative, height, stage):
         artist.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -84,7 +85,15 @@ class DrumsLayer(Layer):
                 if strength > 0 and (only is None or name in only):
                     opacity = (0.4 + 0.6 * strength) * weight * min(1.0, 0.4 + 0.6 * self.intensity)
                     self.mark(
-                        artist, name, x, height * place, size, float(strength), opacity, bool(pale)
+                        stage.surface,
+                        artist,
+                        name,
+                        x,
+                        height * place,
+                        size,
+                        float(strength),
+                        opacity,
+                        bool(pale),
                     )
 
     def reading(self, state):
@@ -100,22 +109,6 @@ class DrumsLayer(Layer):
         if np.isfinite(rate) and row[C["regularity"]] >= 0.5:
             parts.append(f"steady, about {rate:.0f} hits per second")
         return "  ·  ".join(parts)
-
-    def paint_live(self, painter, rect, stage, state):
-        text = self.reading(state)
-        if text:
-            painter.setFont(stage.font(11))
-            painter.setPen(tint(NEUTRAL, "#ffffff", 0.0, 0.9))
-            painter.drawText(
-                QRectF(
-                    rect.left(),
-                    rect.bottom() - 20 * stage.scale,
-                    rect.width() - 10 * stage.scale,
-                    20 * stage.scale,
-                ),
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                text,
-            )
 
     def paint_lane(self, artist, to_x, rows, top, bottom):
         """Detail lane: a tick per hit, in the third of the lane that belongs to its region."""

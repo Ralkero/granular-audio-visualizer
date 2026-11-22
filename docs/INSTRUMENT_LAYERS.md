@@ -1,8 +1,9 @@
 # Instrument layers
 
-**Status: two phases. Guitar (phase 1) is accepted by the owner. Drums, bass and vocals
-(phase 2) are implemented and experimental; the owner has not yet judged them.** The main
-view is a composition of four instrument layers beside the whole-mix spectrum. Each layer
+**Status: guitar (phase 1) is accepted by the owner. Drums, bass and vocals (phase 2) and
+the unified view (instruments drawn inside the selected visualizer) are implemented and
+experimental; the owner has not yet judged them.** The main view is the selected visualizer
+with four instrument layers drawn inside it. Each layer
 is drawn from its own analysis of one instrument and has its own picture.
 
 What has and has not been checked is in [Validation](#validation-phase-1-guitar) and
@@ -85,28 +86,71 @@ analyzer uses it to end phrases. `AnalysisConfig.instrument_analyzers` names the
 registered analyzer. An analyzer that would be expensive belongs in its own worker with a
 bounded queue (as recognition has) and publishes the same message.
 
-### Composition
+### Composition: instruments inside the selected visualizer
 
-`gmv.visualizer.layers`: a `Layer` subclass per instrument. The canvas stacks the active
-layers top to bottom (vocals, guitar, bass, drums) and gives each a band sized by the
-weight of its profile: the six strings get the most room, the bass ribbon the least. With
-the spectrum shown below them, the layers take 50% of the main area for one layer, 62% for
-two, 72% for three and 80% for four. Each layer paints only its own band:
+The instruments are not panels beside the visualizer. They are drawn inside whichever one
+is selected, over its whole-mix spectrum:
 
-- `paint_static`: label and background, in the rarely redrawn picture;
-- `paint_history`: activity rows into a scrolling strip. Only rows that arrived since the
-  last paint are drawn; the strip is drawn again from its start only when the recognition
-  model's level changes, or style or intensity do;
-- `paint_live`: the newest edge and a one-line reading;
-- `paint_lane`: the same rows in the detailed lane.
+- **Radial.** The spectrum keeps the inner half of the radius. Round it, each instrument has
+  a ring: vocals outermost, then guitar, bass, and drums next to the spectrum. Time runs
+  clockwise, one turn every 6 s. Nothing rotates: a hand marks "now", each ring keeps what
+  was drawn until the hand comes round again, and the part just ahead of the hand is empty.
+- **Spectrum Bars.** Each instrument has a strip across the field the bars rise in, top to
+  bottom in the same order, showing the last 4 s scrolling to the left, with the bars
+  (dimmed by default) behind them.
 
-A layer reads `VisualState.activity[key]` and `VisualState.attribution(key, times)`. It does
-not read the whole-mix spectrum and layers do not read each other. The layers show the last
-4 s (short, so that single strokes separate); the lanes show the chosen 10 to 30 s. Both
-place rows by their audio timestamps.
+Rings and strips are sized by the weight of each profile: the six strings get the most
+room, the bass ribbon the least. A hidden instrument's room goes to the others.
 
-The whole-mix spectrum stays: below the layers (default), behind them and dimmed, or
-hidden. With no active layer the main view is exactly what it was.
+**How a mode and the instruments meet.** A renderer draws in *band space*: x is time along
+its band, y runs across it. It hands its shapes to a surface
+(`gmv.visualizer.layers.surface`) and never to the painter:
+
+| Surface | Band | Used by |
+|---|---|---|
+| `Linear` | a horizontal strip; band space is the picture | Spectrum Bars |
+| `Polar` | a ring; x goes round the circle, y from the outer edge inwards | Radial |
+
+The mode builds a `Stage` per layer (where its band is, how long a second is) and the layer
+draws the same rows through whichever surface it is given. A future visualizer supports all
+instruments by providing a surface with the same six methods; no instrument renderer has to
+be written again, and no analyzer knows which mode is selected.
+
+`Layer.paint_stage` draws history through a cached picture: a scrolling strip
+(`strip.Strip`, slid in place) for linear stages and a ring (`strip.Sweep`) for polar ones.
+Only rows that arrived since the last paint are drawn. A layer's picture is drawn again
+from its start only when *that* instrument's presence judgement changes, or its style or
+intensity do. `paint_lane` draws the same rows in the detail lane.
+
+The whole-mix spectrum is one more element of the same visualizer: dimmed behind the
+instruments (default), at full brightness, or hidden.
+
+### Colours
+
+`gmv.visualizer.palette` is the one source:
+
+| Instrument | Colour | Used by |
+|---|---|---|
+| Vocals | `#f472b6` pink | layer, lane, top-bar button, settings |
+| Guitar | `#f5c451` gold | layer, lane, attributed notes, button, settings |
+| Bass | `#4cc9f0` blue-teal | layer, lane, button, settings |
+| Drums | `#ff8a5b` orange | layer (three shades of it for low, mid, high), lane, button, settings |
+
+The whole-mix spectrum is a muted indigo to lavender, and predicted beats are lime, so
+neither can be taken for an instrument.
+
+### Controls and sections
+
+- **Top bar.** One button per instrument in its colour: a click shows or hides its layer
+  while analysis runs (its tooltip says how the layer currently reads the music). Then
+  Timeline, Details and Notes: a click shows or hides that section.
+- **Sections.** Timeline is shown by default; Details (the instrument lanes) and Notes are
+  hidden. A hidden section is not painted. Drag a section's upper edge to resize it; the
+  main visualizer always keeps a minimum height. Settings → Reset layout restores this.
+- **Settings → Instrument layers** keeps sensitivity, intensity and style per layer, and
+  the same show/hide switch as the top-bar button (they are one switch).
+- Layer visibility, section visibility and heights, mode and layer settings are remembered
+  between runs; settings saved before these existed load with the defaults above.
 
 ### Sensitivity and intensity
 
@@ -115,8 +159,8 @@ hidden. With no active layer the main view is exactly what it was.
   It does not touch the recognition model or its thresholds.
 - **Intensity** (per layer) scales how strongly the layer is drawn. It exists only in the
   layer; `AnalysisConfig` has no such field.
-- **Show / hide** hides the layer. Analysis continues, and the lane (which has its own
-  switch) keeps showing the activity.
+- **Show / hide** (top-bar button or Settings) hides the layer. Analysis continues, and
+  the lane keeps showing the activity.
 - **Style** selects between renderings of the same rows.
 
 The settings drawer builds one block of these controls per layer from the layer registry.
