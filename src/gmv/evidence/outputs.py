@@ -11,7 +11,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 
-from . import fusion, queue, read_inventory, read_jsonl, recording_id, write_csv
+from . import fusion, leakage, queue, read_inventory, read_jsonl, recording_id, write_csv
 from .fusion import HOP_S
 
 INVENTORY_KEEP = (
@@ -116,7 +116,10 @@ def fuse(inventory, workdir, review_workdir=None, log=print):
             same_audio[rid] = group["group"]
     human = fusion.human_intervals(review_workdir) if review_workdir else {}
     by_id = {recording_id(r["sha256"]): r for r in rows}
-    trained_groups = {artist_group(by_id[rid]) for rid in human if rid in by_id}
+    leak_rows = leakage.table(rows, workdir)
+    write_csv(workdir / "leakage_groups.csv", leak_rows)
+    leak = {r["recording_id"]: r for r in leak_rows}
+    trained_groups = {leak[rid]["leakage_group"] for rid in human if rid in by_id}
     model_dirs = sorted(p for p in (workdir / "timelines").glob("*") if p.is_dir())
     gmv_dir = model_dirs[0] if model_dirs else None
 
@@ -168,7 +171,7 @@ def fuse(inventory, workdir, review_workdir=None, log=print):
             )
         thresholds = json.loads(str(gmv["thresholds"])) if gmv else {}
         timeline_table += timeline_rows(rid, gmv, panns, thresholds)
-        group = artist_group(row)
+        group = leak[rid]["leakage_group"]
         trained = group in trained_groups
         for_queue.append(
             {
@@ -211,6 +214,7 @@ def fuse(inventory, workdir, review_workdir=None, log=print):
                 "recording_id": rid,
                 **{k: row.get(k, "") for k in INVENTORY_KEEP},
                 "leakage_group": group,
+                "leakage_group_merged_because": leak[rid]["merged_because"],
                 "same_audio_group": same_audio.get(rid, ""),
                 "inventory_version_group": row.get("alternate_version_group", "")
                 or row.get("potential_duplicate_group", ""),
@@ -267,7 +271,11 @@ def fuse(inventory, workdir, review_workdir=None, log=print):
     write_csv(workdir / "Automated_Label_Candidates.csv", candidates)
     write_csv(workdir / "Evidence_Review_Queue.csv", queue_rows)
     (workdir / "review_queue_selection.json").write_text(
-        json.dumps(queue.selection(queue_rows), indent=1), encoding="utf-8"
+        json.dumps(
+            queue.selection(queue_rows, leakage_groups=str((workdir / "leakage_groups.csv").resolve())),
+            indent=1,
+        ),
+        encoding="utf-8",
     )
     automatic = defaultdict(float)
     for c in candidates:
@@ -298,6 +306,13 @@ def fuse(inventory, workdir, review_workdir=None, log=print):
         "trained_artist_groups": len(trained_groups),
         "recordings_of_trained_artists": sum(1 for r in inventory_out if r["artist_used_in_rv1_training"]),
         "same_audio_groups": len(set(same_audio.values())),
+        "leakage_groups": len({r["leakage_group"] for r in leak_rows}),
+        "leakage_groups_merged_across_folders": len(
+            {r["leakage_group"] for r in leak_rows if r["leakage_group"].startswith("merged-")}
+        ),
+        "recordings_in_merged_groups": sum(
+            1 for r in leak_rows if r["leakage_group"].startswith("merged-")
+        ),
         "cut_offs": fusion.CUTS,
     }
     fusion.dump(workdir / "fusion_summary.json", summary)

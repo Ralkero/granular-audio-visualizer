@@ -348,9 +348,68 @@ def test_fingerprint_similarity_finds_the_same_audio_with_an_offset():
     assert 0.4 < fingerprint.similarity(a, other) < 0.6
 
 
-def test_acoustid_lookup_refuses_without_approval():
+def test_acoustid_lookup_refuses_without_approval(tmp_path):
     with pytest.raises(PermissionError, match="acoustid.org"):
-        fingerprint.lookup("fingerprint", 200)
+        fingerprint.lookup("inventory.csv", tmp_path, "fpcalc", "key")
+    with pytest.raises(ValueError, match="application key"):
+        fingerprint.lookup("inventory.csv", tmp_path, "fpcalc", "", approved=True)
+
+
+def test_acoustid_answers_are_only_assigned_when_one_recording_is_clearly_meant():
+    def answer(*results):
+        return {"status": "ok", "results": list(results)}
+
+    def result(score, *recordings):
+        found = [{"id": r, "duration": d} for r, d in recordings]
+        return {"id": "t", "score": score, "recordings": found}
+
+    assert fingerprint.read_lookup(answer(), 200)[0] == "unmatched"
+    assert fingerprint.read_lookup(answer(result(0.97, ("one", 201))), 200)[0] == "matched"
+    # Two different recordings share the fingerprint: both are kept, neither is assigned.
+    status, candidates = fingerprint.read_lookup(
+        answer(result(0.97, ("one", 201), ("two", 199))), 200
+    )
+    assert status == "ambiguous" and {c["recording_mbid"] for c in candidates} == {"one", "two"}
+    assert fingerprint.read_lookup(answer(result(0.6, ("one", 201))), 200)[0] == "ambiguous"
+    assert fingerprint.read_lookup(answer(result(0.97, ("one", 320))), 200)[0] == "ambiguous"
+
+
+def test_acoustid_sends_only_fingerprint_duration_and_key(tmp_path, monkeypatch):
+    from gmv.evidence import write_jsonl
+
+    inventory = tmp_path / "inventory.csv"
+    lines = ["sha256,file_path,title", "a" * 64 + ",private name.mp3,Secret", "b" * 64 + ",known.mp3,Known"]
+    inventory.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_jsonl(
+        tmp_path / "musicbrainz" / "identity.jsonl",
+        [
+            {"recording_id": "r-" + "a" * 12, "status": "unmatched"},
+            {"recording_id": "r-" + "b" * 12, "status": "matched"},
+        ],
+    )
+
+    class Done:
+        returncode = 0
+        stdout = json.dumps({"duration": 200.4, "fingerprint": "AQAA"}).encode()
+
+    monkeypatch.setattr(fingerprint.subprocess, "run", lambda *a, **k: Done())
+    sent = []
+
+    def post(url, fields):
+        sent.append((url, fields))
+        return {"status": "ok", "results": []}
+
+    first = fingerprint.lookup(
+        inventory, tmp_path, "fpcalc", "KEY", approved=True, post=post, interval=0
+    )
+    assert first == {"eligible": 1, "sent_this_run": 1, "results": {"unmatched": 1}}
+    url, fields = sent[0]
+    assert url == fingerprint.ACOUSTID_URL and "submit" not in url
+    assert fields == {"client": "KEY", "duration": "200", "fingerprint": "AQAA", "meta": "recordings"}
+    again = fingerprint.lookup(
+        inventory, tmp_path, "fpcalc", "KEY", approved=True, post=post, interval=0
+    )
+    assert again["sent_this_run"] == 0 and len(sent) == 1  # answered from the cache
 
 
 # ------------------------------------------------------------- nothing personal
@@ -366,3 +425,38 @@ def test_cached_answers_are_plain_json_with_their_source(tmp_path):
     record = api.get("recording", query="x")
     stored = json.loads(next((tmp_path / "cache").glob("*.json")).read_text(encoding="utf-8"))
     assert stored["url"] == record["url"] and stored["retrieved"] and stored["status"] == "ok"
+
+
+# ----------------------------------------------------------------------- leakage
+def test_same_audio_in_two_artist_folders_joins_them_for_every_recording():
+    from gmv.evidence import leakage
+
+    def row(name, folder, **more):
+        return {"sha256": name * 64, "top_folder": folder, "artist": folder, **more}
+
+    rows = [
+        row("a", "Band One"),
+        row("b", "Band One"),
+        row("c", "Soundtrack"),
+        row("d", "Soundtrack", alternate_version_group="v1"),
+        row("e", "Band Three", alternate_version_group="v1"),
+        row("f", "Unrelated"),
+    ]
+    rid = {name: "r-" + name * 12 for name in "abcdef"}
+    same_audio = [{"group": "same-audio-001", "recordings": [rid["a"], rid["c"]]}]
+    found = leakage.groups(rows, same_audio)
+    joined = {found[rid[name]][0] for name in "abcde"}
+    assert len(joined) == 1 and next(iter(joined)).startswith("merged-")
+    # "b" never matched anything itself, but shares a folder with "a": it moves too.
+    assert found[rid["b"]][0] == found[rid["c"]][0]
+    assert found[rid["f"]][0] == "artist-unrelated" and found[rid["f"]][1] == []
+    assert any("same audio" in reason for reason in found[rid["a"]][1])
+    # A reliably matched identical MusicBrainz recording joins folders as well.
+    mbid = "9" * 36
+    identities = [
+        {"recording_id": rid["f"], "recording_mbid": mbid, "confidence": "high"},
+        {"recording_id": rid["b"], "recording_mbid": mbid, "confidence": "high"},
+    ]
+    assert leakage.groups(rows, same_audio, identities)[rid["f"]][0].startswith("merged-")
+    low = [dict(i, confidence="low") for i in identities]
+    assert leakage.groups(rows, same_audio, low)[rid["f"]][0] == "artist-unrelated"

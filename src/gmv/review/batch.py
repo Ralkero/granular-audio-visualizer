@@ -59,10 +59,26 @@ def group_of(row):
     return "artist-" + slug(row["top_folder"] or row.get("artist") or "unknown")
 
 
+def load_leakage(path):
+    """{sha256: (leakage group, same-audio group)} from ``gmv evidence fuse``'s
+    ``leakage_groups.csv``: groups that also join folders holding the same audio or
+    versions of one recording."""
+    with open(path, newline="", encoding="utf-8-sig") as handle:
+        return {
+            row["sha256"]: (row["leakage_group"], row.get("same_audio_group", ""))
+            for row in csv.DictReader(handle)
+        }
+
+
 def version_key(row):
     keys = [
         row.get(k)
-        for k in ("exact_duplicate_group", "potential_duplicate_group", "alternate_version_group")
+        for k in (
+            "exact_duplicate_group",
+            "potential_duplicate_group",
+            "alternate_version_group",
+            "same_audio_group",
+        )
     ]
     return tuple(k for k in keys if k)
 

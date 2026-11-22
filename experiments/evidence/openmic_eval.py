@@ -119,28 +119,52 @@ def main():
             ),
         }
     report["guitar_free_clips_by_other_instrument"] = confusion
-    # Agreement as a selector: how pure are the clips both models are sure about?
-    g = np.array([own[k][0] for k in keys])
-    q = np.array([panns[k][classes.index("guitar")] for k in keys])
-    truth = np.array([clips[k]["labels"]["guitar"]["verdict"] == "present" for k in keys])
-    agreement = {}
-    for name, own_cut, panns_cut in (("strict", 0.926, 0.5), ("moderate", 0.627, 0.3)):
-        both = (g >= own_cut) & (q >= panns_cut)
-        agreement[f"both_say_guitar_{name}"] = {
-            "gmv_at_least": own_cut,
-            "panns_at_least": panns_cut,
-            "clips": int(both.sum()),
-            "share_of_guitar_clips_covered": round(float(both[truth].mean()), 3),
-            "share_truly_guitar": round(float(truth[both].mean()), 3) if both.any() else None,
-        }
-    for name, own_cut, panns_cut in (("strict", 0.05, 0.02), ("moderate", 0.2, 0.05)):
-        both = (g <= own_cut) & (q <= panns_cut)
-        agreement[f"both_say_no_guitar_{name}"] = {
-            "gmv_at_most": own_cut,
-            "panns_at_most": panns_cut,
-            "clips": int(both.sum()),
-            "share_of_guitar_free_clips_covered": round(float(both[~truth].mean()), 3),
-            "share_truly_guitar_free": round(float((~truth[both]).mean()), 3) if both.any() else None,
+    # Agreement as a selector. The cut-offs are chosen on the training partition only (the
+    # widest pair that is at least 99% pure there) and then scored once on the test
+    # partition, which shares no artist with it.
+    def arrays(split):
+        some = [k for k in keys if clips[k]["split"] == split]
+        return (
+            np.array([own[k][0] for k in some]),
+            np.array([panns[k][classes.index("guitar")] for k in some]),
+            np.array([clips[k]["labels"]["guitar"]["verdict"] == "present" for k in some]),
+        )
+
+    train, test = arrays("train"), arrays("test")
+    shared = {clips[k]["artist_id"] for k in keys if clips[k]["split"] == "train"} & {
+        clips[k]["artist_id"] for k in keys if clips[k]["split"] == "test"
+    }
+    agreement = {"artists_in_both_partitions": len(shared), "rule": "widest cut-offs with purity >= 0.99 on train"}
+    grids = {
+        "present": ((thresholds["detected"],), (0.02, 0.05, 0.1, 0.15, 0.2, 0.3)),
+        "absent": ((0.05, 0.1, 0.2, 0.3), (0.001, 0.003, 0.01, 0.02)),
+    }
+    for name, (own_grid, panns_grid) in grids.items():
+        def chosen(data, a, b, name=name):
+            g, q, truth = data
+            mask = (g >= a) & (q >= b) if name == "present" else (g <= a) & (q <= b)
+            truth = truth if name == "present" else ~truth
+            return mask, truth
+
+        options = []
+        for a in own_grid:
+            for b in panns_grid:
+                mask, truth = chosen(train, a, b)
+                if mask.sum() >= 50:
+                    options.append((float(truth[mask].mean()), float(mask[truth].mean()), a, b))
+        pure = [o for o in options if o[0] >= 0.99] or [max(options)]
+        purity, coverage, a, b = max(pure, key=lambda o: o[1])
+        mask, truth = chosen(test, a, b)
+        agreement[f"both_say_{name}"] = {
+            "gmv_cut": a,
+            "panns_cut": b,
+            "train": {"precision": round(purity, 4), "coverage": round(coverage, 3)},
+            "test": {
+                "clips_selected": int(mask.sum()),
+                "wrong": int((~truth[mask]).sum()),
+                "precision": round(float(truth[mask].mean()), 4),
+                "coverage": round(float(mask[truth].mean()), 3),
+            },
         }
     report["agreement_between_models"] = agreement
     Path(args.report).write_text(json.dumps(report, indent=1), encoding="utf-8")

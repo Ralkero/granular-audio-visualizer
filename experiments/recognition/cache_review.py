@@ -33,7 +33,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--workdir", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--leakage",
+        help="leakage_groups.csv from gmv evidence fuse: split groups that also join folders "
+        "holding the same audio or versions of one recording",
+    )
     args = parser.parse_args()
+    merged = {}
+    if args.leakage:
+        merged = {r["recording_id"]: r["leakage_group"] for r in rows(args.leakage)}
     work, out = Path(args.workdir), Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     batch = {r["recording_id"]: r for r in rows(work / "Validation_Batch.csv")}
@@ -74,7 +82,7 @@ def main():
             out / f"{rid}.npz",
             audio=np.stack([np.pad(c, (0, length - len(c))) for c in clips]),
             meta=np.array(meta),
-            group=np.array(excerpts[items[0]["excerpt_id"]]["group_id"]),
+            group=np.array(merged.get(rid, excerpts[items[0]["excerpt_id"]]["group_id"])),
         )
         print(f"{rid}: {len(items)} excerpts", flush=True)
 

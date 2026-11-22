@@ -33,6 +33,17 @@ def add_parser(commands):
     data.add_argument("--moisesdb", default="")
     data.add_argument("--moisesdb-jobs", default="local-evidence/guitar/jobs_moisesdb.json")
     data.add_argument("--medleydb", default="")
+    acoustid = sub.add_parser(
+        "acoustid",
+        help="AcoustID lookup of unmatched or ambiguous recordings (sends fingerprints)",
+    )
+    acoustid.add_argument("--inventory", required=True)
+    acoustid.add_argument("--fpcalc", default=".model-cache/tools/fpcalc.exe")
+    acoustid.add_argument(
+        "--owner-approved",
+        action="store_true",
+        help="The owner has approved sending fingerprints and durations to acoustid.org",
+    )
     return parser
 
 
@@ -74,3 +85,16 @@ def run(args):
             workdir, args.openmic, args.moisesdb, args.moisesdb_jobs, args.medleydb
         )
         print(json.dumps({r["dataset"]: r["local_availability"] for r in rows}, indent=1))
+    elif args.evidence_command == "acoustid":
+        import os
+
+        from . import fingerprint
+
+        result = fingerprint.lookup(
+            args.inventory,
+            workdir,
+            args.fpcalc,
+            os.environ.get("GMV_ACOUSTID_KEY", ""),
+            approved=args.owner_approved,
+        )
+        print(json.dumps(result, indent=1))

@@ -161,8 +161,8 @@ class Client:
                 body, status = self.fetch(url), "ok"
                 break
             except urllib.error.HTTPError as error:
-                if error.code == 404:
-                    body, status = None, "not_found"
+                if error.code in (400, 404):  # no such entity, or a query it rejects
+                    body, status = None, "not_found" if error.code == 404 else "rejected"
                     break
                 if error.code in (429, 503):
                     time.sleep(delay)
@@ -346,7 +346,7 @@ def identify(client, row):
             if found and settle(found, "tag_track_mbid", record["url"]):
                 return out
     for isrc in re.findall(r"[A-Z]{2}[A-Z0-9]{3}\d{7}", (row.get("isrc") or "").upper()):
-        record = client.get(f"isrc/{isrc}", inc="artist-credits+releases+release-groups+isrcs")
+        record = client.get(f"isrc/{isrc}", inc="artist-credits+releases+isrcs")
         found = [candidate(r) for r in (record["body"] or {}).get("recordings", [])]
         if found and settle(found, "isrc", record["url"]):
             return out

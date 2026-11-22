@@ -4,18 +4,42 @@ a second run only asks what is still missing and then rewrites the two output fi
 from collections import Counter
 
 from . import musicbrainz as mb
-from . import read_inventory, recording_id, write_jsonl
+from . import read_inventory, read_jsonl, recording_id, write_jsonl
 
 
 def enrich(inventory, workdir, limit=None, offline=False, log=print, client=None):
     rows = read_inventory(inventory)[: limit or None]
     client = client or mb.Client(workdir / "cache" / "musicbrainz", offline=offline)
     identities, evidence = [], []
+    by_fingerprint = {
+        r["recording_id"]: r
+        for r in read_jsonl(workdir / "acoustid.jsonl")
+        if r["status"] == "matched"
+    }
     release_cache, artist_cache = {}, {}
     for index, row in enumerate(rows, 1):
         rid = recording_id(row["sha256"])
         found = mb.identify(client, row)
         chosen = found["chosen"]
+        if chosen is None and rid in by_fingerprint:
+            # MusicBrainz could not tell from the tags; the fingerprint names one recording.
+            best = by_fingerprint[rid]["candidates"][0]
+            record = client.get(
+                f"recording/{best['recording_mbid']}",
+                inc="artist-credits+isrcs+releases+release-groups",
+            )
+            if record["body"]:
+                chosen = mb.candidate(record["body"])
+                chosen["fit"] = mb.score(row, chosen)
+                agrees = chosen["fit"]["title"] >= 0.85 or chosen["fit"]["artist"] >= 0.85
+                found = dict(
+                    found,
+                    chosen=chosen,
+                    status="matched",
+                    method="acoustid",
+                    confidence="high" if agrees else "medium",
+                    sources=found["sources"] + [f"https://acoustid.org/track/{best['acoustid']}"],
+                )
         entry = {
             "recording_id": rid,
             "status": found["status"],

@@ -223,7 +223,7 @@ def build(recordings, seed="gmv-evidence-v1", limits=LIMITS):
     return chosen
 
 
-def selection(queue_rows, name="evidence-queue-v1"):
+def selection(queue_rows, name="evidence-queue-v1", leakage_groups=""):
     """A ``gmv review build`` selection file that cuts exactly the queued stretches."""
     picks = {}
     for row in queue_rows:
@@ -239,4 +239,10 @@ def selection(queue_rows, name="evidence-queue-v1"):
         pick["excerpts"].append(
             {"start_s": row["start_s"], "queue": row["queue"], "reason": row["why_selected"]}
         )
-    return {"name": name, "seed": name, "picks": list(picks.values()), "quotas": []}
+    return {
+        "name": name,
+        "seed": name,
+        "leakage_groups": leakage_groups,
+        "picks": list(picks.values()),
+        "quotas": [],
+    }

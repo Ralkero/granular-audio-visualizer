@@ -108,12 +108,119 @@ def same_audio_groups(workdir, threshold=0.85, duration_tolerance_s=8.0):
     return [sorted(g) for g in groups.values() if len(g) > 1], pairs
 
 
-def lookup(*_args, approved=False, **_kwargs):
-    """AcoustID lookup: deliberately not implemented until the owner approves sending
-    fingerprints. See docs/evidence/EVIDENCE_ENRICHMENT.md."""
+ACOUSTID_URL = "https://api.acoustid.org/v2/lookup"
+ELIGIBLE = ("unmatched", "ambiguous")
+
+
+def _post(url, fields):
+    """POST form fields with the system curl; returns the decoded JSON answer."""
+    command = ["curl", "-sS", "--max-time", "30", "-X", "POST", url]
+    for key, value in fields.items():
+        command += ["--data-urlencode", f"{key}={value}"]
+    done = subprocess.run(
+        command, capture_output=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    )
+    if done.returncode:
+        raise RuntimeError(done.stderr.decode("utf-8", "replace").strip()[:200])
+    return json.loads(done.stdout.decode("utf-8"))
+
+
+def read_lookup(answer, duration_s):
+    """Reduce an AcoustID answer to (status, candidates). ``matched`` needs one result
+    clearly ahead that names exactly one recording of fitting length; anything else that
+    has candidates is ``ambiguous`` and keeps them all."""
+    candidates = []
+    for result in answer.get("results", []):
+        for recording in result.get("recordings", []) or []:
+            candidates.append(
+                {
+                    "acoustid": result.get("id", ""),
+                    "score": round(float(result.get("score", 0)), 3),
+                    "recording_mbid": recording.get("id", ""),
+                    "title": recording.get("title", ""),
+                    "artists": ", ".join(a.get("name", "") for a in recording.get("artists", [])),
+                    "length_s": recording.get("duration"),
+                }
+            )
+    candidates.sort(key=lambda c: c["score"], reverse=True)
+    if not candidates:
+        return "unmatched", []
+    strong = [c for c in candidates if c["score"] >= 0.9]
+    fitting = [
+        c for c in strong if c["length_s"] is None or abs(c["length_s"] - duration_s) <= 5
+    ]
+    if len(strong) == len(fitting) and len({c["recording_mbid"] for c in fitting}) == 1:
+        return "matched", candidates
+    return "ambiguous", candidates
+
+
+def lookup(
+    inventory, workdir, executable, key, approved=False, post=_post, interval=0.4, log=print
+):
+    """Look up recordings that MusicBrainz could not identify.
+
+    Sends, per recording, its Chromaprint fingerprint, its duration and the application key:
+    nothing else. Never submits. Only recordings whose identity is ``unmatched`` or
+    ``ambiguous`` are sent, each once (answers are cached). Results go to
+    ``acoustid.jsonl``; nothing is assigned here.
+    """
+    import time
+
     if not approved:
         raise PermissionError(
             "AcoustID lookups send an audio-derived fingerprint and the duration to "
             "acoustid.org; the owner has not approved that"
         )
-    raise NotImplementedError("AcoustID lookup is not implemented in this version")
+    if not key:
+        raise ValueError(
+            "An AcoustID application key is needed (https://acoustid.org/new-application)"
+        )
+    workdir = Path(workdir)
+    wanted = {
+        e["recording_id"]
+        for e in read_jsonl(workdir / "musicbrainz" / "identity.jsonl")
+        if e["status"] in ELIGIBLE
+    }
+    rows = [r for r in read_inventory(inventory) if recording_id(r["sha256"]) in wanted]
+    cache = workdir / "cache" / "acoustid"
+    cache.mkdir(parents=True, exist_ok=True)
+    executable = Path(executable).resolve()
+    out, sent = [], 0
+    for row in rows:
+        rid = recording_id(row["sha256"])
+        file = cache / f"{rid}.json"
+        if file.is_file():
+            record = json.loads(file.read_text(encoding="utf-8"))
+        else:
+            done = subprocess.run(
+                [str(executable), "-json", str(row["file_path"])],
+                capture_output=True,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            if done.returncode:
+                continue
+            found = json.loads(done.stdout.decode("utf-8"))
+            time.sleep(interval)  # the service allows three requests a second
+            answer = post(
+                ACOUSTID_URL,
+                {
+                    "client": key,
+                    "duration": str(round(found["duration"])),
+                    "fingerprint": found["fingerprint"],
+                    "meta": "recordings",
+                },
+            )
+            sent += 1
+            if answer.get("status") != "ok":
+                raise RuntimeError(f"AcoustID refused the lookup: {answer.get('error')}")
+            record = {"duration_s": found["duration"], "answer": answer}
+            file.write_text(json.dumps(record), encoding="utf-8")
+            if sent % 50 == 0:
+                log(f"{sent} lookups sent", flush=True)
+        status, candidates = read_lookup(record["answer"], record["duration_s"])
+        out.append({"recording_id": rid, "status": status, "candidates": candidates[:8]})
+    write_jsonl(workdir / "acoustid.jsonl", out)
+    counts = {}
+    for item in out:
+        counts[item["status"]] = counts.get(item["status"], 0) + 1
+    return {"eligible": len(rows), "sent_this_run": sent, "results": counts}

@@ -393,9 +393,12 @@ def build(
     workdir.mkdir(parents=True, exist_ok=True)
     spec = batch_tools.load_spec(selection_path)
     inventory = batch_tools.read_inventory(inventory_path)
+    leakage = batch_tools.load_leakage(spec["leakage_groups"]) if spec.get("leakage_groups") else {}
+    for row in inventory:
+        row["same_audio_group"] = leakage.get(row["sha256"], ("", ""))[1]
     rows, problems = batch_tools.select(inventory, spec)
     for row in rows:
-        row["group_id"] = batch_tools.group_of(row)
+        row["group_id"] = leakage.get(row["sha256"], (batch_tools.group_of(row),))[0]
         row["recording_id"] = "r-" + row["sha256"][:12]
     log(f"{len(rows)} recordings selected; problems: {problems or 'none'}")
     results = {}

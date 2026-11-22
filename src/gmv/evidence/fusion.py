@@ -38,7 +38,7 @@ import numpy as np
 HOP_S = 0.5
 CUTS = {
     "gmv_present": 0.926,  # the recogniser's own "detected" threshold
-    "gmv_absent": 0.2,
+    "gmv_absent": 0.05,
     "panns_present": 0.10,  # PANNs guitar, averaged over the same ten seconds as the recogniser
     "panns_absent": 0.003,
     "gmv_clash_absent": 0.05,  # a contradiction needs both models to be sure
