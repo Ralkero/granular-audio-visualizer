@@ -26,6 +26,11 @@ def add_parser(commands):
     fuse = sub.add_parser("fuse", help="Combine the evidence: candidates, review queue, tables")
     fuse.add_argument("--inventory", required=True)
     fuse.add_argument("--review", default="review-local/pilot-v1", help="review batch with human labels")
+    fuse.add_argument(
+        "--keep-queue",
+        action="store_true",
+        help="Leave the existing review queue files alone (use once the queue has been answered)",
+    )
     check = sub.add_parser("check", help="Automatic classes against the human labels")
     check.add_argument("--review", default="review-local/pilot-v1")
     data = sub.add_parser("datasets", help="External dataset manifest and OpenMIC labels")
@@ -76,7 +81,7 @@ def run(args):
     elif args.evidence_command == "fuse":
         from .outputs import fuse
 
-        print(json.dumps(fuse(args.inventory, workdir, args.review), indent=1))
+        print(json.dumps(fuse(args.inventory, workdir, args.review, write_queue=not args.keep_queue), indent=1))
     elif args.evidence_command == "check":
         from .outputs import hop_level_check
 

@@ -63,7 +63,7 @@ conflict (length or title differing from MusicBrainz).
 
 | Strongest guitar credit | Recordings | Used as |
 |---|---|---|
-| recording-level guitar credit | 254 | support for "present" together with both models; alone it is weak evidence without a time |
+| recording-level guitar credit | 254 | context about the recording: guitar is on it somewhere, never when. It does not change the class or weight of any stretch |
 | release-level only | 11 | weak evidence; never applied to a track |
 | artist-level only (a member plays guitar) | 270 | weak evidence |
 | credits, none for guitar | 35 | nothing: a missing credit is not "no guitar" |
@@ -183,11 +183,22 @@ about 60 CPU-hours and is not justified by this pilot.
 | Class | What it rests on | Category | Proposed training weight |
 |---|---|---|---|
 | verified reference | a person's answer for an excerpt | A | 1.0 |
-| strong agreement | both models say guitar, and a recording-level guitar credit on a reliably matched recording or the separation stem supports it | B | 0.5 |
-| moderate agreement | both models say guitar with nothing else; or both say no guitar and separation supports it | B | 0.25 |
-| weak evidence | a credit alone (no time), or both models saying no guitar with nothing else | C | none |
+| strong agreement | both models say guitar, and the separated guitar stem measured over that same stretch (at least 80% of it) supports them | B | 0.5 |
+| moderate agreement | both models say guitar, with no other source that covers the stretch | B | 0.25 |
+| weak evidence | a credit alone (no time); and every automatic "no guitar", with or without the stem agreeing | C | none |
 | conflict | the models, or a model and the stem, contradict each other | D | none |
 | unknown | everything else, including all recordings without credits | D | none |
+
+**Scope.** Only evidence measured over a stretch can set or raise that stretch's class: the
+two models' scores and the separated stem's level. Credits describe a whole recording
+(or a release, or an artist) and are written beside a candidate as
+`recording_level_metadata`; they change neither class nor weight. An earlier version let a
+recording-level guitar credit raise every agreed stretch of that recording from moderate to
+strong. That was wrong, since the credit says nothing about when the guitar plays, and it
+was corrected before any training: all 196 stretches that had been "strong" (0.89 h) owed
+the class to a credit alone and are now moderate. No stretch outside the reviewed excerpts
+has separation, so the collection currently has no "strong" candidate. Automatic
+"no guitar" is never a training label in any class.
 
 The weights are proposals for a later experiment, not calibrated probabilities. Stretches
 that a person has labelled are never offered an automatic label. Intervals shorter than six
@@ -199,8 +210,8 @@ human "intermittent" answer is kept as such and is not given times.
 | | Recordings | Hours | Share of time |
 |---|---|---|---|
 | verified reference (human excerpts) | 47 | 0.77 | 1.3% |
-| strong agreement, guitar present | 80 | 0.89 | 1.5% |
-| moderate agreement, guitar present | 138 | 1.13 | 1.9% |
+| strong agreement, guitar present | 0 | 0 | 0% |
+| moderate agreement, guitar present | 218 | 2.02 | 3.4% |
 | weak evidence, possibly guitar-free | 192 | 1.56 | 2.6% |
 | conflict | 75 | 0.62 | 1.0% |
 | no candidate of any kind | 478 | | |
@@ -215,8 +226,9 @@ evidence only) and 796 "uncertain".
 170 excerpts of 12 s (168 in the built batch, after two were dropped as versions of recordings already in it; about an hour at the pilot's pace), chosen where listening changes
 something: 40 where the models contradict each other, 15 where the recogniser reports
 distorted guitar and PANNs hears none, 1 where PANNs hears guitar the recogniser misses, and
-113 as a seeded audit of automatic candidates, split evenly between strong "present",
-moderate "present" and weak "absent". The audit measures the candidates' real error rate on
+113 as a seeded audit of automatic candidates, split evenly between what were then strong
+"present", moderate "present" and weak "absent" (after the scope correction above, the first
+two are one class). The audit measures the candidates' real error rate on
 this collection; its "absent" third is also the cheapest way to obtain confirmed guitar-free
 examples, which are what the corpus lacks most (64 so far). At most two excerpts come from
 one recording and eight from one artist folder; stretches with a human label are skipped.

@@ -13,17 +13,23 @@ Sources and what each can say:
                on the recording somewhere, never when. Release- and artist-level credits say
                less. A missing credit says nothing at all
 
+Two scopes are kept apart. *Interval-level* support is evidence about the stretch itself:
+the two models' scores over it, and the separated stem's level over it. *Recording-level*
+metadata (any credit) describes the whole recording. Only interval-level support can set or
+raise the class of a stretch; a credit is written beside the candidate
+(``recording_level_metadata``) and changes neither its class nor its weight.
+
 Classes given to a stretch of time (``confidence_class``):
 
 ``verified_reference``   a person labelled it
-``strong_agreement``     both models agree and a third, different kind of source supports
-                         them (recording-level guitar credit or separation for "present";
-                         separation for "absent"; credits can never support "absent")
-``moderate_agreement``   both models agree on "present" with nothing else to go on, or agree
-                         on "absent" and separation supports them
-``weak_evidence``        one source only; also both models agreeing on "absent" with nothing
-                         else, which measured too unreliable on this collection to be a label
-``conflict``             the models contradict each other
+``strong_agreement``     both models say "present" and the separated guitar stem, measured
+                         over that same stretch, supports them
+``moderate_agreement``   both models say "present" and no other interval-level source
+                         covers the stretch
+``weak_evidence``        a credit alone (a recording, no time); and every automatic
+                         "absent": two models hearing no guitar measured too unreliable on
+                         this collection to be a label, with or without the stem agreeing
+``conflict``             the models, or the models and the stem, contradict each other
 ``unknown``              anything else
 
 These are classes, not probabilities. The cut-offs in ``CUTS`` were read off material with
@@ -160,6 +166,24 @@ def separation_support(stem_db, start, end, cuts=CUTS):
     return ""
 
 
+def recording_level_metadata(credits, match_confidence):
+    """A line of context for a candidate: what the credits say about the *recording*.
+
+    It is never evidence about a stretch of time, so nothing here may touch a class or a
+    weight. Release- and artist-level credits say even less and are named as such."""
+    reliable = match_confidence in ("high", "medium")
+    scope = credits["scope"]
+    if scope == "recording_level_guitar_credit":
+        note = "guitar credited on this recording (MusicBrainz)"
+    elif scope == "release_level_guitar_credit":
+        note = "guitar credited on the release, not on this recording (MusicBrainz)"
+    elif scope == "artist_level_guitarist":
+        note = "the artist has a guitarist; no credit for this recording (MusicBrainz)"
+    else:
+        return ""
+    return note if reliable else note + "; identity match not reliable"
+
+
 def candidates_for(recording, cuts=CUTS):
     """Label candidates of one recording.
 
@@ -198,11 +222,7 @@ def candidates_for(recording, cuts=CUTS):
         return rows, None
     classes = hop_classes(recording["gmv"], recording["panns"], recording["level_db"], cuts)
     min_hops = round(cuts["min_run_s"] / HOP_S)
-    credit = recording["credits"]["scope"]
-    credited = credit == "recording_level_guitar_credit" and recording["match_confidence"] in (
-        "high",
-        "medium",
-    )
+    context = recording_level_metadata(recording["credits"], recording.get("match_confidence"))
     reviewed = [(a, b) for a, b, *_ in recording.get("human", [])]
 
     def overlaps_review(start_s, end_s):
@@ -213,26 +233,24 @@ def candidates_for(recording, cuts=CUTS):
             start_s, end_s = first * HOP_S, last * HOP_S
             if overlaps_review(start_s, end_s):
                 continue  # a person already answered for this stretch
+            # Interval-level sources only: what was measured over these hops.
             support = ["gmv recogniser", "PANNs CNN14"]
             against = []
             separated = separation_support(recording.get("separation"), first, last, cuts)
-            third = False
             if separated == label:
-                support.append("separation guitar stem")
-                third = True
+                support.append("separation guitar stem over this stretch")
             elif separated:
-                against.append("separation guitar stem")
-            if label == "present" and credited:
-                support.append("recording-level guitar credit (MusicBrainz)")
-                third = True
+                against.append("separation guitar stem over this stretch")
             if against:
                 confidence = "conflict"
             elif label == "present":
-                confidence = "strong_agreement" if third else "moderate_agreement"
+                confidence = "strong_agreement" if separated == "present" else "moderate_agreement"
             else:
                 # On the owner's reviewed excerpts the two models agreeing on "no guitar"
-                # was right about four times in five: too weak to be a label by itself.
-                confidence = "moderate_agreement" if third else "weak_evidence"
+                # was right about four times in five, on two separate samples. It is never
+                # a label, whatever else agrees with it.
+                confidence = "weak_evidence"
+            usable = label == "present" and confidence in WEIGHTS
             rows.append(
                 {
                     "recording_id": rid,
@@ -244,9 +262,10 @@ def candidates_for(recording, cuts=CUTS):
                     "confidence_class": confidence,
                     "supporting_sources": "; ".join(support),
                     "conflicting_sources": "; ".join(against),
+                    "recording_level_metadata": context if label == "present" else "",
                     "temporal_precision": "0.5 s hops; edges are model edges, not onsets",
-                    "training_suitable": confidence in WEIGHTS,
-                    "suggested_training_weight": WEIGHTS.get(confidence, 0.0),
+                    "training_suitable": usable,
+                    "suggested_training_weight": WEIGHTS[confidence] if usable else 0.0,
                     "review_required": confidence == "conflict",
                 }
             )

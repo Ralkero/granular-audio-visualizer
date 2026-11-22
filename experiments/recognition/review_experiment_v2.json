@@ -1,0 +1,30 @@
+{
+ "name": "review-experiment-v2",
+ "purpose": "Two arms (H, H+A) from guitar_mn10_v1's weights, five leakage-group folds, scored out of fold. See docs/evidence/TRAINING_PLAN_V2.md.",
+ "python": ".separation-venv/Scripts/python.exe",
+ "arms": ["H", "H+A"],
+ "folds": [0, 1, 2, 3, 4],
+ "paths": {
+  "jobs": "local-evidence/guitar/jobs_moisesdb.json",
+  "parts": "E:/datasets/gmv-cache/recognition/parts",
+  "labels": "E:/datasets/gmv-cache/recognition/labels",
+  "source": "E:/datasets/gmv-cache/recognition/EfficientAT-src",
+  "init": ".model-cache/guitar_mn10_ft_all.pt",
+  "review": "E:/datasets/gmv-cache/recognition/trainset_v1",
+  "runs": "research-local/evidence-v1/trainset-v1/runs",
+  "weights-dir": ".model-cache/v2-experiment",
+  "model-config": ".model-cache/guitar_mn10_v1.json"
+ },
+ "initial_weights_sha256": "eb009fa091f15c491d40db762301b4494c80be9ce51cb305f25b53afd02429df",
+ "settings": {
+  "fold": "0/4",
+  "steps": 500,
+  "batch": 16,
+  "rate": 5e-05,
+  "review-share": 0.4,
+  "silence": 0.15,
+  "hop": 0.5,
+  "threads": 4
+ },
+ "seeds": "review_data.seeds(fold): SeedSequence([20261122, fold, stream]) for the streams plan, moisesdb, review_absent, review_present, augment, torch; identical for both arms of a fold"
+}

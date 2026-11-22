@@ -14,6 +14,10 @@ were not used. Titles, labels and audio stay local.
 
 ## Method
 
+(The three scripts named here have since been adapted for the second experiment and no
+longer take these inputs; the versions used for this report are in the repository history
+at commit `58f9553`. See [../evidence/TRAINING_PLAN_V2.md](../evidence/TRAINING_PLAN_V2.md).)
+
 - `experiments/recognition/cache_review.py` stores each labelled excerpt with the 10 s
   before it; `finetune_review.py` continues the MoisesDB fine-tuning for 500 steps with 40%
   of the clips taken from reviewed excerpts (guitar and guitar-free equally often,

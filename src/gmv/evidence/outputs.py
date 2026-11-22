@@ -103,7 +103,7 @@ def timeline_rows(rid, gmv, panns, thresholds):
     return rows
 
 
-def fuse(inventory, workdir, review_workdir=None, log=print):
+def fuse(inventory, workdir, review_workdir=None, log=print, write_queue=True):
     workdir = Path(workdir)
     rows = read_inventory(inventory)
     identities = {e["recording_id"]: e for e in read_jsonl(workdir / "musicbrainz" / "identity.jsonl")}
@@ -269,14 +269,17 @@ def fuse(inventory, workdir, review_workdir=None, log=print):
     write_csv(workdir / "Enriched_Music_Inventory.csv", inventory_out)
     write_csv(workdir / "Audio_Evidence_Timelines.csv", timeline_table)
     write_csv(workdir / "Automated_Label_Candidates.csv", candidates)
-    write_csv(workdir / "Evidence_Review_Queue.csv", queue_rows)
-    (workdir / "review_queue_selection.json").write_text(
-        json.dumps(
-            queue.selection(queue_rows, leakage_groups=str((workdir / "leakage_groups.csv").resolve())),
-            indent=1,
-        ),
-        encoding="utf-8",
-    )
+    if write_queue:  # a queue someone has already answered must not be replaced
+        write_csv(workdir / "Evidence_Review_Queue.csv", queue_rows)
+        (workdir / "review_queue_selection.json").write_text(
+            json.dumps(
+                queue.selection(
+                    queue_rows, leakage_groups=str((workdir / "leakage_groups.csv").resolve())
+                ),
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
     automatic = defaultdict(float)
     for c in candidates:
         if c["evidence_category"] == "B" and c["training_suitable"]:
@@ -300,9 +303,12 @@ def fuse(inventory, workdir, review_workdir=None, log=print):
         "candidates": fusion.summarise(candidates),
         "recordings_with_automatic_candidates": len(automatic),
         "share_of_collection_time_with_automatic_candidates": round(sum(automatic.values()) / total_s, 3),
-        "review_queue": dict(Counter(r["queue"] for r in queue_rows)),
-        "review_queue_excerpts": len(queue_rows),
-        "review_queue_minutes": round(sum(r["estimated_review_s"] for r in queue_rows) / 60),
+        "review_queue_written": write_queue,
+        "review_queue": dict(Counter(r["queue"] for r in queue_rows)) if write_queue else {},
+        "review_queue_excerpts": len(queue_rows) if write_queue else 0,
+        "review_queue_minutes": round(sum(r["estimated_review_s"] for r in queue_rows) / 60)
+        if write_queue
+        else 0,
         "trained_artist_groups": len(trained_groups),
         "recordings_of_trained_artists": sum(1 for r in inventory_out if r["artist_used_in_rv1_training"]),
         "same_audio_groups": len(set(same_audio.values())),

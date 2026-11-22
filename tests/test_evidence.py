@@ -236,17 +236,60 @@ def test_agreement_of_both_models_is_a_pseudo_label_never_a_reference():
     assert not any(r["evidence_category"] == "A" for r in rows)
 
 
-def test_a_recording_level_credit_strengthens_presence_only():
+def test_a_recording_level_credit_never_raises_the_class_of_a_stretch():
+    plain, _ = fuse(0.99, 0.8)
     rows, _ = fuse(0.99, 0.8, credits=[GUITAR_CREDIT])
-    assert rows[0]["confidence_class"] == "strong_agreement"
-    assert "recording-level guitar credit" in rows[0]["supporting_sources"]
-    # A poorly matched identity lends its credits no weight.
+    assert rows[0]["confidence_class"] == "moderate_agreement"
+    assert rows[0]["suggested_training_weight"] == plain[0]["suggested_training_weight"] == 0.25
+    # The credit is kept as context about the recording, apart from interval-level support.
+    assert "guitar credited on this recording" in rows[0]["recording_level_metadata"]
+    assert "credit" not in rows[0]["supporting_sources"]
     rows, _ = fuse(0.99, 0.8, credits=[GUITAR_CREDIT], confidence="low")
     assert rows[0]["confidence_class"] == "moderate_agreement"
+    assert "not reliable" in rows[0]["recording_level_metadata"]
     # Models hearing no guitar are not contradicted or supported by any credit.
     rows, _ = fuse(0.01, 0.001, credits=[GUITAR_CREDIT])
     assert rows[0]["label"] == "absent" and rows[0]["confidence_class"] == "weak_evidence"
     assert not rows[0]["training_suitable"]  # two models hearing nothing is not a negative label
+
+
+def test_release_and_artist_level_credits_never_raise_the_class_either():
+    for scope in ("release", "artist"):
+        rows, _ = fuse(0.99, 0.8, credits=[dict(GUITAR_CREDIT, scope=scope)])
+        assert rows[0]["confidence_class"] == "moderate_agreement"
+        assert rows[0]["suggested_training_weight"] == 0.25
+        assert "credit" not in rows[0]["supporting_sources"]
+        assert rows[0]["recording_level_metadata"]  # still noted, as context
+
+
+def test_only_separation_over_the_same_stretch_makes_agreement_strong():
+    count = round(60 / fusion.HOP_S)
+    rows, _ = fuse(0.99, 0.8, credits=[GUITAR_CREDIT], separation=np.full(count, -5.0))
+    assert rows[0]["confidence_class"] == "strong_agreement"
+    assert rows[0]["suggested_training_weight"] == 0.5
+    assert "separation guitar stem over this stretch" in rows[0]["supporting_sources"]
+    # Separation run on less than 80% of the stretch does not count, credit or no credit.
+    partly = np.full(count, np.nan)
+    partly[20:55] = -5.0  # 35 of the 100 agreed hops
+    rows, _ = fuse(0.99, 0.8, credits=[GUITAR_CREDIT], separation=partly)
+    assert rows[0]["confidence_class"] == "moderate_agreement"
+    assert rows[0]["suggested_training_weight"] == 0.25
+    # A stem that is neither clearly present nor clearly absent supports nothing.
+    rows, _ = fuse(0.99, 0.8, separation=np.full(count, -25.0))
+    assert rows[0]["confidence_class"] == "moderate_agreement"
+    # Separation that stops before the stretch ends cannot support it.
+    rows, _ = fuse(0.99, 0.8, separation=np.full(count // 2, -5.0))
+    assert rows[0]["confidence_class"] == "moderate_agreement"
+
+
+def test_no_automatic_absent_is_ever_training_material():
+    count = round(60 / fusion.HOP_S)
+    for credits in ([], [GUITAR_CREDIT]):
+        for separation in (None, np.full(count, -50.0)):
+            rows, _ = fuse(0.01, 0.001, credits=credits, separation=separation)
+            assert rows[0]["label"] == "absent"
+            assert rows[0]["confidence_class"] == "weak_evidence"
+            assert not rows[0]["training_suitable"] and rows[0]["suggested_training_weight"] == 0.0
 
 
 def test_missing_credits_and_single_models_never_make_a_label():
@@ -287,7 +330,8 @@ def test_human_labels_win_and_intermittent_is_not_given_times():
 def test_separation_can_support_or_contradict():
     count = round(60 / fusion.HOP_S)
     rows, _ = fuse(0.01, 0.001, separation=np.full(count, -50.0))
-    assert rows[0]["confidence_class"] == "moderate_agreement" and rows[0]["label"] == "absent"
+    assert rows[0]["confidence_class"] == "weak_evidence" and rows[0]["label"] == "absent"
+    assert "separation guitar stem over this stretch" in rows[0]["supporting_sources"]
     assert fuse(0.99, 0.8, separation=np.full(count, -5.0))[0][0]["confidence_class"] == "strong_agreement"
     rows, _ = fuse(0.01, 0.001, separation=np.full(count, -5.0))
     assert rows[0]["confidence_class"] == "conflict" and rows[0]["review_required"]
