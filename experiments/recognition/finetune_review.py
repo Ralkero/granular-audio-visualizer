@@ -21,6 +21,11 @@ clip of the owner's recordings is drawn.
 Scoring follows the application: each answer is about the 10 s ending at a hop, and quiet
 audio is raised to ordinary level first (``gmv.recognition.levelled``).
 
+``--final NAME`` trains one arm on every fold, for weights that are meant to be used rather
+than measured: nothing of the owner's recordings is kept out, so none of it is scored, and
+only the MoisesDB control fold is. Its seeds come from stream set ``FOLDS`` (5), which no
+fold run uses. The weights go to ``<weights-dir>/NAME.pt``.
+
 A training run needs ``--owner-approved``. ``--dry-run`` loads everything, draws a few
 batches, checks the loss against a reference and scores a few excerpts, without an
 optimiser, a gradient or a weights file.
@@ -134,18 +139,23 @@ def main():
     parser.add_argument("--hop", type=float, default=0.5)
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--weights-dir", default=".model-cache/v2-experiment")
+    parser.add_argument("--final", default="", help="name of full-data weights; no fold is kept out")
     parser.add_argument("--owner-approved", action="store_true", help="the owner approved training")
     parser.add_argument("--dry-run", action="store_true", help="check everything; train nothing")
     parser.add_argument("--dry-batches", type=int, default=2)
     args = parser.parse_args()
     training = args.arm != "baseline"
-    if training and args.hold not in range(FOLDS):
+    final = bool(args.final)
+    if final and (not training or args.hold != -1):
+        raise SystemExit("--final is for a training arm and takes no --hold")
+    if training and not final and args.hold not in range(FOLDS):
         raise SystemExit(f"--hold must be 0 to {FOLDS - 1} for a training arm")
+    hold, stream_set = (None, FOLDS) if final else (args.hold, args.hold)
     if training and not args.dry_run and not args.owner_approved:
         raise SystemExit("Training needs the owner's approval: pass --owner-approved once it is given.")
-    name = "baseline" if not training else f"{args.arm}/hold{args.hold}"
+    name = "baseline" if not training else f"final/{args.final}" if final else f"{args.arm}/hold{args.hold}"
     out = Path(args.runs) / ("dry-run" if args.dry_run else "") / name
-    weights = Path(args.weights_dir) / f"{args.arm}_hold{args.hold}.pt"
+    weights = Path(args.weights_dir) / (f"{args.final}.pt" if final else f"{args.arm}_hold{args.hold}.pt")
     if not args.dry_run:
         earlier = out / "run.json"
         if earlier.is_file() and json.loads(earlier.read_text(encoding="utf-8"))["status"] == "complete":
@@ -163,12 +173,12 @@ def main():
     items = rd.load_segments(args.review)
     cache = json.loads((Path(args.review) / "manifest.json").read_text(encoding="utf-8"))
     if training:
-        train = rd.training_items(items, args.arm, args.hold)
-        held = rd.evaluation_items(items, args.hold)
+        train = rd.training_items(items, args.arm, hold)
+        held = [] if final else rd.evaluation_items(items, hold)
         problems = rd.isolation_problems(train, held)
         if problems:
             raise SystemExit("Training and evaluation are not separate: " + "; ".join(problems))
-        seeds = rd.seeds(args.hold)
+        seeds = rd.seeds(stream_set)
     else:
         train, held, seeds = [], rd.evaluation_items(items), {}
     config = {
@@ -189,7 +199,8 @@ def main():
     }
     manifest = {
         "arm": args.arm,
-        "held_out_fold": args.hold if training else None,
+        "held_out_fold": hold if training else None,
+        "full_data": final,
         "status": "dry run" if args.dry_run else "started",
         "started": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "command": [Path(sys.argv[0]).name, *sys.argv[1:]],
@@ -228,7 +239,7 @@ def main():
             report["scored_sample"][item["id"]] = score_review(net, mel, [item], args.hop)[item["id"]][:, 0].round(4).tolist()
         if training:
             songs = ft.load_parts(args.parts, mixes[:6])  # enough to draw from; not the full set
-            rngs = rd.generators(args.hold)
+            rngs = rd.generators(stream_set)
             planned = rd.plan(args.steps, args.batch, args.review_share, args.silence, rngs["plan"])
             pool = rd.pools(train)
             kinds, checks = [], []
@@ -256,7 +267,7 @@ def main():
     started = perf_counter()
     if training:
         songs = ft.load_parts(args.parts, mixes)
-        rngs = rd.generators(args.hold)
+        rngs = rd.generators(stream_set)
         torch.manual_seed(seeds["torch"])
         planned = rd.plan(args.steps, args.batch, args.review_share, args.silence, rngs["plan"])
         pool = rd.pools(train)
@@ -299,14 +310,15 @@ def main():
         manifest["weights"] = {"file": str(weights), "sha256": rd.sha256_of(weights)}
         manifest["clips_drawn"] = dict(sorted(drawn.items()))
         manifest["loss_per_50_steps"] = losses
-    np.savez(out / "review.npz", **score_review(net, mel, held, args.hop))
-    print("scored the human-labelled excerpts", flush=True)
+    if held:  # a full-data run has trained on every excerpt and scores none of them
+        np.savez(out / "review.npz", **score_review(net, mel, held, args.hop))
+        print("scored the human-labelled excerpts", flush=True)
     (out / "moisesdb").mkdir(exist_ok=True)
     score_moisesdb(net, mel, ft.load_parts(args.parts, control), args.labels, args.hop, out / "moisesdb")
     print("scored the MoisesDB control fold", flush=True)
     manifest["status"] = "complete"
     manifest["minutes"] = round((perf_counter() - started) / 60, 1)
-    manifest["outputs"] = {"review_scores": "review.npz", "moisesdb_scores": "moisesdb/*.npz"}
+    manifest["outputs"] = {"moisesdb_scores": "moisesdb/*.npz", **({"review_scores": "review.npz"} if held else {})}
     rd.write_json(out / "run.json", manifest)
 
 

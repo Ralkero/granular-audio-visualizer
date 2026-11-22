@@ -381,3 +381,15 @@ def test_the_experiment_file_gives_both_arms_the_same_settings_and_trains_only_w
     assert all("--owner-approved" in c for n, c in runner.commands(config, approved=True) if "/" in n)
     assert all("--dry-run" in c for _, c in runner.commands(config, dry_run=True))
     assert "--model-config" in listed["summary"]
+
+
+def test_a_full_data_run_trains_on_every_fold_of_its_arm_and_has_its_own_seeds():
+    items = library()
+    everything = rd.training_items(items, "H", None)
+    assert {i["fold"] for i in everything} == set(range(5))
+    assert {i["source"] for i in everything} == {"human"}
+    assert len(everything) == sum(i["source"] == "human" for i in items)
+    used = {seed for fold in range(5) for seed in rd.seeds(fold).values()}
+    assert not used & set(rd.seeds(5).values())
+    script = (Path(review_summary.__file__).parent / "finetune_review.py").read_text(encoding="utf-8")
+    assert "held = [] if final else rd.evaluation_items(items, hold)" in script
