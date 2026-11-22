@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import layers as layer_registry
 from .state import ROWS, SpectrumDisplay, VisualState
 from .strip import Strip, polygon
 
@@ -85,7 +86,13 @@ class Canvas(QWidget):
             "activity_model": None,
             "guitar_model": None,
             "recognition_model": None,
+            "instruments": (),
         }
+        # Instrument layers of the main view, in composition order. Each draws one
+        # instrument from its own activity history; none reads the whole-mix spectrum.
+        self.layers = layer_registry.build()
+        self.stage_seconds = 4.0  # how much time the layers show; short, so strokes separate
+        self.spectrum_place = "beside"  # beside | behind | hidden, while layers are shown
         self.level = self.intensity = self.flash = self.pulse = 0.0
         self.peak_level = 0.0
         self.rings = []  # [age_s, strength, predicted]
@@ -183,7 +190,12 @@ class Canvas(QWidget):
         margin = round(28 * self.scale)
         header = round(58 * self.scale)
         rows = [row for row in ROWS if row[0] not in self.hidden and self.row_in_use(row[0])]
-        lanes = [item for item in self.state.board.lanes() if item[0].key not in self.hidden]
+        # A lane is live when a detector fills it or an instrument analyzer does.
+        lanes = [
+            (lane, live or (lane.key in self.layers and lane.key in self.state.activity))
+            for lane, live in self.state.board.lanes()
+            if lane.key not in self.hidden
+        ]
         body = height - header - margin
         timeline_h = round(min(body * 0.20, (26 * len(rows) + 26) * self.scale)) if rows else 0
         lanes_h = round(min(body * 0.26, (26 * len(lanes) + 26) * self.scale)) if lanes else 0
@@ -196,6 +208,15 @@ class Canvas(QWidget):
             width - 2 * margin,
             body - timeline_h - lanes_h - notes_h - gap * (bool(rows) + bool(lanes) + notes),
         )
+        # Instrument layers share the main area with the whole-mix spectrum: above it,
+        # over it (the spectrum dimmed behind them) or instead of it.
+        active = self.active_layers()
+        stage = QRectF(spectrum)
+        show_spectrum = not active or self.spectrum_place != "hidden"
+        if active and self.spectrum_place == "beside":
+            tall = round(spectrum.height() * min(0.72, 0.38 + 0.12 * len(active)))
+            stage.setHeight(tall - gap)
+            spectrum.setTop(spectrum.top() + tall)
         gutter = round(150 * self.scale)
         top = spectrum.bottom() + gap
         timeline = QRectF(margin, top, width - 2 * margin, timeline_h)
@@ -210,13 +231,18 @@ class Canvas(QWidget):
 
         def everything(painter):
             self.draw_header(painter, QRectF(margin, 0, width - 2 * margin, header))
-            if not self.static:
-                self.draw_glow(painter, spectrum)
-            if self.mode == "radial":
+            if show_spectrum:
                 if not self.static:
-                    self.draw_radial(painter, spectrum)
-            else:
-                self.draw_bars(painter, spectrum)
+                    self.draw_glow(painter, spectrum)
+                if self.mode == "radial":
+                    if not self.static:
+                        self.draw_radial(painter, spectrum)
+                else:
+                    self.draw_bars(painter, spectrum)
+            if active:
+                if self.spectrum_place == "behind" and not self.static:
+                    painter.fillRect(spectrum, QColor(5, 6, 10, 165))  # the spectrum steps back
+                self.draw_layers(painter, stage, active)
             if self.now is None and self.static:
                 self.draw_idle(painter, spectrum)
             if rows:
@@ -260,6 +286,8 @@ class Canvas(QWidget):
             bool(self.info["recognition_model"] or self.info["guitar_model"]),
             (self.state.board.recognition or {}).get("detail"),
             len(self.display.values) if self.display.values is not None else 0,
+            tuple(layer.key for layer in active),
+            self.spectrum_place,
         )
         still = self.cached("still", key, still_picture)
         painter = QPainter(self)
@@ -279,6 +307,30 @@ class Canvas(QWidget):
         painter.end()
         self.paint_ms.append((perf_counter() - began) * 1000)
         self.painted += 1
+
+    def active_layers(self):
+        """Layers to draw: switched on, and with an analyzer behind them in this session.
+        A layer without data from its own analyzer is not drawn at all."""
+        return [
+            layer
+            for layer in self.layers.values()
+            if layer.enabled
+            and (layer.key in self.state.activity or layer.key in self.info["instruments"])
+        ]
+
+    def draw_layers(self, painter, rect, active):
+        slots = layer_registry.slots(rect, len(active), 8 * self.scale)
+        for layer, slot in zip(active, slots, strict=True):
+            stage = layer_registry.Stage(
+                slot, self.now, self.stage_seconds, self.scale, self.state.generation, self.font
+            )
+            if self.static:
+                layer.paint_static(painter, slot, stage, self.state)
+            elif self.now is not None:
+                painter.save()
+                painter.setClipRect(slot)
+                layer.paint_stage(painter, slot, stage, self.state)
+                painter.restore()
 
     def row_in_use(self, row):
         # The delayed-context row only appears once such analysis has produced something.
@@ -962,15 +1014,27 @@ class Canvas(QWidget):
         def draw(artist, to_x, since, _height):
             if since is None:
                 self._lane_drawn = {}
-            for index, (lane, live) in enumerate(lanes):
+            for index, (lane, _) in enumerate(lanes):
                 # Each lane continues from its own last drawn row: detectors report at
                 # different rates (frames every 20 ms, recognition twice a second), so the
                 # time of the last paint says nothing about what a lane still has to draw.
-                rows = history[lane.key].since(self._lane_drawn.get(lane.key, start)) if live else ()
+                bottom = (index + 1) * lane_height - 2
+                # The same activity rows the instrument's layer draws, at lane resolution.
+                track = self.state.activity.get(lane.key)
+                if lane.key in self.layers and track is not None:
+                    name = lane.key + "#activity"
+                    rows = track.since(self._lane_drawn.get(name, start))
+                    if len(rows) >= 2:
+                        self._lane_drawn[name] = rows[-1, 0]
+                        self.layers[lane.key].paint_lane(
+                            artist, to_x, rows, index * lane_height + 2, bottom
+                        )
+                if lane.key not in history:
+                    continue
+                rows = history[lane.key].since(self._lane_drawn.get(lane.key, start))
                 if len(rows) < 2:
                     continue
                 self._lane_drawn[lane.key] = rows[-1, 0]
-                bottom = (index + 1) * lane_height - 2
                 xs = to_x(rows[:, 0])
                 ys = bottom - np.maximum(0.03, rows[:, 1]) * (lane_height - 7)
                 edge_x = np.concatenate(([xs[0]], xs, [xs[-1]]))
@@ -1046,6 +1110,23 @@ class VisualizerWindow(QWidget):
         self.state.window_s = float(seconds)
         self.canvas.update()
 
+    def set_layer(self, key, *, enabled=None, intensity=None, style=None):
+        """Display options of one instrument layer. None of them reaches an analyzer."""
+        layer = self.canvas.layers[key]
+        if enabled is not None:
+            layer.enabled = bool(enabled)
+        if intensity is not None:
+            layer.intensity = max(0.0, float(intensity))
+        if style is not None and style in dict(layer.profile.styles):
+            layer.style = style
+        self.canvas.update()
+
+    def set_spectrum_place(self, place):
+        """Where the whole-mix spectrum goes while instrument layers are shown."""
+        if place in ("beside", "behind", "hidden"):
+            self.canvas.spectrum_place = place
+            self.canvas.update()
+
     def set_shown(self, key, shown):
         (self.canvas.hidden.discard if shown else self.canvas.hidden.add)(key)
         self.canvas.update()
@@ -1078,6 +1159,7 @@ class VisualizerWindow(QWidget):
         activity_model=None,
         guitar_model=None,
         recognition_model=None,
+        instruments=(),
     ):
         """Follow ``bus`` with a subscription of this window's own. Replaces any earlier one."""
         self.detach()
@@ -1090,6 +1172,7 @@ class VisualizerWindow(QWidget):
             activity_model=activity_model,
             guitar_model=guitar_model,
             recognition_model=recognition_model,
+            instruments=tuple(instruments),
             dropped=0,
         )
         self.timer.start(16)

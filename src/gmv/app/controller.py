@@ -10,6 +10,7 @@ from pathlib import Path
 
 from ..activity import ActivityModel
 from ..engine import Engine
+from ..instruments import analyzers
 from ..models import AnalysisConfig
 from ..sources.file import FileAudioSource
 from ..sources.system_native import system_audio_source
@@ -36,6 +37,8 @@ class Settings:
     beat_tracker: bool = False
     pitch_tracking: bool = True
     logging: bool = True
+    # How readily each fast instrument analyzer reports, 0..1. Not a display setting.
+    instrument_sensitivity: tuple[tuple[str, float], ...] = ()
     # Advanced
     delayed_analysis: bool = False
     debug_audio_seconds: int = 0
@@ -101,6 +104,10 @@ def analysis_config(settings):
         guitar_model_path=guitar_weights,
         recognition_model_path=recognition,
         pitch_tracking=settings.pitch_tracking,
+        # Every instrument that has a fast analyzer is analysed, whether or not its layer
+        # is shown: hiding a layer is a display choice.
+        instrument_analyzers=tuple(analyzers()),
+        instrument_sensitivity=settings.instrument_sensitivity,
         debug_audio_seconds=settings.debug_audio_seconds,
     )
 
@@ -162,7 +169,13 @@ class SessionController:
             "activity_model": self.settings.activity_model or None,
             "guitar_model": guitar_paths(self.settings.guitar_model)[0],
             "recognition_model": guitar_paths(self.settings.guitar_model)[1],
+            "instruments": tuple(analyzers()),
         }
+
+    def set_sensitivity(self, instrument, value):
+        """Change an analyzer's sensitivity while it runs; it follows at its next frame."""
+        if self.engine is not None:
+            self.engine.instrument_sensitivity[instrument] = min(1.0, max(0.0, float(value)))
 
     # -- replay ------------------------------------------------------------------------------
 
@@ -242,6 +255,12 @@ class SessionController:
         }
         if engine.config.advanced:
             lines["Delayed analysis"] = metrics["advanced_status"]
+        timing = metrics["instrument_analysis_ms"]
+        if timing:
+            lines["Instrument analysis"] = (
+                f"{', '.join(engine.config.instrument_analyzers)}: "
+                f"p95 {timing['p95']:.2f} ms per frame, inside the analysis pass"
+            )
         if engine.config.recognition_model_path:
             lines["Guitar recognition"] = (
                 f"{metrics['recognition_status']} · estimates {metrics['recognition_jobs']}"

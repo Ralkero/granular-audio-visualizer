@@ -29,6 +29,10 @@ class AnalysisConfig(FrozenModel):
     pitch_tracking: bool = False
     # Log-spaced display spectrum carried on every feature frame; 0 turns it off.
     spectrum_bands: int = Field(default=48, ge=0, le=96)
+    # Fast instrument analyzers to run inside the analysis pass (gmv.instruments), and how
+    # readily each one reports: (name, sensitivity 0..1), 0.5 when not listed.
+    instrument_analyzers: tuple[str, ...] = ()
+    instrument_sensitivity: tuple[tuple[str, float], ...] = ()
     debug_audio_seconds: int = Field(default=0, ge=0, le=60)
     analysis_channel_weights: tuple[float, ...] | None = None
 
@@ -46,6 +50,8 @@ class AnalysisConfig(FrozenModel):
             raise ValueError("Provide eight nonnegative frequency edges")
         if any(a >= b for a, b in zip(self.band_edges, self.band_edges[1:], strict=False)):
             raise ValueError("Frequency edges must strictly increase")
+        if any(not 0 <= value <= 1 for _, value in self.instrument_sensitivity):
+            raise ValueError("Instrument sensitivity is between 0 and 1")
         return self
 
 
@@ -164,6 +170,33 @@ class InstrumentEstimate(Message):
     context_s: float = 0
     processing_ms: float = 0
     confidence_interpretation: str = "uncalibrated_model_score"
+
+
+class InstrumentActivity(Message):
+    """What a fast instrument analyzer says about the frame centred on ``timestamp``.
+
+    Instrument-oriented activity derived from the mixed audio: how much is ringing
+    (``level``), how sharply it is being articulated (``flux``), an attack placed at this
+    frame (``attack``, else 0) and whether the articulation repeats (``rate_hz``,
+    ``regularity``). It is not an isolated instrument signal and does not say that the
+    instrument is present: that is the recognition model's ``InstrumentEstimate``, and
+    ``gmv.instruments.combine`` joins the two. ``basis`` names the signal the analyzer could
+    use for this frame when it has more than one (guitar: "stereo" or "mono").
+    """
+
+    type: Literal["instrument_activity"] = "instrument_activity"
+    instrument: str
+    method: str
+    segment: int = 0
+    level: float = Field(ge=0, le=1)
+    flux: float = Field(ge=0, le=1)
+    attack: float = Field(default=0, ge=0, le=1)
+    rate_hz: float | None = None
+    regularity: float = Field(default=0, ge=0, le=1)
+    centre: float = Field(default=0.5, ge=0, le=1)
+    spread: float = Field(default=0, ge=0, le=1)
+    basis: str = ""
+    confidence_interpretation: str = "uncalibrated_activity_from_mixed_audio"
 
 
 BAND_NAMES = ("sub_bass", "bass", "low_mids", "mids", "upper_mids", "presence", "air")

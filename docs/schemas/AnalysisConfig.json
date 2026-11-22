@@ -111,6 +111,32 @@
       "title": "Spectrum Bands",
       "type": "integer"
     },
+    "instrument_analyzers": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Instrument Analyzers",
+      "type": "array"
+    },
+    "instrument_sensitivity": {
+      "default": [],
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "type": "array"
+      },
+      "title": "Instrument Sensitivity",
+      "type": "array"
+    },
     "debug_audio_seconds": {
       "default": 0,
       "maximum": 60,

@@ -1,0 +1,174 @@
+{
+  "additionalProperties": false,
+  "description": "What a fast instrument analyzer says about the frame centred on ``timestamp``.\n\nInstrument-oriented activity derived from the mixed audio: how much is ringing\n(``level``), how sharply it is being articulated (``flux``), an attack placed at this\nframe (``attack``, else 0) and whether the articulation repeats (``rate_hz``,\n``regularity``). It is not an isolated instrument signal and does not say that the\ninstrument is present: that is the recognition model's ``InstrumentEstimate``, and\n``gmv.instruments.combine`` joins the two. ``basis`` names the signal the analyzer could\nuse for this frame when it has more than one (guitar: \"stereo\" or \"mono\").",
+  "properties": {
+    "schema_version": {
+      "const": "1.1",
+      "default": "1.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "timestamp": {
+      "minimum": 0,
+      "title": "Timestamp",
+      "type": "number"
+    },
+    "detected_monotonic": {
+      "title": "Detected Monotonic",
+      "type": "number"
+    },
+    "published_monotonic": {
+      "default": 0,
+      "title": "Published Monotonic",
+      "type": "number"
+    },
+    "sequence": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "segment": {
+      "default": 0,
+      "title": "Segment",
+      "type": "integer"
+    },
+    "evidence_monotonic": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Evidence Monotonic"
+    },
+    "age_at_publication_ms": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Age At Publication Ms"
+    },
+    "replayed": {
+      "default": false,
+      "title": "Replayed",
+      "type": "boolean"
+    },
+    "original_published_monotonic": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Original Published Monotonic"
+    },
+    "type": {
+      "const": "instrument_activity",
+      "default": "instrument_activity",
+      "title": "Type",
+      "type": "string"
+    },
+    "instrument": {
+      "title": "Instrument",
+      "type": "string"
+    },
+    "method": {
+      "title": "Method",
+      "type": "string"
+    },
+    "level": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Level",
+      "type": "number"
+    },
+    "flux": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Flux",
+      "type": "number"
+    },
+    "attack": {
+      "default": 0,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Attack",
+      "type": "number"
+    },
+    "rate_hz": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rate Hz"
+    },
+    "regularity": {
+      "default": 0,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Regularity",
+      "type": "number"
+    },
+    "centre": {
+      "default": 0.5,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Centre",
+      "type": "number"
+    },
+    "spread": {
+      "default": 0,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Spread",
+      "type": "number"
+    },
+    "basis": {
+      "default": "",
+      "title": "Basis",
+      "type": "string"
+    },
+    "confidence_interpretation": {
+      "default": "uncalibrated_activity_from_mixed_audio",
+      "title": "Confidence Interpretation",
+      "type": "string"
+    }
+  },
+  "required": [
+    "session_id",
+    "source",
+    "timestamp",
+    "detected_monotonic",
+    "instrument",
+    "method",
+    "level",
+    "flux"
+  ],
+  "title": "InstrumentActivity",
+  "type": "object"
+}

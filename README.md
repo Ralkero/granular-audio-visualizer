@@ -37,6 +37,14 @@ Sources:
 
 Logging is enabled by default. Audio recording is disabled. The optional debug setting explicitly enables **at most 60 seconds** of float WAV recording with a timeline sidecar. Exports omit debug audio. Advanced analysis is also off by default; enabling it runs a delayed spectral harmonic/percussive estimate, **not vocals/drums/bass stem separation**.
 
+## Instrument layers (experimental)
+
+The main view is a composition of instrument layers beside the whole-mix spectrum. Each layer is drawn from its own analysis of one instrument, not from the spectrum. **Guitar is the first and so far only layer**: six strings that are struck, ring and die away, a stroke for every attack, and a beam joining strokes that repeat at a steady rate. The Guitar lane shows the same activity in more detail.
+
+- The guitar layer combines two things: a fast analysis of articulation, every 20 ms, mostly from the stereo difference signal (where rhythm guitars usually are), and the slower recognition model, which decides whether any of it is shown. While the model says guitar is absent the layer is empty; before it has judged, the layer is pale and dashed.
+- **Settings → Instrument layers**: show or hide the layer, its sensitivity (what the analysis reports), its intensity (how strongly it is drawn; the analysis is not affected), its style, and where the whole-mix spectrum goes (below, behind or hidden).
+- It is not an isolated guitar signal. In a stereo mix it recovers about 70% of the guitar stem's attacks (MoisesDB, 40 songs), and it cannot tell a guitar from another panned instrument playing at the same time. On mono material it is much weaker. Design, measurements and limits: [docs/INSTRUMENT_LAYERS.md](docs/INSTRUMENT_LAYERS.md).
+
 ## Fresh development checkout
 
 Install Python 3.14 and `uv`, then run `./Setup.ps1`. Dependency versions are pinned in `uv.lock`. For application capture, install the .NET 9 SDK and run `./Build Process Capture.ps1`; the resulting helper uses the installed .NET 9 runtime. System capture uses the same helper when it is built (recommended: it timestamps every packet with the Windows audio clock); without it, system capture falls back to a PortAudio backend whose timestamps drift under load. File analysis does not require .NET. Python project metadata supports 3.11+, but this checkout was validated with 3.14.3 only.

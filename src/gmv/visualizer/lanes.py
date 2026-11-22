@@ -95,6 +95,10 @@ class LaneBoard:
         # What the context recognition model last said about itself, or None when not in use.
         self.recognition = None
         self.revision = 0  # grows whenever recognition adds to the guitar lane
+        # Grows when a lane's committed level changes (or first appears): what was drawn
+        # with the level held from the estimate before is then no longer right.
+        self.judgement = 0
+        self.context_s = 0.0  # how much audio the recognition model listens to
 
     def register(self, lane):
         """Give a label a title, colour and parent before (or after) it is published."""
@@ -118,6 +122,8 @@ class LaneBoard:
             # A hole in the stream is a hole in the lane, not a held score.
             track.append(track.last[0] + 0.02, 0.0, 0.0)
             track.append(time - 0.02, 0.0, 0.0)
+        if not len(track) or track.last[2] != level:
+            self.judgement += 1
         track.append(time, min(1.0, max(0.0, float(score))), level)
         return key
 
@@ -137,6 +143,7 @@ class LaneBoard:
         }
         if not message.available:
             return
+        self.context_s = message.context_s
         levels = {"detected": 1.0, "candidate": 0.5}
         states = dict(message.states)
         hop = max(0.05, message.interval_end - message.timestamp)
@@ -157,6 +164,23 @@ class LaneBoard:
         index = np.searchsorted(rows[:, 0], times, side="left")
         inside = index < len(rows)
         return np.where(inside, rows[np.minimum(index, len(rows) - 1), 2], 0.0)
+
+    def judged_at(self, key, times, hold=1.5):
+        """The detector's level (1, 0.5 or 0) at each time, or NaN where it has said nothing:
+        no detector, before its first row, or more than ``hold`` seconds after its newest.
+        Up to ``hold`` the newest level is assumed to continue, because a recognition model
+        always reports late and the display should not blank while it waits."""
+        times = np.asarray(times, dtype=float)
+        track = self.history.get(key)
+        if track is None or not len(track):
+            return np.full(len(times), np.nan)
+        rows = track.since()
+        index = np.searchsorted(rows[:, 0], times, side="left")
+        known = np.where(index < len(rows), rows[np.minimum(index, len(rows) - 1), 2], np.nan)
+        held = (index >= len(rows)) & (times - rows[-1, 0] <= hold)
+        known = np.where(held, rows[-1, 2], known)
+        # Before the first row nothing is known; a hole in the stream is stored as zeros.
+        return np.where(times < rows[0, 0] - 0.75, np.nan, known)
 
     def lanes(self):
         """(lane, has detector output) in display order."""

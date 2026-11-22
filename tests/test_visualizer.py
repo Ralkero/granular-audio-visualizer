@@ -277,24 +277,6 @@ def test_analyzer_publishes_a_display_spectrum_from_its_own_fft():
 # -- the window itself (Qt, offscreen) -------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
-def app():
-    from PySide6.QtWidgets import QApplication
-
-    return QApplication.instance() or QApplication([])
-
-
-@pytest.fixture
-def window(app):
-    from gmv.visualizer.window import VisualizerWindow
-
-    view = VisualizerWindow()
-    view.timer.stop()  # the tests drive the refresh themselves
-    view.resize(1280, 800)
-    yield view
-    view.close()
-
-
 def publish_music(bus, seconds, start=0.0, **frame_changes):
     for index in range(round(seconds / 0.02)):
         time = start + index * 0.02

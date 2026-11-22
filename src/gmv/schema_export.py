@@ -22,6 +22,7 @@ def schema_models():
             "MusicalEvent",
             "Status",
             "InstrumentEstimate",
+            "InstrumentActivity",
         )
     }
     try:

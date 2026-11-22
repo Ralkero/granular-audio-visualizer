@@ -72,3 +72,24 @@ def estimate_intervals(estimates, label, states=("detected",)):
             else:
                 spans.append((estimate.start, estimate.end))
     return spans
+
+
+def run_instruments(audio, rate, config=None, sensitivity=None):
+    """``InstrumentActivity`` messages of the fast instrument analyzers over decoded audio
+    (frames, channels), produced by the same ``Analyzer`` pass the engine runs. ``config``
+    names the analyzers; guitar when omitted. Returns (messages, analysis_times_ms)."""
+    config = config or AnalysisConfig(instrument_analyzers=("guitar",), spectrum_bands=0)
+    analyzer = Analyzer(rate, audio.shape[1], config, "evaluation", "evaluation", sensitivity)
+    assembler = WindowAssembler(config)
+    found, times = [], []
+    step = round(rate * config.capture_ms / 1000)
+    for pos in range(0, len(audio), step):
+        chunk = audio[pos : pos + step]
+        block = AudioBlock(
+            chunk.astype("<f4").tobytes(), len(chunk), rate, chunk.shape[1], pos / rate, pos / rate, 0
+        )
+        for window, start, mono, _reset in assembler.push(block):
+            analyzer.process(window, start, mono, block, live=False)
+            found.extend(analyzer.instrument_activity)
+            times.append(analyzer.instrument_ms)
+    return found, times

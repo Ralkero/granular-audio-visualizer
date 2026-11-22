@@ -10,10 +10,11 @@ def parse_message(data):
         "musical_event": "MusicalEvent",
         "status": "Status",
         "instrument_estimate": "InstrumentEstimate",
+        "instrument_activity": "InstrumentActivity",
     }
     name = classes[data["type"]]
-    if version == "1.0" and name == "InstrumentEstimate":
-        raise ValueError("Schema 1.0 has no instrument estimates")
+    if version == "1.0" and name in ("InstrumentEstimate", "InstrumentActivity"):
+        raise ValueError("Schema 1.0 has no instrument estimates or activity")
     if version == "1.0":
         legacy = getattr(models_v1, name).model_validate(data)
         data = legacy.model_dump()

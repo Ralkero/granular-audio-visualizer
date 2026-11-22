@@ -32,6 +32,9 @@ class Engine:
             deque(maxlen=4096),
             deque(maxlen=4096),
         )
+        self.instrument_times = deque(maxlen=4096)
+        # Live: change a value here and the running analyzers follow at their next frame.
+        self.instrument_sensitivity = dict(self.config.instrument_sensitivity)
         self.state, self.detail, self.error = "ready", "Ready", None
         self.latest = None
         self.cpu, self.memory_mb, self.peak_memory_mb = 0.0, 0.0, 0.0
@@ -159,6 +162,7 @@ class Engine:
                                 self.config,
                                 self.session_id,
                                 self.source.kind,
+                                self.instrument_sensitivity,
                             )
                         frame, events = analyzer.process(
                             window, start, mono, block, queue_ms, self.source.live
@@ -175,6 +179,10 @@ class Engine:
                         self.latest = self.bus.publish(frame)
                         for event in events:
                             self.bus.publish(event)
+                        for activity in analyzer.instrument_activity:
+                            self.bus.publish(activity)
+                        if analyzer.instruments:
+                            self.instrument_times.append(analyzer.instrument_ms)
                         self.frame_count += 1
                         self.event_count += len(events)
                         self.dsp_times.append(frame.dsp_ms)
@@ -252,6 +260,7 @@ class Engine:
             "queue_high_water": self.audio.high_water,
             "discontinuities": self.discontinuities,
             "dsp_ms": stats(self.dsp_times),
+            "instrument_analysis_ms": stats(self.instrument_times),
             "queue_ms": stats(self.queue_times),
             "estimated_capture_center_to_publish_ms": stats(self.ages),
             "timing_scope": "latest 4096 frames; callback clock estimate, not physical output latency",

@@ -112,6 +112,7 @@ class SettingsDrawer(QFrame):
     """Every control that is not Start/Stop. Reading ``settings()`` never has side effects."""
 
     engine_changed = Signal()  # something that needs a restart to take effect
+    sensitivity_changed = Signal(str, float)  # applies to the running analysis at once
     refresh_requested = Signal()
 
     def __init__(self, view, parent=None):
@@ -138,6 +139,7 @@ class SettingsDrawer(QFrame):
         self.build_source()
         self.build_analysis()
         self.build_visualizer()
+        self.build_instruments()
         self.build_sessions()
         self.build_diagnostics()
         self.build_advanced()
@@ -258,6 +260,77 @@ class SettingsDrawer(QFrame):
         self.form.addRow("Timeline", self.window)
         self.form.addRow(row(self.reset, self.fullscreen))
 
+    def build_instruments(self):
+        """One block of controls per instrument layer, built from the layer registry: a new
+        instrument gets its controls without any change here."""
+        self.heading(
+            "Instrument layers",
+            "Each instrument is drawn from its own analysis. Sensitivity changes what the "
+            "analysis reports; intensity only changes how strongly it is drawn.",
+        )
+        self.spectrum_place = Combo()
+        for key, title in (
+            ("beside", "Below the instruments"),
+            ("behind", "Behind the instruments, dimmed"),
+            ("hidden", "Hidden"),
+        ):
+            self.spectrum_place.addItem(title, key)
+        self.spectrum_place.currentIndexChanged.connect(
+            lambda: self.view.set_spectrum_place(self.spectrum_place.currentData())
+        )
+        self.form.addRow("Whole-mix spectrum", self.spectrum_place)
+        self.layer_controls = {}
+        for key, layer in self.view.canvas.layers.items():
+            shown = QCheckBox(f"Show the {layer.profile.title.lower()} layer")
+            shown.setChecked(True)
+            shown.setToolTip("Hiding a layer does not stop its analysis.")
+            shown.toggled.connect(lambda on, key=key: self.view.set_layer(key, enabled=on))
+            sensitivity = QSlider(Qt.Orientation.Horizontal)
+            sensitivity.setRange(0, 100)
+            sensitivity.setValue(50)
+            sensitivity.setToolTip(
+                "How readily the analysis reports this instrument's articulation. "
+                "It does not change the recognition model or its thresholds."
+            )
+            sensitivity.valueChanged.connect(
+                lambda value, key=key: self.sensitivity_changed.emit(key, value / 100)
+            )
+            intensity = QSlider(Qt.Orientation.Horizontal)
+            intensity.setRange(20, 160)
+            intensity.setValue(100)
+            intensity.setToolTip("How strongly the layer is drawn. The analysis is not affected.")
+            intensity.valueChanged.connect(
+                lambda value, key=key: self.view.set_layer(key, intensity=value / 100)
+            )
+            style = Combo()
+            for name, title in layer.profile.styles:
+                style.addItem(title, name)
+            style.currentIndexChanged.connect(
+                lambda _=0, key=key, box=style: self.view.set_layer(key, style=box.currentData())
+            )
+            self.form.addRow(shown)
+            self.form.addRow(f"{layer.profile.title} sensitivity", sensitivity)
+            self.form.addRow(f"{layer.profile.title} intensity", intensity)
+            if layer.profile.styles:
+                self.form.addRow(f"{layer.profile.title} style", style)
+            self.layer_controls[key] = {
+                "shown": shown,
+                "sensitivity": sensitivity,
+                "intensity": intensity,
+                "style": style,
+            }
+
+    def layer_settings(self):
+        return {
+            key: {
+                "shown": controls["shown"].isChecked(),
+                "sensitivity": controls["sensitivity"].value(),
+                "intensity": controls["intensity"].value(),
+                "style": controls["style"].currentData(),
+            }
+            for key, controls in self.layer_controls.items()
+        }
+
     def build_sessions(self):
         self.heading("Sessions")
         self.logging = QCheckBox("Save analysis logs for each session (never audio)")
@@ -327,6 +400,8 @@ class SettingsDrawer(QFrame):
 
     def show_capabilities(self):
         def state(path, what):
+            if not path.strip() and what == "Guitar":
+                return "Guitar: no recognition model chosen, the guitar layer stays unconfirmed"
             if not path.strip():
                 return f"{what}: no weights chosen, lane shows no detector output"
             if not Path(path).is_file():
@@ -414,6 +489,10 @@ class SettingsDrawer(QFrame):
             beat_tracker=self.beat_tracker.isChecked(),
             pitch_tracking=self.pitch.isChecked(),
             logging=self.logging.isChecked(),
+            instrument_sensitivity=tuple(
+                (key, controls["sensitivity"].value() / 100)
+                for key, controls in self.layer_controls.items()
+            ),
             delayed_analysis=self.delayed.isChecked(),
             debug_audio_seconds=self.debug_audio.value(),
             window_ms=self.window_ms.value(),
@@ -440,6 +519,8 @@ class SettingsDrawer(QFrame):
             "gain": self.gain.value(),
             "window": self.window.currentData(),
             "show_beats": self.show_beats.isChecked(),
+            "spectrum_place": self.spectrum_place.currentData(),
+            "layers": self.layer_settings(),
         }
 
     def restore(self, saved):
@@ -459,6 +540,17 @@ class SettingsDrawer(QFrame):
         self.gain.setValue(int(saved.get("gain", 0)))
         self.window.setCurrentIndex(max(0, self.window.findData(saved.get("window", 15))))
         self.show_beats.setChecked(bool(saved.get("show_beats", True)))
+        self.spectrum_place.setCurrentIndex(
+            max(0, self.spectrum_place.findData(saved.get("spectrum_place", "beside")))
+        )
+        for key, values in (saved.get("layers") or {}).items():
+            controls = self.layer_controls.get(key)
+            if controls is None or not isinstance(values, dict):
+                continue
+            controls["shown"].setChecked(bool(values.get("shown", True)))
+            controls["sensitivity"].setValue(int(values.get("sensitivity", 50)))
+            controls["intensity"].setValue(int(values.get("intensity", 100)))
+            controls["style"].setCurrentIndex(max(0, controls["style"].findData(values.get("style"))))
 
 
 class MainWindow(QWidget):
@@ -490,6 +582,7 @@ class MainWindow(QWidget):
         self.drawer_open = False
         self.drawer.close_button.clicked.connect(lambda: self.show_settings(False))
         self.drawer.engine_changed.connect(self.settings_changed)
+        self.drawer.sensitivity_changed.connect(self.controller.set_sensitivity)
         self.drawer.refresh_requested.connect(self.refresh_sources)
         self.drawer.fullscreen.clicked.connect(self.toggle_fullscreen)
         self.drawer.open_session.clicked.connect(self.open_session_folder)
@@ -653,6 +746,7 @@ class MainWindow(QWidget):
                 source=session.title,
                 beat_tracker=session.configuration.get("experimental_beat_phase"),
                 activity_model=session.configuration.get("activity_model_path"),
+                instruments=session.configuration.get("instrument_analyzers") or (),
             )
             session.start()
         except Exception as exc:

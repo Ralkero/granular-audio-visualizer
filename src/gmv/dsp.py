@@ -10,7 +10,8 @@ from .activity import ActivityBank, ActivityModel
 from .pitch import METHOD as PITCH_METHOD
 from .pitch import PitchTracker, midi_to_hz
 from .beat import BeatTracker
-from .models import AnalysisConfig, FeatureFrame, MusicalEvent
+from .instruments import build as build_instruments
+from .models import AnalysisConfig, FeatureFrame, InstrumentActivity, MusicalEvent
 
 
 class WindowAssembler:
@@ -53,7 +54,9 @@ class WindowAssembler:
 
 
 class Analyzer:
-    def __init__(self, rate, channels, config: AnalysisConfig, session_id, source):
+    def __init__(
+        self, rate, channels, config: AnalysisConfig, session_id, source, sensitivity=None
+    ):
         self.rate, self.channels, self.config = rate, channels, config
         self.session_id, self.source = session_id, source
         self.size = round(rate * config.window_ms / 1000)
@@ -116,6 +119,15 @@ class Analyzer:
         )
         self.hop_samples = round(rate * config.hop_ms / 1000)
         self.pitch = PitchTracker(rate, self.hop) if config.pitch_tracking else None
+        # Fast instrument analyzers share this pass and its FFT. ``sensitivity`` is a live
+        # mapping (name -> 0..1) the owner may change while analysis runs.
+        self.sensitivity = dict(config.instrument_sensitivity) if sensitivity is None else sensitivity
+        self.instruments = build_instruments(
+            config.instrument_analyzers, rate, self.size, self.hop, self.sensitivity
+        )
+        # What the analyzers said about the newest frame; read after ``process``.
+        self.instrument_activity = []
+        self.instrument_ms = 0.0
 
     def estimate_tempo(self, timestamp):
         if timestamp - self.last_tempo < 1 or len(self.flux_history) * self.hop < 4:
@@ -218,6 +230,38 @@ class Analyzer:
             labels = self.activity.labels
             instrument_scores = tuple((n, float(s)) for n, s in zip(labels, scores, strict=True))
             instruments_active = tuple(n for n, on in zip(labels, active, strict=True) if on)
+        self.instrument_activity = []
+        if self.instruments:
+            instruments_began = perf_counter()
+            for instrument in self.instruments:
+                instrument.sensitivity = self.sensitivity.get(instrument.key, 0.5)
+                found = instrument.step(spectrum, is_quiet)
+                if found is None:
+                    continue
+                back = found.delay_frames * self.hop
+                self.instrument_activity.append(
+                    InstrumentActivity(
+                        session_id=self.session_id,
+                        source=self.source,
+                        timestamp=max(0.0, timestamp - back),
+                        detected_monotonic=perf_counter(),
+                        segment=block.segment,
+                        evidence_monotonic=capture_mono + len(audio) / self.rate / 2 - back
+                        if live
+                        else None,
+                        instrument=instrument.key,
+                        method=instrument.method,
+                        level=found.level,
+                        flux=found.flux,
+                        attack=found.attack,
+                        rate_hz=found.rate_hz,
+                        regularity=found.regularity,
+                        centre=found.centre,
+                        spread=found.spread,
+                        basis=found.basis,
+                    )
+                )
+            self.instrument_ms = (perf_counter() - instruments_began) * 1000
         self.flux_history.append(strength)
         self.estimate_tempo(timestamp)
         # Slow reference plus absolute anchor prevents equalizing every passage.

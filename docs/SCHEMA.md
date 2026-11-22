@@ -73,3 +73,14 @@ Additive, optional fields inside schema 1.1:
 - With two weights files, `instrument_scores` holds the labels of both and `activity_method` joins their names with `+`.
 
 None of these identify an instrument by themselves: pitch candidates describe the mix, and only a detector's label in `instrument_scores` says an instrument is playing.
+
+## Instrument activity
+
+`InstrumentActivity` (`type` `instrument_activity`, [schema](schemas/InstrumentActivity.json)) is published by a fast instrument analyzer for every analysis frame while `AnalysisConfig.instrument_analyzers` names it.
+
+- `timestamp` is the centre of the frame it describes; analyzers answer a frame or more late and back-date the message.
+- `instrument`, `method` (guitar: `guitar_articulation_v1`), `basis` (guitar: `stereo` or `mono`).
+- `level`, `flux`, `attack` (0 unless an attack is placed at this frame), `regularity`, `centre`, `spread`: 0 to 1, uncalibrated. `rate_hz` is null when the articulation does not repeat.
+- It is instrument-oriented activity derived from the mixed audio, not an isolated instrument signal, and it does not say the instrument is present. Presence is `InstrumentEstimate`.
+- Logged to `advanced_analysis/instrument_activity.jsonl` as well as `messages.jsonl`. Schema 1.0 has no such message.
+- `AnalysisConfig.instrument_sensitivity`: pairs of analyzer name and sensitivity (0 to 1, 0.5 when not listed).

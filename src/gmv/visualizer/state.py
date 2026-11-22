@@ -11,7 +11,14 @@ from time import perf_counter
 
 import numpy as np
 
-from ..models import FeatureFrame, InstrumentEstimate, MusicalEvent, Status
+from ..instruments import combine
+from ..models import (
+    FeatureFrame,
+    InstrumentActivity,
+    InstrumentEstimate,
+    MusicalEvent,
+    Status,
+)
 from .lanes import LaneBoard, Track
 
 # event_type -> (timeline row, plain description). Anything else lands in "changes" under
@@ -44,6 +51,31 @@ ROWS = (
     ("context", "Delayed context"),
 )
 STOPPED = {"stopped", "finished", "error"}
+# Columns of an instrument's activity history. The first eight are what the analyzer
+# published; the rest are derived once, when a row arrives, so that every renderer and the
+# lane read the same thing:
+#   ring         envelope that jumps to the articulation and dies away, slower while more is
+#                ringing
+#   struck_time  when the most recent attack was
+#   struck_centre, struck_spread  where and how wide that attack was
+#   gap          at an attack: seconds since the attack before it (0 otherwise)
+ACTIVITY = (
+    "time",
+    "level",
+    "flux",
+    "attack",
+    "rate_hz",
+    "regularity",
+    "centre",
+    "spread",
+    "ring",
+    "struck_time",
+    "struck_centre",
+    "struck_spread",
+    "gap",
+)
+COLUMN = {name: index for index, name in enumerate(ACTIVITY)}
+LEVELS = {1.0: "detected", 0.5: "candidate", 0.0: "absent"}
 
 
 @dataclass(frozen=True)
@@ -96,6 +128,10 @@ class VisualState:
         self.markers = deque(maxlen=2048)
         self.gaps = deque(maxlen=64)  # (start, end) on the audio timeline
         self.board.clear()
+        self.activity = {}  # instrument -> Track of ACTIVITY rows
+        self.activity_info = {}  # instrument -> {"method": ..., "basis": ...}
+        self.music_start = None  # when sound last began after silence (or at all)
+        self._silent_from = None
         self.latest = None
         self.spectrum = None
         self.spectrum_range = None
@@ -157,6 +193,8 @@ class VisualState:
                 self.beat_tempo = dict(message.measurements).get("tempo_bpm", self.beat_tempo)
         elif isinstance(message, InstrumentEstimate):
             self.board.estimate(message)
+        elif isinstance(message, InstrumentActivity):
+            self._activity(message)
         elif isinstance(message, Status):
             self.status, self.detail = message.state, message.detail
 
@@ -181,6 +219,17 @@ class VisualState:
         self.replayed = frame.replayed
         if self.status in ("idle", "waiting", *STOPPED):
             self.status = "capturing"
+        # Where the current music began: a recognition model that has heard only a few
+        # seconds of it is still judging mostly silence.
+        if frame.silence:
+            if self._silent_from is None:
+                self._silent_from = frame.timestamp
+        else:
+            if self.music_start is None or (
+                self._silent_from is not None and frame.timestamp - self._silent_from >= 3.0
+            ):
+                self.music_start = frame.timestamp
+            self._silent_from = None
         level = min(1.0, max(0.0, (frame.loudness_dbfs + 60) / 60))
         self.frames.append(frame.timestamp, level, frame.dynamic_intensity, frame.onset_strength)
         if frame.spectrum_db:
@@ -203,6 +252,63 @@ class VisualState:
                 frame.instruments_active,
                 frame.activity_method,
             )
+
+    def _activity(self, message):
+        track = self.activity.get(message.instrument)
+        if track is None:
+            track = self.activity[message.instrument] = Track(self.capacity, len(ACTIVITY))
+        last = track.last
+        if last is not None and message.timestamp <= last[0]:
+            return  # rows stay in time order
+        self.activity_info[message.instrument] = {
+            "method": message.method,
+            "basis": message.basis,
+        }
+        fresh = last is None or message.timestamp - last[0] > 0.5  # start, or a hole
+        ring, struck, centre, spread = (0.0, -1e6, 0.5, 0.0) if fresh else last[8:12]
+        # The envelope dies away over 60 ms when little is ringing, half a second when a
+        # chord is held: a held chord stays on screen, a muted stroke does not.
+        elapsed = 0.02 if fresh else message.timestamp - last[0]
+        ring = max(message.flux, ring * float(np.exp(-elapsed / (0.06 + 0.45 * message.level))))
+        gap = 0.0
+        if message.attack > 0:
+            gap = 0.0 if struck < 0 else message.timestamp - struck
+            struck, centre, spread = message.timestamp, message.centre, message.spread
+        track.append(
+            message.timestamp,
+            message.level,
+            message.flux,
+            message.attack,
+            np.nan if message.rate_hz is None else message.rate_hz,
+            message.regularity,
+            message.centre,
+            message.spread,
+            ring,
+            struck,
+            centre,
+            spread,
+            gap,
+        )
+
+    def attribution(self, key, times):
+        """How much of an instrument's fast activity to show at each time, and where that is
+        only a tentative reading: (weights 0..1, tentative flags). See
+        ``gmv.instruments.combine``; this applies it to the lane the recognition model fills.
+        """
+        times = np.asarray(times, dtype=float)
+        judged = self.board.judged_at(key, times)
+        start = self.music_start if self.music_start is not None else 0.0
+        warming = times < start + (self.board.context_s or 10.0)
+        weights = np.empty(len(times))
+        tentative = np.zeros(len(times), dtype=bool)
+        cases = [(np.isnan(judged), None, False)]
+        for level, name in LEVELS.items():
+            for warm in (False, True):
+                cases.append(((judged == level) & (warming == warm), name, warm))
+        for mask, name, warm in cases:
+            if mask.any():
+                weights[mask], tentative[mask] = combine(name, warm)
+        return weights, tentative
 
     # -- output --------------------------------------------------------------------------
 
