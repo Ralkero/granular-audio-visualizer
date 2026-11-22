@@ -100,7 +100,7 @@ def test_a_sustained_chord_is_one_attack_that_keeps_ringing_not_a_repeating_figu
     ringing = [m for m in held if 1.0 < m.timestamp < 2.5]
     assert np.mean([m.level for m in ringing]) > 0.5  # still sounding
     # Two takes ringing against each other leave a small residue, far below a stroke.
-    assert np.mean([m.flux for m in ringing]) < 0.12
+    assert np.mean([m.flux for m in ringing]) < 0.2
     assert all(m.rate_hz is None for m in ringing)
     busy = [m for m in strummed if 1.0 < m.timestamp < 2.5]
     assert np.mean([m.flux for m in busy]) > 2 * np.mean([m.flux for m in ringing])

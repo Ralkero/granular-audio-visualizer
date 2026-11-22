@@ -6,10 +6,11 @@ drawn from its own analysis of one instrument. Bass, drums and vocals have a des
 and no layer yet: nothing is drawn for an instrument without its own analysis source.
 
 What has and has not been checked is in [Validation](#validation). The short version: the
-analysis and drawing are tested on synthetic audio and measured on MoisesDB stems; the live
-path was measured on the development machine with a test pattern; nobody has yet judged it
-on real music by eye, and the recording named as the practical test case was not available
-as a file.
+analysis and drawing are tested on synthetic audio, measured on MoisesDB stems, and
+corrected against a captured recording of the practical test case, whose fast opening strum
+is now found and drawn as a repeating figure. With the full band playing, that recording
+gives no stroke pattern, and whether the layer is convincing to watch is the owner's
+judgement, not yet given.
 
 ## Design
 
@@ -136,8 +137,12 @@ stem holds a median 62% of the energy of the difference signal against 27% of th
 
 **What is computed**, per 20 ms frame, from the FFT the analysis pass already has:
 
-1. the rise of the log spectrum of the difference signal between 200 Hz and 5 kHz, minus
-   half of the same rise in the sum signal (a centre hit leaks a little into the sides);
+1. the rise of the log spectrum of the difference signal between 200 Hz and 5 kHz. A
+   first version subtracted half of the same rise in the sum signal, to take out what a
+   centre hit leaks into the sides. It was dropped: a guitar that is partly in the middle
+   rises in both signals at once, and the correction removed it (on the captured test
+   recording 8.0 instead of 9.6 of 10 strokes a second; on stems, precision 0.69 instead
+   of 0.84);
 2. `flux` from that rise on a fixed scale (it is not normalised to recent activity, so a
    quiet stretch is not stretched into activity);
 3. an `attack` where the flux has a local maximum that clears the recent lower quartile,
@@ -214,14 +219,15 @@ guitar stem alone, not human annotation. Medians over songs:
 
 | | Stereo, as recorded | Same songs summed to mono |
 |---|---|---|
-| Stem attacks also found in the full mix | 0.70 | 0.40 |
-| Attacks in the mix that match a stem attack | 0.63 | 0.36 |
-| Correlation of flux in the mix with flux of the stem | 0.57 | 0.25 |
-| Same correlation with the guitar taken out of the mix | 0.08 | 0.03 |
-| Attacks per minute with / without the guitar in the mix | 213 / 234 | 166 / 183 |
+| Stem attacks also found in the full mix | 0.71 | 0.40 |
+| Attacks in the mix that match a stem attack | 0.82 | 0.36 |
+| Correlation of flux in the mix with flux of the stem | 0.70 | 0.25 |
+| Same correlation with the guitar taken out of the mix | 0.22 | 0.03 |
+| Attacks per minute with / without the guitar in the mix | 178 / 184 | 166 / 183 |
 
-Read together: in a stereo mix the signal follows the guitar's own articulation (0.57
-against 0.08 when the guitar is removed), and seven in ten of its attacks are found. **It
+Read together: in a stereo mix the signal follows the guitar's own articulation
+(0.70 against 0.22 when the guitar is removed; what remains is the rest
+of the band playing in time with it), and about seven in ten of its attacks are found. **It
 is not a guitar detector**: without the guitar the signal is as busy as with it, driven by
 whatever else is panned. That is why nothing is shown while the recognition model says
 guitar is absent. In mono the analysis is much weaker.
@@ -251,15 +257,41 @@ paint 3.2 to 3.6 ms mean, guitar analysis 0.4 to 0.5 ms p95. The pictures showed
 strokes and beams where expected; that is a check that it runs and draws, not a judgement
 of whether the strokes are the guitar's.
 
+### Measured on the practical test case (a 60 s capture made by the owner)
+
+The recording is streamed, not a file, so the owner captured its first minute with the
+application's opt-in debug recording (system loopback, after the sound device; the audio
+stays in the local session folder). The analyzer was run over it offline, through the same
+analysis pass. The opening is a guitar alone, strummed ten times a second, for about 10 s;
+then the full band enters.
+
+| | Strum alone (10 s) | Full band (36 s) |
+|---|---|---|
+| Strokes found per second | 9.6 of 10 | 0.0 to 0.2 |
+| Gaps between strokes within 25 ms of 100 ms | 97% | none |
+| Frames with the repetition rate reported | 100%, at 10.0 per second | 0 to 5% |
+| Frames regular enough for beams | 100% | 0 to 3% |
+| Stereo basis | yes (difference 8 dB below the sum) | yes (1 to 5 dB below) |
+
+Played through the engine into the window, the opening is drawn as evenly spaced strokes
+joined by beams with the reading "repeating, about 10 strokes per second"; the same picture
+from the presence state alone would be a filled band. That is the difference this phase
+was asked to show.
+
+With the full band the layer shows strings ringing and no strokes. In the capture the
+difference signal then has no repeating articulation at any band resolution tried
+(self-similarity under 0.4 between 2 and 17 per second), while the sum signal follows the
+drum pattern. Either the guitars hold a sustained wall there, or their strokes are not
+recoverable from this signal; the capture cannot say which. The layer does not invent a
+pattern from the drums.
+
+Before the correction described under Analysis, the owner's live plays of the same opening
+gave 2 to 7.5 strokes a second.
+
 ### Not done
 
-- **The named test recording was not available as a file**, so no offline diagnostic of it
-  exists. From the owner's earlier plays, the logs (analysis features only, no audio) show
-  the opening strum as a steady pulse of 10 per second between 600 Hz and 6 kHz
-  (self-similarity 0.84 at 100 ms). That says the pattern is there to be found; it does
-  not show that this analyzer finds it, because the logs hold no stereo spectrum. Playing
-  the song with this build will log `instrument_activity.jsonl`, which answers it.
-- Nobody has watched the layer against real music and judged whether it is convincing.
+- Nobody has yet watched the corrected layer against real music and judged whether it is
+  convincing. One recording was examined closely; others were only checked to run.
 - Stems tell how the analyzer behaves on MoisesDB mixes. The owner's recordings, and
   streamed audio after any processing by the sound device, may be narrower in stereo. On
   the development machine the captured left and right channels of a two-tone test
@@ -276,7 +308,8 @@ of whether the strokes are the guitar's.
 - Centre-panned guitar (a solo, a single acoustic guitar) is analysed by the weaker mono
   fallback or not separated from the centre at all.
 - Attacks closer together than 55 ms, or faster than 17 per second, are merged.
-- A stroke that coincides with a centre drum hit is reduced by the centre correction.
+- In a dense section the articulation can sit at a steady level with no peak that counts as
+  an attack: the layer then shows ringing strings without strokes.
 - Isolating the guitar itself needs source separation or a trained guitar-onset model.
   The six-source HTDemucs model measured earlier in this project needs 1.4 s of CPU per 2 s
   of audio and answers 1.4 to 3.4 s late, so it is not a live path on CPU; a GPU path that

@@ -14,8 +14,7 @@ and peak-based spectral flux, band-limited, with drum vetoes) follows the guitar
 than it follows the drums; see ``docs/INSTRUMENT_LAYERS.md`` for the numbers.
 
 **What is computed.** The rise of the log spectrum of the difference signal in the guitar
-band, minus half of the same rise in the sum signal (a centre hit leaks a little into the
-sides and is taken out this way). From that: attacks, how much is ringing, where in the
+band. From that: attacks, how much is ringing, where in the
 band the articulation sat and how wide it was, and whether it repeats and how fast.
 
 **What it cannot do.** Tell a guitar from anything else that is panned and articulated:
@@ -37,10 +36,9 @@ METHOD = "guitar_articulation_v1"
 LOW_HZ, HIGH_HZ = 200.0, 5000.0  # above bass fundamentals and kick, below cymbal wash
 HISTORY_S = 1.28  # how much articulation the repetition estimate looks at
 SLOWEST_HZ, FASTEST_HZ = 2.0, 17.0  # repetition rates that are reported
-CENTRE_SHARE = 0.5  # how much of the centre's rise is taken out of the sides' rise
 STEREO_DB = -26.0  # difference signal this far below the sum: treated as a mono recording
 FLAT = 0.45  # mono fallback: a strong rise spread this evenly is a broadband hit
-SPARSE = (0.55, 0.85)  # mono fallback: share of the rise in the top fifth of bins, none..full
+SPARSE = (0.55, 0.85)  # share of the centre's rise in the top fifth of bins: flat .. plucked
 FLUX_SCALE = 0.11  # mean log rise per bin that maps to a strength of 0.63
 
 
@@ -93,12 +91,10 @@ class GuitarArticulation:
         self.lags = np.arange(
             max(2, round(1 / (FASTEST_HZ * hop_s))), round(1 / (SLOWEST_HZ * hop_s)) + 1
         )
-        self.slow = 1.0 - float(np.exp(-hop_s / 4.0))
         self.reset()
 
     def reset(self):
         self.side, self.mid = Rise(self.hop), Rise(self.hop)
-        self.average = {"side": 0.02, "mid": 0.02}  # typical rise of each signal
         self.hit_frames = 0  # mono fallback: frames left of the veto after a broadband hit
         self.width = None  # smoothed level of the difference relative to the sum, in dB
         self.flux = np.zeros(self.frames)  # articulation history, newest last
@@ -111,10 +107,6 @@ class GuitarArticulation:
         self.count = 0
         self.rate_hz, self.regularity = None, 0.0
         self.basis = "stereo"
-
-    def _typical(self, name, value):
-        self.average[name] += self.slow * (value - self.average[name])
-        return max(self.average[name], 1e-4)
 
     def step(self, spectrum, quiet=False):
         """Take the complex spectrum of one frame, shape (bins, channels); return the
@@ -131,22 +123,25 @@ class GuitarArticulation:
         stereo = self.width is not None and self.width > STEREO_DB
         self.basis = "stereo" if stereo else "mono"
         centre_rise = float(mid_rise.mean())
-        typical_mid = self._typical("mid", centre_rise) if not quiet else self.average["mid"]
+        # How the centre's rise is spread over the band. A hit that raises every bin alike is
+        # noise (a drum); a pluck raises its partials and little else. The share of the rise
+        # carried by the strongest fifth of the bins tells them apart: 0.2 for a flat rise,
+        # near 1 for a few partials. ``plucked`` is 0 for a flat rise, 1 for a sparse one.
+        top = np.partition(mid_rise, -self.fifth)[-self.fifth :]
+        share = float(top.sum() / max(float(mid_rise.sum()), 1e-9))
+        plucked = min(1.0, max(0.0, (share - SPARSE[0]) / (SPARSE[1] - SPARSE[0])))
         if quiet:
             raw, rise, loud = 0.0, None, 0.0
         elif stereo:
-            own = float(side_rise.mean())
-            typical = self._typical("side", own)
-            raw = max(0.0, own - CENTRE_SHARE * centre_rise * typical / typical_mid)
+            # The rise of the difference signal as it is. Taking out a share of the centre's
+            # rise (to remove what a centre hit leaks into the sides) was tried and dropped:
+            # a guitar that is partly in the middle rises in both signals at once, and the
+            # correction removed it (measured on stems and on a captured recording).
+            raw = float(side_rise.mean())
             rise, loud = side_rise, side_loud
         else:
-            # One signal only. A hit that raises every bin alike is noise (a drum); a pluck
-            # raises its partials and little else. The share of the rise carried by the
-            # strongest fifth of the bins tells them apart: 0.2 for a flat rise, near 1 for
-            # a few partials.
-            top = np.partition(mid_rise, -self.fifth)[-self.fifth :]
-            share = float(top.sum() / max(float(mid_rise.sum()), 1e-9))
-            raw = centre_rise * min(1.0, max(0.0, (share - SPARSE[0]) / (SPARSE[1] - SPARSE[0])))
+            # One signal only: count what is plucked, and veto around a broadband hit.
+            raw = centre_rise * plucked
             # A strong flat rise is a hit; the noise it leaves behind flickers for a few
             # frames and is not articulation either.
             if centre_rise > 0.15 and share < FLAT:

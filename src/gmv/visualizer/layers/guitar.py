@@ -213,7 +213,13 @@ class GuitarLayer(Layer):
             painter.setFont(stage.font(11))
             painter.setPen(tint(NEUTRAL, "#ffffff", 0.0, 0.9))
             painter.drawText(
-                QRectF(rect.left(), rect.top(), rect.width() - 10 * stage.scale, 20 * stage.scale),
+                # Along the bottom edge: the top belongs to the beams.
+                QRectF(
+                    rect.left(),
+                    rect.bottom() - 20 * stage.scale,
+                    rect.width() - 10 * stage.scale,
+                    20 * stage.scale,
+                ),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
                 text,
             )
