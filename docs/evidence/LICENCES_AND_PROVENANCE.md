@@ -76,7 +76,7 @@ Attribution:
 
 ## Implications for a release
 
-`guitar_mn10_v1` and `activity_v2` are in the 0.1.0 release for non-commercial use. A model
+`guitar_mn10_v1` and `activity_v2` are in the 0.1.0 and 0.1.1 releases for non-commercial use. A model
 trained with label candidates from this milestone would additionally depend on the owner's
 recordings and, if OpenMIC audio is used, on NonCommercial and NoDerivatives clips. Such
 weights should stay local until that is looked at again; the code can be released as it is.
