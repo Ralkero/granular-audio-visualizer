@@ -1,6 +1,7 @@
 # Second training experiment with the owner's recordings: plan
 
-**Status: proposed, awaiting the owner's approval. Nothing has been trained.**
+**Status: approved by the owner and run once as written; results in
+[TRAINING_RESULTS_V2.md](TRAINING_RESULTS_V2.md). No model was produced.**
 `guitar_mn10_v1` remains the model the application starts with; `guitar_mn10_rv1` stays a
 separate local alternative. What was checked before asking for approval is in
 [PRE_TRAINING_VALIDATION_V2.md](PRE_TRAINING_VALIDATION_V2.md). Recording and artist names
