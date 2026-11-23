@@ -32,6 +32,12 @@ def sessions_folder():
     return Path(base) / "GranularMusicVisualizer" / "sessions"
 
 
+def icon():
+    """The application's icon file (made by ``packaging/make_icon.py``), or None."""
+    path = program_folder() / ("app.ico" if packaged() else "packaging/app.ico")
+    return path if path.is_file() else None
+
+
 def capture_helper():
     if packaged():
         return program_folder() / "ProcessLoopback" / "ProcessLoopback.exe"

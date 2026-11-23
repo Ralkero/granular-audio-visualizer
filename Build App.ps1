@@ -32,7 +32,11 @@ if ($LASTEXITCODE -ne 0) {
     uv pip install --python .venv/Scripts/python.exe --quiet "pyinstaller>=6.16" "onnxruntime>=1.23,<2"
     if ($LASTEXITCODE -ne 0) { throw 'Could not install the build tools' }
 }
+# The icon: packaging/app.ico, made from a picture by packaging/make_icon.py. An absolute
+# path, because PyInstaller reads it relative to the spec file's folder.
+$icon = (Resolve-Path 'packaging/app.ico').Path
 & .venv/Scripts/python.exe -m PyInstaller --noconfirm --clean --windowed --name $name `
+    --icon $icon `
     --paths src --distpath dist --workpath dist/.work --specpath dist/.work `
     --collect-submodules gmv.recognition --hidden-import onnxruntime `
     --exclude-module pytest --exclude-module mir_eval --exclude-module matplotlib `
@@ -40,6 +44,7 @@ if ($LASTEXITCODE -ne 0) {
 if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
 $out = "dist/$name"
 Copy-Item $helper "$out/ProcessLoopback" -Recurse -Force
+Copy-Item $icon "$out/app.ico" -Force  # the running application's window icon
 New-Item -ItemType Directory -Force "$out/models" | Out-Null
 $defaults = @{}
 if (Test-Path '.model-cache/activity_v2.npz') { Copy-Item '.model-cache/activity_v2.npz' "$out/models" }
