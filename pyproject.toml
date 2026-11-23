@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "granular-music-visualizer"
-version = "0.1.1"
+version = "0.2.0"
 description = "Live-first music analysis and diagnostic control center"
 requires-python = ">=3.11"
 dependencies = [
