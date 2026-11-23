@@ -1,8 +1,17 @@
 # Radiant: a second radial theme, with a palette of its own
 
 Phase 1 of the Radiant theme: its geometry, what moves it, its colour system and how it sits
-in the application. It is a QPainter picture; procedural plasma, turbulence and bloom done
-by a shader are a later phase and are not here.
+in the application. It is a QPainter picture.
+
+**This is no longer what Radiant normally looks like.** Where the graphics card has OpenGL
+3.3, Radiant is drawn entirely by shaders, with a composition, a spectrum and instrument
+structures of its own: see [RADIANT_PLASMA.md](RADIANT_PLASMA.md). None of the geometry
+on this page is drawn then: not the spikes, the contour, the segments, the rings or the
+instrument layers. This page describes the reduced picture shown when the card cannot
+draw Radiant or the user switches effects off, and the palette, theme selection and
+saving, which both share. The palette has since grown to twenty-five roles (five for
+plasma and filaments, three for smoke, all drawn by the graphics card only); the
+seventeen described here are unchanged. This reduced picture has no plasma and no smoke.
 
 Radiant is a **radial theme**: another picture of the same visual state. The radial layout
 now has two, chosen in Settings → Visualizer → Radial theme:

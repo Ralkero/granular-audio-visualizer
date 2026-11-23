@@ -4,6 +4,9 @@ Every colour Radiant draws with comes from a role of this palette; the renderer 
 colour literals of its own. Colours are plain ``#rrggbb`` strings, so the same palette can
 be handed to another renderer (a shader, later) unchanged.
 
+The five plasma and filament roles colour effects that only the graphics-card renderer
+draws (``radiant_gpu``); without it they are kept and saved but nothing shows them.
+
 Roles are independent: nothing derives one role's colour from another's, so a pink core
 can sit inside green rings round a blue spectrum. The four instrument roles start at the
 canonical instrument colours (``visualizer.palette.INSTRUMENTS``) and are Radiant's own
@@ -21,6 +24,8 @@ GROUPS = (
     ("core", "Central core"),
     ("spectrum", "Spectrum"),
     ("structures", "Concentric structures"),
+    ("plasma", "Plasma and filaments"),
+    ("smoke", "Smoke"),
     ("instruments", "Instruments"),
 )
 # (role, title, group, what it colours)
@@ -43,6 +48,18 @@ ROLES = (
     ("energy_accents", "Energy accents", "structures",
      "Radial streaks at onsets and attacks, and the beat glow."),
     ("particle_accents", "Particle accents", "structures", "The small drifting points of light."),
+    ("plasma_primary", "Plasma primary", "plasma",
+     "The dense parts of the plasma clouds. Drawn by the graphics card only."),
+    ("plasma_secondary", "Plasma secondary", "plasma",
+     "The thinner parts of the clouds and the wisps far out."),
+    ("plasma_highlights", "Plasma highlights", "plasma",
+     "The veins of light in the clouds and the hottest ridges of the energy rings."),
+    ("filament_core", "Filament core", "plasma", "The hot middle of an electrical filament."),
+    ("filament_glow", "Filament glow", "plasma", "The body of the filaments round the rings."),
+    ("smoke_primary", "Smoke primary", "smoke", "The lit body of the smoke round the outside."),
+    ("smoke_highlight", "Smoke highlight", "smoke",
+     "The smoke's bright edges, and the light a beat's wave throws on it."),
+    ("smoke_shadow", "Smoke shadow", "smoke", "The smoke's dense, shaded depths."),
     ("vocals", "Vocals", "instruments", "The vocals' strands in Radiant."),
     ("guitar", "Guitar", "instruments", "The guitar's strings in Radiant."),
     ("bass", "Bass", "instruments", "The bass ring in Radiant."),
@@ -50,6 +67,11 @@ ROLES = (
 )  # fmt: skip
 KEYS = tuple(role[0] for role in ROLES)
 INSTRUMENTS = ("vocals", "guitar", "bass", "drums")
+# Roles only the graphics-card effects layer draws with.
+EFFECTS = (
+    "plasma_primary", "plasma_secondary", "plasma_highlights", "filament_core", "filament_glow",
+    "smoke_primary", "smoke_highlight", "smoke_shadow",
+)  # fmt: skip
 CUSTOM = "custom"
 
 
@@ -75,6 +97,14 @@ PRESETS = {
             segmented_ring="#2f7cff",
             energy_accents="#e6fbff",
             particle_accents="#8fd0ff",
+            plasma_primary="#1f6bff",
+            plasma_secondary="#5b2bd6",
+            plasma_highlights="#d6f6ff",
+            filament_core="#f2fbff",
+            filament_glow="#49b6ff",
+            smoke_primary="#3b82f6",
+            smoke_highlight="#bfe3ff",
+            smoke_shadow="#1e1b6b",
         ),
     ),
     "plasma_magenta": (
@@ -93,6 +123,14 @@ PRESETS = {
             segmented_ring="#7a5cff",
             energy_accents="#ffe9fb",
             particle_accents="#f0a6ff",
+            plasma_primary="#c026d3",
+            plasma_secondary="#5b21b6",
+            plasma_highlights="#ffd9fb",
+            filament_core="#fff0fd",
+            filament_glow="#ff5ce1",
+            smoke_primary="#d946ef",
+            smoke_highlight="#ffd0f7",
+            smoke_shadow="#3b0764",
         ),
     ),
     "aurora_green": (
@@ -111,6 +149,14 @@ PRESETS = {
             segmented_ring="#9be15d",
             energy_accents="#f0fff2",
             particle_accents="#9df5cf",
+            plasma_primary="#10b981",
+            plasma_secondary="#0e7490",
+            plasma_highlights="#e3ffe9",
+            filament_core="#f4fff6",
+            filament_glow="#5cffb0",
+            smoke_primary="#34d399",
+            smoke_highlight="#d1fae5",
+            smoke_shadow="#134e4a",
         ),
     ),
     "multicolor_energy": (
@@ -129,6 +175,14 @@ PRESETS = {
             segmented_ring="#facc15",
             energy_accents="#fff4d6",
             particle_accents="#7dd3fc",
+            plasma_primary="#7c3aed",
+            plasma_secondary="#db2777",
+            plasma_highlights="#fde68a",
+            filament_core="#ecfeff",
+            filament_glow="#22d3ee",
+            smoke_primary="#8b5cf6",
+            smoke_highlight="#fef3c7",
+            smoke_shadow="#831843",
         ),
     ),
 }

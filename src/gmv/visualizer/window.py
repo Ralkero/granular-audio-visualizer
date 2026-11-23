@@ -25,7 +25,8 @@ from PySide6.QtGui import (
     QRadialGradient,
 )
 from PySide6.QtWidgets import (
-    QVBoxLayout,
+    QApplication,
+    QStackedLayout,
     QWidget,
 )
 
@@ -127,6 +128,20 @@ def automatic_rate(refresh):
     return refresh / max(1, round(refresh / 66))
 
 
+def effects_unavailable():
+    """'' when the effects layer may be tried here, otherwise why not. Whether the card
+    can really draw it is only known once its context exists (``effects_failed``)."""
+    if os.environ.get("GMV_RADIANT_GPU", "").lower() in ("0", "off", "no"):
+        return "switched off by GMV_RADIANT_GPU"
+    if QApplication.platformName() == "offscreen":
+        return "Qt's offscreen platform has no OpenGL"
+    try:
+        from .themes.radiant_gpu import view  # noqa: F401
+    except ImportError as error:
+        return f"Qt's OpenGL modules are missing: {error}"
+    return ""
+
+
 def canvas_base():
     """The widget class the canvas is built on. ``GMV_RENDERER=opengl`` selects an OpenGL
     surface (QPainter then draws through the graphics card); anything else, or a failure
@@ -203,6 +218,10 @@ class Canvas(canvas_base()):
         # which also holds its palette. The choice stays while Spectrum Bars is shown.
         self.theme = themes.DEFAULT
         self.radiant = Radiant()
+        # True while the graphics-card effects layer is showing behind this canvas: the
+        # canvas then leaves its background clear and draws Radiant's geometry only.
+        self.gpu = False
+        self.path = ""  # who drew the central view at the last paint: see ``paintEvent``
         self.static = False  # True while the rarely-changing picture is being drawn
         self.ring_offset = 0.0
         edges = np.linspace(0, 2 * np.pi, 97)
@@ -366,13 +385,26 @@ class Canvas(canvas_base()):
         self._heights = {name: wanted[name] for name in present}
 
         radiant = self.themed()
+        gpu = self.gpu and radiant is not None
+
+        # Who draws the central view: "radiant-gpu" (the graphics card, all of it; this
+        # canvas draws none of it), "radiant-cpu" (the reduced QPainter Radiant), "classic"
+        # or "bars" (drawn here, as ever).
+        self.path = (
+            "radiant-gpu" if gpu else "radiant-cpu" if radiant is not None
+            else "classic" if self.mode == "radial" else "bars"
+        )  # fmt: skip
 
         def everything(painter):
-            if radiant is not None and self.static:
+            if radiant is not None and self.static and not gpu:
                 radiant.paint_static(self, painter, spectrum, active)  # under everything
             self.draw_header(painter, QRectF(margin, 0, width - 2 * margin, header))
             timed = self.perf.measure if not self.static else _untimed
-            if radiant is not None:
+            if gpu:
+                if not self.static:
+                    with timed("radiant frame"):  # numbers for the card; nothing is drawn
+                        radiant.present(self, spectrum, active)
+            elif radiant is not None:
                 if not self.static:
                     with timed("spectrum"):
                         self.draw_glow(painter, spectrum)
@@ -412,6 +444,8 @@ class Canvas(canvas_base()):
 
         def still_picture():
             picture = QPixmap(self.background())
+            if gpu:  # clear, so that the effects layer behind the canvas shows through
+                picture.fill(Qt.GlobalColor.transparent)
             artist = QPainter(picture)
             artist.scale(self.devicePixelRatioF(), self.devicePixelRatioF())
             artist.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -445,7 +479,7 @@ class Canvas(canvas_base()):
             tuple(layer.key for layer in active),
             self.spectrum_place,
             tuple(sorted(self._edges.items())),
-            (radiant.name, radiant.palette.version) if radiant is not None else None,
+            (radiant.name, radiant.palette.version, gpu) if radiant is not None else None,
         )
         still = self.cached("still", key, still_picture)
         painter = QPainter(self)
@@ -484,6 +518,23 @@ class Canvas(canvas_base()):
         """The theme that draws the radial view instead of the canvas, or None: the classic
         radial view and Spectrum Bars are drawn here."""
         return self.radiant if self.mode == "radial" and self.theme == "radiant" else None
+
+    def plasma_values(self):
+        """What the effects layer's shaders are told for the frame last painted
+        (``radiant_gpu.frame.values``), or None when there is nothing for it to draw."""
+        radiant = self.themed()
+        if radiant is None or not self.gpu or radiant.shown is None or len(radiant.shown) != 5:
+            return None
+        from .themes.radiant_gpu import frame
+
+        lay, view, rect, keys, spectrum = radiant.shown
+        # The glow's strength from the scene (audio time), not from the per-paint easing.
+        strength = (0.05 + 0.20 * view.intensity + 0.16 * view.flash) * self.response.glow
+        return frame.values(
+            lay, view, radiant.palette, self.response, size=(self.width(), self.height()),
+            area=(rect.top(), rect.bottom()), spectrum=spectrum, state=self.state, keys=keys,
+            glow=(self.glow_colour(), min(1.0, strength)), instrument=radiant.instrument,
+        )  # fmt: skip
 
     def radial_geometry(self, rect):
         """Centre and full radius of the radial visualizer in ``rect``."""
@@ -1392,9 +1443,14 @@ class VisualizerWindow(QWidget):
         self.canvas = Canvas(self.state)
         self.bus = self.subscription = None
         self.dropped = 0
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.canvas)
+        # The canvas, and behind it (made only when first needed) the effects layer.
+        self.stack = QStackedLayout(self)
+        self.stack.setContentsMargins(0, 0, 0, 0)
+        self.stack.setStackingMode(QStackedLayout.StackingMode.StackAll)
+        self.stack.addWidget(self.canvas)
+        self.plasma = None
+        self.effects = "auto"  # "auto": the graphics card when it can; "off": phase 1 drawing
+        self.effects_problem = ""  # why the effects layer is not in use, when it is wanted
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.frame_s = FRAME_S  # seconds per frame; see set_frame_rate
@@ -1407,7 +1463,68 @@ class VisualizerWindow(QWidget):
 
     def set_mode(self, mode):
         self.canvas.mode = mode
+        self.sync_effects()
         self.canvas.update()
+
+    # -- the graphics-card effects layer ---------------------------------------------------------
+
+    def set_radiant_effects(self, choice):
+        """Who draws Radiant's light: "auto" (shaders on the graphics card when an OpenGL
+        3.3 context can be had, otherwise the phase 1 drawing) or "off" (always the phase 1
+        drawing). Only the drawing."""
+        if choice in ("auto", "off"):
+            self.effects = choice
+            self.sync_effects()
+            self.canvas.update()
+
+    def sync_effects(self):
+        """Show the effects layer exactly while Radiant is on screen and the card can draw
+        it. It is made the first time it is needed, so a session that never shows Radiant
+        never makes an OpenGL context."""
+        wanted = self.canvas.themed() is not None and self.effects == "auto"
+        # Only once the window is on screen: an OpenGL widget in a window that is only
+        # ever drawn into a picture (tests, offscreen renders) has no surface to draw on.
+        if wanted and self.plasma is None and not self.effects_problem:
+            self.effects_problem = effects_unavailable()
+            if not self.effects_problem and self.isVisible():
+                from .themes.radiant_gpu.view import PlasmaView
+
+                self.plasma = PlasmaView(self.canvas.plasma_values, self)
+                self.plasma.failed.connect(self.effects_failed)
+                self.stack.addWidget(self.plasma)
+                self.stack.setCurrentWidget(self.canvas)  # the canvas stays on top
+        showing = wanted and self.plasma is not None and not self.effects_problem
+        if self.plasma is not None:
+            self.plasma.setVisible(showing)
+        self.canvas.gpu = showing
+
+    def effects_failed(self, problem):
+        """The card could not draw the effects (no context, a shader that did not compile):
+        go back to the phase 1 drawing and say why."""
+        self.effects_problem = problem or "the OpenGL effects could not be set up"
+        self.sync_effects()
+        self.canvas.update()
+
+    def renderer_report(self):
+        """Who is drawing Radiant's light, and at what cost: for diagnostics."""
+        if self.canvas.gpu and self.plasma is not None:
+            renderer = self.plasma.renderer
+            return {
+                "backend": "gpu",
+                "detail": f"{renderer.info.get('renderer', '?')}, OpenGL {renderer.info.get('version', '?')}, "
+                f"GLSL {renderer.info.get('glsl', '?')}",
+                "submit_ms": renderer.cpu_ms,
+                "gpu_ms": renderer.gpu_ms,
+                "buffers_mib": round(renderer.memory() / 2**20, 1),
+                "frames": renderer.frames,
+            }
+        if self.effects == "off":
+            reason = "effects switched off in Settings"
+        else:
+            reason = self.effects_problem or (
+                "Radiant is not on screen" if self.canvas.themed() is None else "the window is not shown yet"
+            )
+        return {"backend": "cpu", "detail": "reduced QPainter picture (no plasma): " + reason}
 
     def set_beats(self, shown):
         self.canvas.show_beats = bool(shown)
@@ -1415,9 +1532,11 @@ class VisualizerWindow(QWidget):
 
     def set_smoothing(self, seconds):
         self.canvas.display.release_s = seconds
+        self.state.spectrum_release_s = seconds
 
     def set_gain(self, decibels):
         self.canvas.display.gain_db = decibels
+        self.state.spectrum_gain_db = decibels
 
     def set_window(self, seconds):
         """Length of the timeline and lanes."""
@@ -1458,6 +1577,7 @@ class VisualizerWindow(QWidget):
         Only the drawing: the stream, the analysis and the history are untouched, and
         Spectrum Bars is not a radial theme."""
         self.canvas.theme = themes.known(name)
+        self.sync_effects()
         self.canvas.update()
 
     @property
@@ -1598,6 +1718,8 @@ class VisualizerWindow(QWidget):
             self.canvas.info["dropped"] = self.dropped + self.subscription.dropped
         self.canvas.advance(dt, clock)
         self.canvas.update()
+        if self.canvas.gpu:
+            self.plasma.update()
         perf.add("tick", (perf_counter() - clock) * 1000)
         # Nothing arriving and nothing moving: check a few times a second instead.
         if self.canvas.settled():
@@ -1651,6 +1773,7 @@ class VisualizerWindow(QWidget):
     def performance(self):
         """Rolling timings of message intake and painting (see ``perf.Timings``)."""
         report = self.canvas.perf.stats()
+        report["radiant renderer"] = self.renderer_report()
         if self.subscription is not None:
             report["dropped by this window"] = self.dropped + self.subscription.dropped
         return report
@@ -1658,7 +1781,19 @@ class VisualizerWindow(QWidget):
     def closeEvent(self, event):
         self.detach()
         self.timer.stop()
+        self.close_effects()
         event.accept()
+
+    def close_effects(self):
+        """Release the graphics card's resources and let the effects view go, now, in an
+        order we choose. The reduced picture is what is left until the window is shown again."""
+        if self.plasma is not None:
+            self.canvas.gpu = False
+            self.plasma.shutdown()
+            self.stack.removeWidget(self.plasma)
+            self.plasma.hide()
+            self.plasma.deleteLater()
+            self.plasma = None
 
     def showEvent(self, event):
         if self.frame_rate is None:
@@ -1673,3 +1808,4 @@ class VisualizerWindow(QWidget):
         if not self.timer.isActive():
             self.timer.start(ACTIVE_MS)
         super().showEvent(event)
+        QTimer.singleShot(0, self.sync_effects)  # the effects layer, now that there is a window

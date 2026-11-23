@@ -43,6 +43,10 @@ def main():
     parser.add_argument("--expressive", action="store_true", help="Expressive Mode")
     parser.add_argument("--theme", default="classic", choices=("classic", "radiant"), help="radial theme")
     parser.add_argument("--palette", default="", help="a Radiant preset, e.g. multicolor_energy")
+    parser.add_argument("--effects", default="auto", choices=("auto", "off"), help="Radiant: shaders or phase 1")
+    parser.add_argument("--shot", default="", help="save a picture of the window here at the end")
+    parser.add_argument("--shots", default="", help="folder: save a picture of the window every second")
+    parser.add_argument("--hide-beats", action="store_true", help="beats not shown (no beat-driven effects)")
     parser.add_argument(
         "--neutral-background", action="store_true", help="no instrument-reactive glow"
     )
@@ -61,7 +65,9 @@ def main():
     window.set_intensity_colour(not args.plain_spectrum)
     window.set_radial_rings(args.rings)
     window.set_expressive(args.expressive)
+    window.set_radiant_effects(args.effects)
     window.set_radial_theme(args.theme)
+    window.set_beats(not args.hide_beats)
     if args.palette:
         window.set_radiant_preset(args.palette)
     window.set_reactive_background(not args.neutral_background)
@@ -84,6 +90,19 @@ def main():
     process.cpu_percent()
     began = time.perf_counter()
     warm = {"done": False}
+    card = {"gpu": [], "submit": [], "last": None}
+
+    def sample_card():  # Radiant's timer-query result, collected as it changes (not every frame is timed)
+        report = window.renderer_report()
+        if warm["done"] and report.get("backend") == "gpu" and report.get("gpu_ms") is not None:
+            if (report["gpu_ms"], report["submit_ms"]) != card["last"]:
+                card["last"] = (report["gpu_ms"], report["submit_ms"])
+                card["gpu"].append(report["gpu_ms"])
+                card["submit"].append(report["submit_ms"])
+
+    sampler = QTimer()
+    sampler.timeout.connect(sample_card)
+    sampler.start(50)
 
     def settle():  # leave the first seconds (window creation, caches) out of the figures
         window.canvas.perf.clear()
@@ -91,11 +110,23 @@ def main():
         warm["done"], warm["at"], warm["painted"] = True, time.perf_counter(), window.canvas.painted
 
     def finish():
+        if args.shot:  # what is on the display, effects layer included
+            on_display(window).save(args.shot)
         elapsed = time.perf_counter() - warm.get("at", began)
         perf = window.canvas.perf.stats()
         intervals = perf.get("frame interval") or {}
         result = {
             "label": args.label,
+            "renderer": window.renderer_report(),
+            "card_ms": {
+                name: {
+                    "samples": len(values),
+                    "p50": round(sorted(values)[len(values) // 2], 3),
+                    "p95": round(sorted(values)[min(len(values) - 1, int(len(values) * 0.95))], 3),
+                }
+                for name, values in (("gpu", card["gpu"]), ("submit", card["submit"]))
+                if values
+            },
             "window": f"{window.width()}x{window.height()}",
             "device_pixel_ratio": window.devicePixelRatioF(),
             "mode": args.mode,
@@ -144,8 +175,25 @@ def main():
         app.quit()
 
     QTimer.singleShot(4000, settle)
+    if args.shots:  # what is on the display, once a second, effects layer included
+        from pathlib import Path
+
+        folder = Path(args.shots)
+        folder.mkdir(parents=True, exist_ok=True)
+        for second in range(5, int(args.seconds)):
+            QTimer.singleShot(second * 1000, lambda s=second: on_display(window).save(str(folder / f"t{s:03d}.png")))
     QTimer.singleShot(int(args.seconds * 1000), finish)
     return app.exec()
+
+
+def on_display(window):
+    """What the display shows where the window is, the graphics card's layer included. A grab
+    of the window itself is not used: once Radiant's OpenGL view is in it, that returns the
+    same stale picture every time on Windows, and ``QWidget.grab`` leaves the OpenGL layer
+    black."""
+    screen = window.screen()
+    area, origin = window.frameGeometry(), screen.geometry()
+    return screen.grabWindow(0, area.x() - origin.x(), area.y() - origin.y(), area.width(), area.height())
 
 
 def place(app, window, name, width, height):

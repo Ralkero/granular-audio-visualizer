@@ -35,8 +35,11 @@ if ($LASTEXITCODE -ne 0) {
 # The icon: packaging/app.ico, made from a picture by packaging/make_icon.py. An absolute
 # path, because PyInstaller reads it relative to the spec file's folder.
 $icon = (Resolve-Path 'packaging/app.ico').Path
+# The shader files of Radiant's effects layer are data, not Python: say where they go.
+$shaders = (Resolve-Path 'src/gmv/visualizer/themes/radiant_gpu/shaders').Path
 & .venv/Scripts/python.exe -m PyInstaller --noconfirm --clean --windowed --name $name `
     --icon $icon `
+    --add-data "$shaders;gmv/visualizer/themes/radiant_gpu/shaders" `
     --paths src --distpath dist --workpath dist/.work --specpath dist/.work `
     --collect-submodules gmv.recognition --hidden-import onnxruntime `
     --exclude-module pytest --exclude-module mir_eval --exclude-module matplotlib `

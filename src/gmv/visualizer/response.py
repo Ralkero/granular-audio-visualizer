@@ -33,6 +33,9 @@ class Response:
     heat: float = 1.0  # how far the intensity colouring goes for the same intensity
     # Background
     glow: float = 1.0  # strength of the background glow and of the beat glow
+    # Effects drawn by the graphics card (Radiant)
+    plasma: float = 1.0  # density and light of the plasma, the energy rings and the filaments
+    bloom: float = 1.0  # how far bright things light their surroundings
 
     def lifted(self, values):
         """Bar heights (an array or a number in 0..1) through the spectrum curve."""
@@ -50,4 +53,6 @@ EXPRESSIVE = Response(
     breath=1.8,
     heat=1.25,
     glow=1.7,
+    plasma=1.35,
+    bloom=1.5,
 )

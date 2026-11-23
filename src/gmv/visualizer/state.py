@@ -91,6 +91,7 @@ LEVELS = {1.0: "detected", 0.5: "candidate", 0.0: "absent"}
 # the newest audio time seen, is the timeline starting again (a replay played from the
 # start); nearer than that it is a late frame of a segment that is over.
 RESTART_S = 2.0
+SPECTRUM_KEPT = 600  # frames kept for the audio-time display spectrum until it is asked for
 # Pitch range (MIDI notes) over which an instrument's live ``place`` runs.
 PITCH_RANGE = {"bass": (26.0, 56.0), "vocals": (45.0, 81.0)}
 
@@ -140,6 +141,9 @@ class VisualState:
         # the frames do not carry. Whoever knows it says so (``set_band_edges``); a
         # state that is told nothing takes the analysis default. Kept across resets.
         self.band_edges = tuple(DEFAULT_EDGES)
+        # How the audio-time display spectrum is eased (``audio_spectrum``): the display's
+        # own settings, kept across resets.
+        self.spectrum_release_s, self.spectrum_gain_db = 0.22, 0.0
         self.marked = 0  # markers ever received; lets a drawing find the new ones
         self.reset()
 
@@ -177,6 +181,14 @@ class VisualState:
         self.latest = None
         self.spectrum = None
         self.spectrum_range = None
+        # The display spectrum stepped once per analysis frame, by the audio time between
+        # frames: the same bar heights for the same recording however often anything is
+        # drawn. (The canvas's own ``SpectrumDisplay`` is stepped per paint; Classic and
+        # Spectrum Bars keep using that one.) The stepping is done when the heights are
+        # asked for (``spectrum_at``), not as frames arrive: taking in a frame only notes
+        # it, so a renderer that never asks pays nothing.
+        self.audio_spectrum = SpectrumDisplay(self.spectrum_release_s, self.spectrum_gain_db)
+        self._spectrum_waiting = deque(maxlen=SPECTRUM_KEPT)  # (seconds since the frame before, dB, range)
         self.beats = deque(maxlen=64)  # predicted beat times not yet reached
         # Note candidates: (time, MIDI note, score, guitar judged active at that time).
         self.notes = Track(4 * self.capacity, 4)
@@ -303,6 +315,8 @@ class VisualState:
         else:  # sessions recorded before the display spectrum existed: seven broad bands
             self.spectrum = 10 * np.log10(np.maximum(frame.band_energy, 1e-12))
             self.spectrum_range = None
+        elapsed = 0.02 if previous is None else frame.timestamp - previous.timestamp
+        self._spectrum_waiting.append((min(0.25, max(0.0, elapsed)), self.spectrum, self.spectrum_range))
         if frame.pitch_method:
             self.pitch_method = frame.pitch_method
             guitar = float("guitar" in frame.instruments_active)
@@ -317,6 +331,23 @@ class VisualState:
                 frame.instruments_active,
                 frame.activity_method,
             )
+
+    def spectrum_at(self, now):
+        """The display spectrum (bar heights 0..1, lows first) at audio time ``now``, or
+        None before any frame: the heights as of the newest frame, fallen by the release
+        for the audio time since. A function of the frames and ``now`` alone, as long as
+        it is asked for at least every ``SPECTRUM_KEPT`` frames (twelve seconds); after a
+        longer pause it is built up again from the frames of that long."""
+        shown = self.audio_spectrum
+        shown.release_s, shown.gain_db = self.spectrum_release_s, self.spectrum_gain_db
+        while self._spectrum_waiting:  # every frame since the last time, in order
+            elapsed, spectrum, span = self._spectrum_waiting.popleft()
+            shown.step(spectrum, elapsed, span)
+        values = shown.values
+        if values is None or self.latest is None or now is None:
+            return None
+        since = max(0.0, now - self.latest.timestamp)
+        return values * np.exp(-since / max(self.audio_spectrum.release_s, 1e-3))
 
     def set_band_edges(self, edges):
         """Say which band edges the stream's ``band_energy`` uses; None when that is not

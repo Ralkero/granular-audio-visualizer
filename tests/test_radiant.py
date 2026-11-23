@@ -20,6 +20,7 @@ from gmv.visualizer.themes import radiant_geometry as geometry
 from gmv.visualizer.themes.radiant import Radiant
 from gmv.visualizer.themes.radiant_palette import (
     CUSTOM,
+    EFFECTS,
     FACTORY,
     INSTRUMENTS,
     KEYS,
@@ -43,7 +44,9 @@ MIXED = dict(
     spectrum_body="#2563eb", spectrum_highlights="#f97316", primary_ring="#22c55e",
     secondary_ring="#e11d48", segmented_ring="#facc15", energy_accents="#fb923c",
     particle_accents="#ffffff", vocals="#22d3ee", guitar="#ff00aa", bass="#a3e635",
-    drums="#c084fc",
+    drums="#c084fc", plasma_primary="#ff1493", plasma_secondary="#7a1fa2",
+    plasma_highlights="#ffe600", filament_core="#eaffea", filament_glow="#39ff14",
+    smoke_primary="#00e5ff", smoke_highlight="#fff4d6", smoke_shadow="#4a044e",
 )  # fmt: skip
 
 
@@ -472,11 +475,11 @@ def test_the_same_recording_gives_the_same_scene_at_any_frame_rate():
 
 def test_every_role_takes_any_colour_and_changing_one_changes_no_other():
     colours = RadiantPalette()
-    assert set(MIXED) == set(KEYS) and len(KEYS) == 17
+    assert set(MIXED) == set(KEYS) and len(KEYS) == 25 and set(EFFECTS) < set(KEYS)
     assert {key: colours[key] for key in INSTRUMENTS} == palette.INSTRUMENTS  # canonical to start
     for index, role in enumerate(KEYS):
         before, version = dict(colours.colours), colours.version
-        for colour in ("#ff1493", "#00ff00", "#000000", "#ffffff", f"#{index * 15:02x}80c0"):
+        for colour in ("#ff1493", "#00ff00", "#000000", "#ffffff", f"#{index * 9:02x}80c0"):
             assert colours.set(role, colour) and colours[role] == colour
         assert {key: value for key, value in colours.colours.items() if key != role} == {
             key: value for key, value in before.items() if key != role
@@ -535,6 +538,8 @@ def test_every_role_shows_in_the_picture_and_none_is_replaced_by_a_default(windo
     window.set_section("timeline", shown=False)
     window.grab()
     for role in KEYS:
+        if role in EFFECTS:  # drawn by the effects layer only: see test_radiant_plasma
+            continue
         window.radiant_palette.restore()
         before = picture(window)
         # As unlike the factory colour as a colour can be: its opposite.

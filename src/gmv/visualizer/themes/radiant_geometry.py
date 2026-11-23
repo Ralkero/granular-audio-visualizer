@@ -38,6 +38,9 @@ FLASH_S, PULSE_S = 0.14, 0.22  # how fast an onset's flash and a beat's pulse di
 ONSET_LIFE, ATTACK_LIFE = 0.45, 0.36  # seconds a streak lasts
 SHOCK_LIFE = 0.6  # seconds an onset's widening circle lasts
 MOST_STREAKS = 64
+BEAT_LIFE = 2.6  # seconds a beat goes on disturbing the smoke
+MOST_BEATS = 16  # beats that can be disturbing it at once
+BEAT_LEAST = 0.45  # strength of a beat the tracker was least sure of
 PARTICLES = 150
 
 
@@ -209,6 +212,41 @@ def impulses(markers, now, since=None, beats=True):
             pulse = max(pulse, math.exp(-age / PULSE_S))
             predicted.append((age, 1.0, mark.time))
     return flash, pulse, onsets, predicted
+
+
+def beats(markers, now, since=None, shown=True, life=BEAT_LIFE, most=MOST_BEATS):
+    """The predicted beats that audio time ``now`` has reached within the last ``life``
+    seconds: ``(age, strength, time)``, newest first, at most ``most``, each beat once.
+
+    A beat here is exactly what the beat tracker published as ``beat_prediction`` (drawn
+    as "predicted"), and only once its time has come. Nothing else is a beat: not an
+    onset, not a drum hit, not a transient. With the tracker off, or not locked, it
+    publishes none and this is empty. ``shown`` is the "Show beats" setting, which
+    switches every beat-driven part of the picture, as it always has.
+
+    ``strength`` is the tracker's own confidence for that beat (which the tracker caps at
+    0.7), scaled so that a beat it was sure of is 1 and the least sure is ``BEAT_LEAST``:
+    a predicted beat always does something. Marks before ``since`` (the start of the
+    audio segment) are over."""
+    found, seen = [], set()
+    if now is None or not shown:
+        return found
+    for scanned, mark in enumerate(reversed(markers)):
+        age = now - mark.time
+        if scanned > 600 or age > life + 4.0:
+            break
+        if age < 0 or age > life or mark.kind != "beat_prediction" or mark.style != "predicted":
+            continue
+        if since is not None and mark.time < since:
+            continue
+        key = round(mark.time * 1000)
+        if key in seen:
+            continue
+        seen.add(key)
+        sure = min(1.0, max(0.0, mark.intensity) / 0.7)
+        found.append((age, BEAT_LEAST + (1.0 - BEAT_LEAST) * sure, mark.time))
+    found.sort(key=lambda beat: beat[0])
+    return found[:most]
 
 
 def core(lay, level, intensity, flash, pulse, breath=1.0):

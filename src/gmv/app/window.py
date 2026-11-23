@@ -320,6 +320,18 @@ class SettingsDrawer(QFrame):
         box = QVBoxLayout(self.radiant_box)
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(6)
+        self.radiant_effects = Combo()
+        self.radiant_effects.addItem("Plasma effects on the graphics card (automatic)", "auto")
+        self.radiant_effects.addItem("Off: geometry only (phase 1 drawing)", "off")
+        self.radiant_effects.setToolTip(
+            "The plasma, energy rings, filaments, core and bloom are drawn by shaders on the "
+            "graphics card when it has OpenGL 3.3. Without it, or switched off here, Radiant "
+            "is drawn as its geometry alone. Diagnostics says which is in use."
+        )
+        self.radiant_effects.currentIndexChanged.connect(
+            lambda: self.view.set_radiant_effects(self.radiant_effects.currentData())
+        )
+        box.addLayout(row(QLabel("Effects"), self.radiant_effects))
         self.radiant_fold = QToolButton(text="Radiant palette  \u25b8")
         self.radiant_fold.setCheckable(True)
         self.radiant_fold.setToolTip("Choose the colour of every part of the Radiant theme.")
@@ -747,6 +759,7 @@ class SettingsDrawer(QFrame):
             "expressive": self.expressive.isChecked(),
             "radial_theme": self.radial_theme.currentData(),
             "radiant_palette": self.view.radiant_palette.saved(),
+            "radiant_effects": self.radiant_effects.currentData(),
         }
 
     def restore(self, saved):
@@ -777,6 +790,9 @@ class SettingsDrawer(QFrame):
         # Settings saved before the themes existed: Classic and the factory Radiant palette.
         self.view.radiant_palette.load(saved.get("radiant_palette"))
         self.sync_radiant_controls()
+        self.radiant_effects.setCurrentIndex(
+            max(0, self.radiant_effects.findData(saved.get("radiant_effects", "auto")))
+        )
         self.radial_theme.setCurrentIndex(
             max(0, self.radial_theme.findData(saved.get("radial_theme", DEFAULT_THEME)))
         )
@@ -1155,6 +1171,15 @@ class MainWindow(QWidget):
                     f"drawing p95 {ordered[int(len(ordered) * 0.95)]:.1f} ms per frame · "
                     f"messages dropped by the display {canvas.info.get('dropped', 0)}"
                 )
+            if canvas.themed() is not None:
+                report = self.view.renderer_report()
+                text = f"{report['backend'].upper()}: {report['detail']}"
+                if report.get("gpu_ms") is not None:
+                    text += (
+                        f" · card {report['gpu_ms']:.1f} ms, submission {report['submit_ms']:.1f} ms "
+                        f"per frame · buffers {report['buffers_mib']} MiB"
+                    )
+                lines["Radiant renderer"] = text
             drawer.diagnostics.setText("\n".join(f"{key}: {value}" for key, value in lines.items()))
 
     def apply_build_defaults(self):

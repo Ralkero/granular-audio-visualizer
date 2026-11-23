@@ -221,6 +221,33 @@ more). Starting a session takes about two seconds longer, during which the windo
 The visualizer alone (session replay, no engine) at the automatic 72 fps, 1080p: 72.0 fps,
 paint 4.4 to 6.1 ms at the median, 6.3 to 8.7 ms p95, 9.2 to 10.9 ms p99.
 
+## Radiant on the graphics card
+
+Radiant is drawn by GLSL shaders, not by this page's QPainter canvas: see
+[RADIANT_PLASMA.md](RADIANT_PLASMA.md), "Cost". In short, at 1920×1080 on the 144 Hz
+display in one replay run: 71 to 72 frames a second, the canvas painting only the
+application's shell (1.9 ms a frame at the median), about 5 ms a frame on the card, frame
+intervals as even as Classic's, and about 130 to 150 MiB more process memory because Qt
+then composes the window through OpenGL. 2560×1440 was not run on a display. Classic and
+Spectrum bars are drawn exactly as before and their figures on this page stand.
+
+The smoke round Radiant is one more pass in the same buffer. Measured without a window as
+the difference with and without it: 0.5 to 0.7 ms on the card at 1920×1080 and 0.5 to
+1.1 ms at 2560×1440, the higher figures with sixteen beats at once; all passes together
+1.7 to 2.1 ms and 2.5 to 3.0 ms. In the application at 1920×1080 on the 144 Hz display,
+with the smoke and beats: 72 frames a second (138.8 when drawn at every refresh), canvas
+paint 1.74 ms at the median and 2.48 ms p95, frame preparation 0.72 / 1.16 ms, 4.4 ms at
+the median and 5.4 ms p95 on the card, 416 MiB of process memory, the same with the beats
+hidden, in Expressive Mode and in Multicolor Energy. Nothing is measurably worse than
+before the smoke; the card's time in the application varies by about a millisecond from
+batch to batch, more than the smoke costs. Full table: [RADIANT_PLASMA.md](RADIANT_PLASMA.md),
+"Smoke", "Cost".
+
+Taking in messages was checked while this was built: a first version stepped Radiant's
+audio-time spectrum on every analysis frame and raised the cost of taking in a frame from
+18 to 51 microseconds. It is now stepped only when asked for (19 microseconds, the extra
+being one queue append).
+
 ## The graphics card experiment
 
 With `GMV_RENDERER=opengl` the canvas is a `QOpenGLWidget` and the same QPainter code draws

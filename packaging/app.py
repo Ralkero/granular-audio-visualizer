@@ -90,6 +90,16 @@ def self_check(report):
                     view.grab()
                     control.click()
                     app.processEvents()
+            # Radiant, with the effects layer if this machine's card can draw it.
+            view.set_mode("radial")
+            view.set_radial_theme("radiant")
+            until = perf_counter() + 1.5
+            while perf_counter() < until:
+                app.processEvents()
+                sleep(0.01)
+            result["radiant_renderer"] = view.renderer_report()
+            view.set_radial_theme("classic")
+            view.set_mode("bars")
             result["ui_exercise"] = "ok"
             result["layers_active"] = [layer.key for layer in view.canvas.active_layers()]
             timings = view.performance()

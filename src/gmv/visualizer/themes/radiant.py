@@ -63,6 +63,8 @@ class Radiant:
     def __init__(self):
         self.palette = RadiantPalette()
         self._pictures = OrderedDict()  # (name, colours, size) -> picture, newest last
+        self.shown = None  # (layout, scene, area, instruments, spectrum) last presented
+        self.painted = 0  # times the QPainter picture was drawn: never while the GPU owns it
 
     # -- colours ---------------------------------------------------------------------------
 
@@ -199,9 +201,10 @@ class Radiant:
         if running and now is not None:
             level, intensity = geometry.mix_levels(state.frames, now)
             flash, pulse, onsets, _ = geometry.impulses(state.markers, now, since, beats)
+            struck = geometry.beats(state.markers, now, since, beats)
         else:
             level = intensity = flash = pulse = 0.0
-            onsets = []
+            onsets, struck = [], []
         radius, halo, rays = geometry.core(lay, level, intensity, flash, pulse, response.breath)
         attacks = {}
         if running:
@@ -237,9 +240,35 @@ class Radiant:
             contour=geometry.contour(lay, state.frames if running else None, now, response.motion),
             segments=geometry.segment_levels(values),
             segment_ring=geometry.segment_ring(lay, pulse),
+            onsets=onsets,
+            beats=struck,
             streaks=geometry.streaks(lay, onsets, attacks, response.impact),
             shocks=geometry.shocks(lay, onsets),
         )
+
+    # -- the graphics card's frame ---------------------------------------------------------------
+
+    def present(self, canvas, rect, active):
+        """Work out the frame the graphics card draws, and draw nothing. This is all the
+        canvas does for Radiant while the GPU renderer owns the view: no ``paint``, no
+        ``paint_static``, no instrument layer. The composition is the GPU's own
+        (``radiant_gpu.scene.layout``); only the visual state is shared."""
+        from .radiant_gpu import scene as composition
+
+        state = canvas.state
+        running = canvas.condition in ("live", "replay") and canvas.now is not None
+        keys = tuple(layer.key for layer in active)
+        cx, cy, reach = canvas.radial_geometry(rect)
+        lay = composition.layout(cx, cy, reach, keys)
+        if running:
+            composition.advance(state, canvas.now, keys)
+        spectrum = state.spectrum_at(canvas.now) if running else None
+        view = self.scene(
+            state, canvas.now, lay, values=spectrum, peaks=None, response=canvas.response,
+            running=running, beats=canvas.show_beats, keys=keys,
+        )  # fmt: skip
+        self.shown = (lay, view, rect, keys, spectrum)
+        return view
 
     # -- drawing -----------------------------------------------------------------------------
 
@@ -322,8 +351,11 @@ class Radiant:
                 layer.paint_stage(painter, stage, state)
 
     def paint(self, canvas, painter, rect, active, spectrum=True):
-        """One frame of the moving picture, over the atmosphere."""
+        """One frame of the moving picture, over the atmosphere: the QPainter Radiant,
+        drawn when the graphics card does not draw Radiant (no OpenGL 3.3, a failure, or
+        effects switched off). Never called while the GPU renderer owns the view."""
         colours = self.palette
+        self.painted += 1
         response = canvas.response
         running = canvas.condition in ("live", "replay") and canvas.now is not None
         lay = self.layout(canvas, rect, active)
