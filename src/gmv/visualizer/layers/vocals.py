@@ -41,7 +41,7 @@ class VocalsLayer(Layer):
         far they open is the level now, with a bloom where a phrase begins; the whole
         ribbon moves outwards with a higher note; the strands drift past one another
         all the while a voice sounds. Without a readable pitch they are dotted."""
-        colour = self.profile.colour
+        colour = self.tone
         angles, sines, cosines = around(180)
         height = stage.height
         respond = stage.response
@@ -128,7 +128,7 @@ class VocalsLayer(Layer):
         return out
 
     def paint_history(self, artist, to_x, rows, weights, tentative, height, stage):
-        colour = self.profile.colour
+        colour = self.tone
         # The first row was drawn with the slice before: start from where that left off.
         place = self.contour(rows, self.place)
         xs = np.asarray(to_x(rows[:, 0]), dtype=float)

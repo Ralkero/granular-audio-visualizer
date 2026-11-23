@@ -31,12 +31,14 @@ from PySide6.QtWidgets import (
 
 from . import layers as layer_registry
 from . import palette
+from . import themes
 from .intensity import tint
 from .dominance import DEFAULT_EDGES
 from .perf import Timings
 from .response import BASELINE, EXPRESSIVE
 from .state import ROWS, SpectrumDisplay, VisualState
 from .strip import Strip, polygon
+from .themes.radiant import Radiant
 
 TEXT, DIM, FAINT = QColor("#e8ebf4"), QColor("#8089a0"), QColor("#262b3a")
 PREDICTED = QColor(palette.PREDICTED)  # reserved for predictions; no instrument has it
@@ -197,6 +199,10 @@ class Canvas(canvas_base()):
         self.reactive_background = True
         # How strongly everything is drawn: the baseline, or Expressive Mode.
         self.response = BASELINE
+        # The radial theme: "classic" is drawn here, as ever; "radiant" by ``self.radiant``,
+        # which also holds its palette. The choice stays while Spectrum Bars is shown.
+        self.theme = themes.DEFAULT
+        self.radiant = Radiant()
         self.static = False  # True while the rarely-changing picture is being drawn
         self.ring_offset = 0.0
         edges = np.linspace(0, 2 * np.pi, 97)
@@ -359,10 +365,20 @@ class Canvas(canvas_base()):
         self._edges = {name: blocks[name].top() - gap / 2 for name in present}
         self._heights = {name: wanted[name] for name in present}
 
+        radiant = self.themed()
+
         def everything(painter):
+            if radiant is not None and self.static:
+                radiant.paint_static(self, painter, spectrum, active)  # under everything
             self.draw_header(painter, QRectF(margin, 0, width - 2 * margin, header))
             timed = self.perf.measure if not self.static else _untimed
-            if show_spectrum:
+            if radiant is not None:
+                if not self.static:
+                    with timed("spectrum"):
+                        self.draw_glow(painter, spectrum)
+                    with timed("radiant"):
+                        radiant.paint(self, painter, spectrum, active, show_spectrum)
+            elif show_spectrum:
                 with timed("spectrum"):
                     if not self.static:
                         self.draw_glow(painter, spectrum)
@@ -371,7 +387,7 @@ class Canvas(canvas_base()):
                             self.draw_radial(painter, spectrum)
                     else:
                         self.draw_bars(painter, spectrum)
-            if active:
+            if active and radiant is None:
                 if show_spectrum and self.spectrum_place == "behind" and not self.static:
                     painter.fillRect(spectrum, QColor(5, 6, 10, 150))  # the spectrum steps back
                 with timed("layers"):
@@ -429,6 +445,7 @@ class Canvas(canvas_base()):
             tuple(layer.key for layer in active),
             self.spectrum_place,
             tuple(sorted(self._edges.items())),
+            (radiant.name, radiant.palette.version) if radiant is not None else None,
         )
         still = self.cached("still", key, still_picture)
         painter = QPainter(self)
@@ -462,6 +479,11 @@ class Canvas(canvas_base()):
             if layer.enabled
             and (layer.key in self.state.activity or layer.key in self.info["instruments"])
         ]
+
+    def themed(self):
+        """The theme that draws the radial view instead of the canvas, or None: the classic
+        radial view and Spectrum Bars are drawn here."""
+        return self.radiant if self.mode == "radial" and self.theme == "radiant" else None
 
     def radial_geometry(self, rect):
         """Centre and full radius of the radial visualizer in ``rect``."""
@@ -671,24 +693,27 @@ class Canvas(canvas_base()):
         with a stream running, the neutral and the instruments' colours mixed in the shares
         ``state.dominance.mix`` gives. The shares are taken in ``GLOW_STEPS`` steps, so only
         so many colours ever occur and each has its picture made once."""
+        theme = self.themed()  # a theme with a palette has its own neutral and instruments
+        neutral = SPECTRUM[1] if theme is None else theme.neutral
         if not (
             self.reactive_background
             and self.mode == "radial"
             and self.condition in ("live", "replay")
         ):
-            return SPECTRUM[1]
+            return neutral
         steps = tuple(
             min(GLOW_STEPS, round(share * GLOW_STEPS)) for share in self.state.dominance.mix.values()
         )
-        colour = self._glow_colours.get(steps)
+        key = steps if theme is None else (steps, theme.name, theme.palette.version)
+        colour = self._glow_colours.get(key)
         if colour is None:
             if len(self._glow_colours) > 512:
                 self._glow_colours.clear()
             left = max(0, GLOW_STEPS - sum(steps))
-            colour = self._glow_colours[steps] = palette.blend(
-                [(SPECTRUM[1], left)]
+            colour = self._glow_colours[key] = palette.blend(
+                [(neutral, left)]
                 + [
-                    (palette.INSTRUMENTS[name], step)
+                    (palette.INSTRUMENTS[name] if theme is None else theme.instrument(name), step)
                     for name, step in zip(self.state.dominance.mix, steps, strict=True)
                 ]
             )
@@ -699,9 +724,11 @@ class Canvas(canvas_base()):
         in one colour at the strength the music gives it (the response only scales that),
         and the beat glow, which is its own thing and keeps its own colour."""
         strength = (0.05 + 0.20 * self.intensity + 0.16 * self.flash) * self.response.glow
+        theme = self.themed()
+        beat = PREDICTED if theme is None else QColor(theme.beat)
         return [
             ("glow", self.glow_colour(), min(1.0, strength)),
-            ("beat glow", PREDICTED, min(1.0, 0.14 * self.pulse * self.response.glow)),
+            ("beat glow", beat, min(1.0, 0.14 * self.pulse * self.response.glow)),
         ]
 
     def glow_for(self, colour, key, size):
@@ -1425,6 +1452,37 @@ class VisualizerWindow(QWidget):
         (``response.EXPRESSIVE``). Nothing about the analysis changes."""
         self.canvas.response = EXPRESSIVE if enabled else BASELINE
         self.canvas.update()
+
+    def set_radial_theme(self, name):
+        """How the radial view is drawn: "classic" or "radiant" (``visualizer.themes``).
+        Only the drawing: the stream, the analysis and the history are untouched, and
+        Spectrum Bars is not a radial theme."""
+        self.canvas.theme = themes.known(name)
+        self.canvas.update()
+
+    @property
+    def radiant_palette(self):
+        """The Radiant theme's colours (``themes.radiant_palette.RadiantPalette``). They
+        are its own: no other theme or mode reads them."""
+        return self.canvas.radiant.palette
+
+    def set_radiant_colour(self, role, colour):
+        """Give one role of the Radiant palette a colour (``#rrggbb``); the next frame is
+        drawn with it. Returns False for an unknown role or something that is no colour."""
+        taken = self.radiant_palette.set(role, colour)
+        self.canvas.update()
+        return taken
+
+    def set_radiant_preset(self, name):
+        """Take all the colours of a named Radiant preset."""
+        taken = self.radiant_palette.apply(name)
+        self.canvas.update()
+        return taken
+
+    def instrument_colour(self, key):
+        """The colour an instrument is drawn in by what is on screen now."""
+        theme = self.canvas.themed()
+        return palette.instrument(key) if theme is None else theme.instrument(key)
 
     def set_radial_rings(self, kind):
         """How the instrument rings of the radial view are drawn: "live" (fixed objects

@@ -82,7 +82,7 @@ class BassLayer(Layer):
         now; every note onset pushes it outwards and brightens it, and it falls back
         between notes; it flows faster the more energy there is, so a held note keeps
         moving; the note itself sets how far out the ring sits."""
-        colour = self.profile.colour
+        colour = self.tone
         sines, cosines = around(180)[1:]
         outer, inner, lit = self.live_shape(stage, live)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -138,7 +138,7 @@ class BassLayer(Layer):
         return pitch, middle, half
 
     def paint_history(self, artist, to_x, rows, weights, tentative, height, stage):
-        colour = self.profile.colour
+        colour = self.tone
         pitch, middle, half = self.shape(rows, weights, height)
         xs = np.asarray(to_x(rows[:, 0]), dtype=float)
         # Steps, not slopes: each row holds its height until the next one.

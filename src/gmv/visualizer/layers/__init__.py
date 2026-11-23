@@ -83,8 +83,11 @@ class Stage:
 
     def __init__(
         self, now, seconds, scale, generation, font, *, rect=None, ring=None, live=False, gain=1.0,
-        response=BASELINE,
+        response=BASELINE, colour=None,
     ):  # fmt: skip
+        # ``colour``: the instrument's colour in the theme being drawn; None for its own
+        # (``profile.colour``). Only a theme with a palette of its own passes one.
+        self.colour = colour
         # ``response``: how strongly everything is drawn (``visualizer.response``).
         self.response = response
         # ``live``: a polar stage is drawn as a fixed, animated object from the
@@ -119,6 +122,7 @@ class Layer:
         self.enabled = True
         self.intensity = 1.0
         self.response = BASELINE  # of the stage being painted; see ``drawn``
+        self.tone = profile.colour  # the colour of the stage being painted
         self.style = self.profile.styles[0][0] if self.profile.styles else ""
         self.strip = Strip()  # history as a scrolling strip (linear stages)
         self.sweep = Sweep()  # history as a ring that a hand sweeps round (polar stages)
@@ -176,6 +180,7 @@ class Layer:
         if track is None or stage.now is None:
             return
         self.response = stage.response
+        self.tone = stage.colour or self.profile.colour
         if stage.live:
             live = state.live.get(self.key)
             if live is None or live.time is None:
@@ -191,6 +196,7 @@ class Layer:
             self.style,
             round(self.intensity, 3),
             self.response.name,
+            self.tone,
         )
         if stage.kind != self._kind:  # the mode changed: the other picture starts afresh
             self._kind, self.drawn_until = stage.kind, None

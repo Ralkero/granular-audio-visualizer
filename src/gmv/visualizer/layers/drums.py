@@ -27,6 +27,21 @@ from .guitar import NEUTRAL, tint
 
 ROWS = (("low", 0.76), ("mid", 0.47), ("high", 0.17))  # region, height in the band (0 top)
 SHADES = palette.DRUM_REGIONS  # three shades of the drums' own colour
+
+
+@lru_cache(maxsize=32)
+def shades(colour):
+    """Three shades of ``colour`` for the three regions. The drums' own colour has its
+    chosen shades (``palette.DRUM_REGIONS``); any other is darkened and lightened."""
+    if colour == palette.INSTRUMENTS["drums"]:
+        return SHADES
+    return {
+        "low": palette.shade(colour, "#000000", 0.3),
+        "mid": colour,
+        "high": palette.shade(colour, "#ffffff", 0.55),
+    }
+
+
 RAYS = [(math.cos(a), math.sin(a)) for a in np.linspace(0, 2 * math.pi, 8, endpoint=False)]
 
 
@@ -60,7 +75,7 @@ class DrumsLayer(Layer):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         rest = stage.inner + height * 0.2
-        painter.setPen(QPen(tint(self.profile.colour, NEUTRAL, 0.3, 0.16 * min(1.0, shown)), 1))
+        painter.setPen(QPen(tint(self.tone, NEUTRAL, 0.3, 0.16 * min(1.0, shown)), 1))
         painter.drawEllipse(QPointF(cx, cy), rest, rest)
         regions = ("low", "mid") if self.style == "low and mid" else ("low", "mid", "high")
         for age, hit in live.recent(max(LIFE.values())):
@@ -70,7 +85,7 @@ class DrumsLayer(Layer):
                 if power <= 0 or progress >= 1:
                     continue
                 fade = (1.0 - progress) ** 1.6
-                shade = SHADES[name]
+                shade = shades(self.tone)[name]
                 colour = (
                     tint(shade, NEUTRAL, 0.6, 0.7 * fade * shown)
                     if hollow
@@ -121,7 +136,7 @@ class DrumsLayer(Layer):
 
     def mark(self, surface, artist, name, x, y, size, strength, opacity, hollow):
         """One impact of region ``name`` centred on (x, y)."""
-        shade = SHADES[name]
+        shade = shades(self.tone)[name]
         colour = (
             tint(shade, NEUTRAL, 0.6, opacity * 0.8)
             if hollow

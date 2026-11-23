@@ -94,7 +94,7 @@ class GuitarLayer(Layer):
         )
 
     def paint_history(self, artist, to_x, rows, weights, tentative, height, stage):
-        colour = self.profile.colour
+        colour = self.tone
         strength = min(1.6, self.drawn)
         ys, spacing, rail = self.geometry(height)
         times = rows[:, 0]
@@ -179,7 +179,7 @@ class GuitarLayer(Layer):
         standing wave, so they visibly vibrate in place) and flashes them; the swing
         follows the ringing envelope down, slowly under a held chord, quickly after a
         muted stroke. Each stroke starts the swing again."""
-        colour = self.profile.colour
+        colour = self.tone
         angles, sines, cosines = around(240)
         height = stage.height
         respond = stage.response

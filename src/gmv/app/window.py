@@ -18,10 +18,11 @@ from PySide6.QtCore import (
     QUrl,
     Signal,
 )
-from PySide6.QtGui import QAction, QColor, QDesktopServices, QPainter, QPen
+from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QColorDialog,
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,
@@ -42,6 +43,9 @@ from PySide6.QtWidgets import (
 
 from .. import paths
 from ..visualizer.state import ROWS
+from ..visualizer.themes import DEFAULT as DEFAULT_THEME
+from ..visualizer.themes import THEMES
+from ..visualizer.themes import radiant_palette
 from ..visualizer.window import VisualizerWindow
 from .controller import DEFAULT_EDGES, SOURCES, SessionController, Settings, discover
 
@@ -114,6 +118,7 @@ class SettingsDrawer(QFrame):
     engine_changed = Signal()  # something that needs a restart to take effect
     sensitivity_changed = Signal(str, float)  # applies to the running analysis at once
     refresh_requested = Signal()
+    colours_changed = Signal()  # the colours instruments are drawn in may have changed
 
     def __init__(self, view, parent=None):
         super().__init__(parent, objectName="drawer")
@@ -227,6 +232,16 @@ class SettingsDrawer(QFrame):
         self.mode.addItem("Spectrum bars", "bars")
         self.mode.addItem("Radial", "radial")
         self.mode.currentIndexChanged.connect(lambda: self.view.set_mode(self.mode.currentData()))
+        self.mode.currentIndexChanged.connect(lambda: self.colours_changed.emit())
+        self.radial_theme = Combo()
+        for key, title in THEMES:
+            self.radial_theme.addItem(title, key)
+        self.radial_theme.setToolTip(
+            "How the Radial layout is drawn. Classic is the radial view as it always was; "
+            "Radiant is a luminous concentric picture with a palette of its own. Only the "
+            "drawing: nothing about the analysis, and Spectrum bars is not affected."
+        )
+        self.radial_theme.currentIndexChanged.connect(self.theme_changed)
         self.lanes = QToolButton(text="Choose lanes and timeline rows  ▾")
         self.lanes.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = QMenu(self.lanes)
@@ -253,6 +268,8 @@ class SettingsDrawer(QFrame):
         self.reset.clicked.connect(self.view.state.reset)
         self.fullscreen = QPushButton("Full screen (F11)")
         self.form.addRow("Layout", self.mode)
+        self.form.addRow("Radial theme", self.radial_theme)
+        self.build_radiant_palette()
         self.form.addRow("Show", self.lanes)
         self.form.addRow(self.show_beats)
         self.form.addRow("Smoothing", self.smoothing)
@@ -292,6 +309,141 @@ class SettingsDrawer(QFrame):
         self.expressive.toggled.connect(self.view.set_expressive)
         self.form.addRow(self.expressive)
         self.form.addRow(row(self.reset, self.fullscreen))
+
+    # -- radial theme and the Radiant palette ---------------------------------------------------
+
+    def build_radiant_palette(self):
+        """The Radiant theme's colours: a preset to start from and one control per role,
+        in groups that fold away. Shown only while Radiant is the radial theme; the
+        colours are kept whatever is shown."""
+        self.radiant_box = QWidget()
+        box = QVBoxLayout(self.radiant_box)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(6)
+        self.radiant_fold = QToolButton(text="Radiant palette  \u25b8")
+        self.radiant_fold.setCheckable(True)
+        self.radiant_fold.setToolTip("Choose the colour of every part of the Radiant theme.")
+        box.addWidget(self.radiant_fold)
+        self.radiant_body = QWidget()
+        body = QVBoxLayout(self.radiant_body)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(6)
+        box.addWidget(self.radiant_body)
+        self.radiant_body.hide()
+        self.radiant_fold.toggled.connect(
+            lambda on: (
+                self.radiant_body.setVisible(on),
+                self.radiant_fold.setText("Radiant palette  " + ("\u25be" if on else "\u25b8")),
+            )
+        )
+        self.radiant_preset = Combo()
+        for key, (title, _) in radiant_palette.PRESETS.items():
+            self.radiant_preset.addItem(title, key)
+        self.radiant_preset.addItem("Custom colours", radiant_palette.CUSTOM)
+        self.radiant_preset.setToolTip(
+            "A preset is a starting point: choose one, then change any colour you like."
+        )
+        self.radiant_preset.activated.connect(self.choose_radiant_preset)
+        self.radiant_restore = QPushButton("Restore Radiant defaults")
+        self.radiant_restore.setToolTip("Put back the original Radiant colours. Nothing else changes.")
+        self.radiant_restore.clicked.connect(
+            lambda: self.choose_radiant_preset(preset=radiant_palette.FACTORY)
+        )
+        body.addLayout(row(QLabel("Preset"), self.radiant_preset))
+        body.addWidget(self.radiant_restore)
+        self.radiant_controls = {}  # role -> (swatch button, hex field)
+        for group, group_title in radiant_palette.GROUPS:
+            fold = QToolButton(text=group_title + "  \u25b8")
+            fold.setCheckable(True)
+            panel = QWidget()
+            form = QFormLayout(panel)
+            form.setContentsMargins(8, 0, 0, 4)
+            form.setVerticalSpacing(5)
+            panel.hide()
+            fold.toggled.connect(
+                lambda on, panel=panel, fold=fold, title=group_title: (
+                    panel.setVisible(on),
+                    fold.setText(title + "  " + ("\u25be" if on else "\u25b8")),
+                )
+            )
+            body.addWidget(fold)
+            body.addWidget(panel)
+            for role, title, role_group, about in radiant_palette.ROLES:
+                if role_group != group:
+                    continue
+                swatch = QPushButton()
+                swatch.setFixedSize(46, 24)
+                swatch.setCursor(Qt.CursorShape.PointingHandCursor)
+                swatch.setToolTip(about + " Click to choose a colour.")
+                swatch.setAccessibleName(f"{title} colour")
+                swatch.clicked.connect(lambda _=False, role=role: self.pick_radiant_colour(role))
+                code = QLineEdit()
+                code.setMaxLength(7)
+                code.setFixedWidth(84)
+                code.setToolTip("The colour as #rrggbb. Type one and press Enter.")
+                code.setAccessibleName(f"{title} colour as hexadecimal")
+                code.editingFinished.connect(
+                    lambda role=role, code=code: self.set_radiant_colour(role, code.text())
+                )
+                line = QHBoxLayout()
+                line.setSpacing(8)
+                line.addWidget(swatch)
+                line.addWidget(code)
+                line.addStretch(1)
+                form.addRow(title, line)
+                self.radiant_controls[role] = (swatch, code)
+        self.form.addRow(self.radiant_box)
+        self.radiant_box.hide()
+        self.sync_radiant_controls()
+
+    def theme_changed(self):
+        theme = self.radial_theme.currentData()
+        self.view.set_radial_theme(theme)
+        self.radiant_box.setVisible(theme == "radiant")
+        self.colours_changed.emit()
+
+    def sync_radiant_controls(self):
+        """Show the palette as it is: every swatch, every code, and the preset's name."""
+        palette = self.view.radiant_palette
+        for role, (swatch, code) in self.radiant_controls.items():
+            colour = palette[role]
+            swatch.setStyleSheet(
+                f"QPushButton {{ background: {colour}; border: 1px solid #5b6377; border-radius: 5px; }}"
+                "QPushButton:hover { border-color: #e8ebf4; }"
+            )
+            if code.text() != colour:
+                code.setText(colour)
+        self.radiant_preset.setCurrentIndex(max(0, self.radiant_preset.findData(palette.preset)))
+        self.colours_changed.emit()
+
+    def set_radiant_colour(self, role, colour):
+        """One role, one colour: drawn from the next frame on. Something that is not a
+        colour is refused and the field shows the colour in use again."""
+        taken = self.view.set_radiant_colour(role, colour)
+        self.sync_radiant_controls()
+        return taken
+
+    def choose_radiant_preset(self, _index=None, preset=None):
+        preset = preset or self.radiant_preset.currentData()
+        if preset != radiant_palette.CUSTOM:  # "Custom colours" only names what is there
+            self.view.set_radiant_preset(preset)
+        self.sync_radiant_controls()
+
+    def pick_radiant_colour(self, role):
+        """Qt's colour dialog for one role (any colour; RGB, HSV or #rrggbb). The picture
+        follows the dialog while it is open; cancelling puts the colours back."""
+        palette = self.view.radiant_palette
+        before = palette.saved()
+        dialog = QColorDialog(QColor(palette[role]), self)
+        dialog.setOption(QColorDialog.ColorDialogOption.DontUseNativeDialog)  # has a #rrggbb field
+        dialog.setWindowTitle(dict((r[0], r[1]) for r in radiant_palette.ROLES)[role])
+        dialog.currentColorChanged.connect(
+            lambda colour: self.set_radiant_colour(role, colour.name())
+        )
+        if dialog.exec() != QColorDialog.DialogCode.Accepted:
+            palette.load(before)
+            self.view.canvas.update()
+            self.sync_radiant_controls()
 
     def apply_frame_rate(self):
         if self.frame_rate.currentData() == "display":
@@ -593,6 +745,8 @@ class SettingsDrawer(QFrame):
             "radial_rings": self.radial_rings.currentData(),
             "reactive_background": self.reactive_background.isChecked(),
             "expressive": self.expressive.isChecked(),
+            "radial_theme": self.radial_theme.currentData(),
+            "radiant_palette": self.view.radiant_palette.saved(),
         }
 
     def restore(self, saved):
@@ -620,6 +774,13 @@ class SettingsDrawer(QFrame):
         self.intensity_colour.setChecked(bool(saved.get("intensity_colour", True)))
         self.reactive_background.setChecked(bool(saved.get("reactive_background", True)))
         self.expressive.setChecked(bool(saved.get("expressive", False)))
+        # Settings saved before the themes existed: Classic and the factory Radiant palette.
+        self.view.radiant_palette.load(saved.get("radiant_palette"))
+        self.sync_radiant_controls()
+        self.radial_theme.setCurrentIndex(
+            max(0, self.radial_theme.findData(saved.get("radial_theme", DEFAULT_THEME)))
+        )
+        self.theme_changed()
         self.radial_rings.setCurrentIndex(
             max(0, self.radial_rings.findData(saved.get("radial_rings", "live")))
         )
@@ -732,18 +893,13 @@ class MainWindow(QWidget):
             chip.setCheckable(True)
             chip.setChecked(True)
             chip.setCursor(Qt.CursorShape.PointingHandCursor)
-            colour = layer.profile.colour
-            chip.setStyleSheet(
-                f"QPushButton#chip {{ border: 1px solid {colour}; color: {colour}; border-radius: 11px;"
-                " padding: 3px 12px; background: transparent; }"
-                f"QPushButton#chip:checked {{ background: {colour}; color: #0a0c13; font-weight: 600; }}"
-                "QPushButton#chip:!checked { border-color: #3a4055; color: #8089a0; }"
-            )
             chip.setToolTip(
                 f"Show or hide the {layer.profile.title.lower()} layer. Its analysis keeps running."
             )
             line.addWidget(chip)
             self.chips[key] = chip
+        self.colour_chips()
+        self.drawer.colours_changed.connect(self.colour_chips)
         line.addSpacing(10)
         for name, title in (("timeline", "Timeline"), ("details", "Details"), ("notes", "Notes")):
             button = QPushButton(title, objectName="section")
@@ -769,6 +925,21 @@ class MainWindow(QWidget):
         for widget in (self.apply, self.toggle, self.settings_button):
             line.addWidget(widget)
         return bar
+
+    def colour_chips(self):
+        """Each instrument's button in the colour the instrument is drawn in now: its own,
+        or the one the Radiant palette gives it while Radiant is on screen."""
+        for key, chip in self.chips.items():
+            colour = self.view.instrument_colour(key)
+            if chip.property("colour") == colour:
+                continue
+            chip.setProperty("colour", colour)
+            chip.setStyleSheet(
+                f"QPushButton#chip {{ border: 1px solid {colour}; color: {colour}; border-radius: 11px;"
+                " padding: 3px 12px; background: transparent; }"
+                f"QPushButton#chip:checked {{ background: {colour}; color: #0a0c13; font-weight: 600; }}"
+                "QPushButton#chip:!checked { border-color: #3a4055; color: #8089a0; }"
+            )
 
     def show_readings(self):
         """Each instrument button's tooltip says how its layer reads the music right now."""
@@ -1014,6 +1185,9 @@ def application():
     app.setOrganizationName("GranularMusicVisualizer")
     app.setApplicationName("Granular Music Visualizer")
     app.setStyle("Fusion")
+    icon = paths.icon()
+    if icon is not None:  # title bar, taskbar and Alt+Tab; the executable has its own copy
+        app.setWindowIcon(QIcon(str(icon)))
     return app
 
 

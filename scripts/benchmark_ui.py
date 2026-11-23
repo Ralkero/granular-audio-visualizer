@@ -41,6 +41,8 @@ def main():
         "--rings", default="live", choices=("live", "history"), help="radial instrument rings"
     )
     parser.add_argument("--expressive", action="store_true", help="Expressive Mode")
+    parser.add_argument("--theme", default="classic", choices=("classic", "radiant"), help="radial theme")
+    parser.add_argument("--palette", default="", help="a Radiant preset, e.g. multicolor_energy")
     parser.add_argument(
         "--neutral-background", action="store_true", help="no instrument-reactive glow"
     )
@@ -59,6 +61,9 @@ def main():
     window.set_intensity_colour(not args.plain_spectrum)
     window.set_radial_rings(args.rings)
     window.set_expressive(args.expressive)
+    window.set_radial_theme(args.theme)
+    if args.palette:
+        window.set_radiant_preset(args.palette)
     window.set_reactive_background(not args.neutral_background)
     if args.fps and hasattr(window, "set_frame_rate"):
         window.set_frame_rate(args.fps)
@@ -94,6 +99,7 @@ def main():
             "window": f"{window.width()}x{window.height()}",
             "device_pixel_ratio": window.devicePixelRatioF(),
             "mode": args.mode,
+            "theme": args.theme if args.mode == "radial" else None,
             "sections": sorted(shown),
             "layers": sorted(layers),
             "measured_seconds": round(elapsed, 1),

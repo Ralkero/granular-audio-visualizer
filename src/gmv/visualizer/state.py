@@ -159,6 +159,9 @@ class VisualState:
         # activity rows): the one authority on which segment the stream is in. It only
         # moves forward, except at a full reset.
         self.segment = None
+        # Audio time of the first message of the current segment once a later segment
+        # has replaced an earlier one (None before that): events before it are over.
+        self.segment_start = None
         self._newest = None  # newest audio time seen in an accepted frame or row
         self._row_segment = {}  # instrument -> segment of its newest history row
         self.music_start = None  # when sound last began after silence (or at all)
@@ -336,6 +339,7 @@ class VisualState:
             for live in self.live.values():
                 live.begin(segment)
             self.live_epoch += 1
+            self.segment_start = time
             self.dominance.reset()  # nobody leads a segment because of the one before
             self._weights, self._weights_age = {}, 0
         if self.segment is None or segment > self.segment:
