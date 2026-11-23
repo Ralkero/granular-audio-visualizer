@@ -9,6 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from test_visualizer import write_clicks
 
+from gmv import host
 from gmv.app.controller import Settings, analysis_config, audio_source
 from gmv.app.window import MainWindow
 
@@ -54,7 +55,9 @@ def test_opens_straight_into_the_visualizer_with_nothing_running(window):
     assert window.view.isVisible() and not window.drawer.isVisible()
     assert window.toggle.text() == "Start" and not window.apply.isVisible()
     assert window.view.canvas.condition == "idle" and window.view.bus is None
-    assert "Default system output" in window.status.text()
+    # the source a system starts with: its output where it can be captured, else a file
+    starts_with = "Default system output" if host.live_capture() else "No file selected"
+    assert starts_with in window.status.text()
     assert window.controller.engine is None
 
 
@@ -200,6 +203,7 @@ def test_settings_become_engine_configuration():
 def test_packaged_build_finds_its_files_beside_the_executable(tmp_path, monkeypatch):
     from gmv import paths
 
+    monkeypatch.setattr(host, "system", lambda: "windows")  # the build this is about
     assert not paths.packaged() and paths.build_defaults() == {}
     assert paths.models_folder().name == ".model-cache"
     program = tmp_path / "app"

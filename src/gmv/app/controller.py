@@ -6,17 +6,18 @@ engine's own threads; nothing here blocks the GUI thread for longer than a join 
 
 import os
 import zipfile
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from .. import host, paths, sources
 from ..activity import ActivityModel
 from ..engine import Engine
 from ..instruments import analyzers
 from ..models import AnalysisConfig
 from ..sources.file import FileAudioSource
-from ..sources.system_native import system_audio_source
-from ..sources.windows import list_output_devices
 
+# Every audio source the application knows. Which of them a system has is ``gmv.host``'s
+# answer; ``available_sources`` is what is offered.
 SOURCES = (
     ("system", "Default system output"),
     ("device", "Specific output device"),
@@ -26,9 +27,19 @@ SOURCES = (
 DEFAULT_EDGES = AnalysisConfig().band_edges
 
 
+def available_sources():
+    """The entries of ``SOURCES`` this system has, in the order they are offered."""
+    offered = host.audio_sources()
+    return tuple(entry for entry in SOURCES if entry[0] in offered)
+
+
+def default_source():
+    return available_sources()[0][0]
+
+
 @dataclass(frozen=True)
 class Settings:
-    source: str = "system"
+    source: str = field(default_factory=default_source)
     device: str | None = None
     application: dict | None = None  # {"pid": ..., "name": ..., ...} from discovery
     application_label: str = ""
@@ -64,14 +75,13 @@ class Settings:
 
 
 def discover():
-    """Output devices and audio applications; safe to call from a worker thread."""
+    """Output devices and audio applications; safe to call from a worker thread. Both are
+    empty on a system without live capture, and nothing of a capture backend is loaded."""
     devices, applications, error = [], [], ""
     try:
-        devices = list_output_devices()
+        devices = sources.list_output_devices()
         try:
-            from ..sources.application import list_audio_applications
-
-            applications = list_audio_applications()
+            applications = sources.list_audio_applications()
         except ImportError:
             pass
     except Exception as exc:
@@ -117,19 +127,20 @@ def analysis_config(settings):
 
 
 def audio_source(settings):
+    """The ``AudioSource`` the settings describe. A source this system does not have (one
+    remembered from another system, say) is refused with a sentence for the user."""
+    sources.require(settings.source)
     if settings.source == "file":
         if not Path(settings.file).is_file():
             raise ValueError("Choose an existing audio file in Settings")
         return FileAudioSource(settings.file, realtime=True)
     if settings.source == "application":
-        from ..sources.application import ApplicationAudioSource
-
         if not settings.application:
             raise ValueError("No audio application selected. Refresh sources in Settings.")
-        return ApplicationAudioSource(**settings.application)
+        return sources.application_audio_source(**settings.application)
     if settings.source == "device" and not settings.device:
         raise ValueError("No output device selected")
-    return system_audio_source(settings.device if settings.source == "device" else None)
+    return sources.system_audio_source(settings.device if settings.source == "device" else None)
 
 
 class SessionController:
@@ -155,6 +166,10 @@ class SessionController:
             raise RuntimeError("Analysis is already running")
         config = analysis_config(settings)
         source = audio_source(settings)
+        if settings.logging:
+            # Before anything starts, so that a folder that cannot be written is one sentence
+            # here and not an error from inside the analysis process.
+            paths.writable_folder(self.session_root, "session logs")
         self.stop_replay()
         if settings.analysis_process and os.environ.get("GMV_ANALYSIS", "").lower() != "thread":
             from ..remote import RemoteEngine

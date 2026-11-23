@@ -2,6 +2,8 @@
 
 A Windows 11 desktop application that **captures live PC audio, analyses it on the CPU and visualizes the result**: a control center for sources, diagnostics and session logs, and a visualizer window that draws what the analysis publishes. The visualizer is a first prototype (Phase 2A); the analysis underneath it is still being improved.
 
+**Linux** (first phase of a port): the application is made to start from a source checkout on Linux, for audio files and replay of recorded sessions. It does not capture live audio there yet, and this phase has not yet been run on a real Linux machine. Setup, launch, where files are kept and what has and has not been checked: [docs/LINUX.md](docs/LINUX.md).
+
 ## Launch
 
 Double-click **Launch Visualizer.cmd**. One window opens: the visualizer. Press **Start** to visualize what is playing on this PC, **Stop** to end the session.
@@ -35,6 +37,8 @@ Sources:
 - **Application / process tree:** refresh sources, select the app, then start. Captures its process and children across endpoints. If unavailable, the error explains how to select system output. It never silently switches to capturing all apps.
 - **Audio file:** uses the same DSP engine, paced at playback speed in the application. CLI file analysis can run faster than real time.
 
+The list shows the sources the system has. On Windows that is all four. On Linux it is the audio file alone, with a note that live system audio capture is not available there yet; nothing stands in for it.
+
 Logging is enabled by default. Audio recording is disabled. The optional debug setting explicitly enables **at most 60 seconds** of float WAV recording with a timeline sidecar. Exports omit debug audio. Advanced analysis is also off by default; enabling it runs a delayed spectral harmonic/percussive estimate, **not vocals/drums/bass stem separation**.
 
 ## Instrument layers (experimental)
@@ -64,6 +68,8 @@ Each instrument's lane shows the same activity in more detail.
 
 Install Python 3.14 and `uv`, then run `./Setup.ps1`. Dependency versions are pinned in `uv.lock`. For application capture, install the .NET 9 SDK and run `./Build Process Capture.ps1`; the resulting helper uses the installed .NET 9 runtime. System capture uses the same helper when it is built (recommended: it timestamps every packet with the Windows audio clock); without it, system capture falls back to a PortAudio backend whose timestamps drift under load. File analysis does not require .NET. Python project metadata supports 3.11+, but this checkout was validated with 3.14.3 only.
 
+On Linux (not yet run there; `uv run python scripts/validate_linux.py --tests` checks it): `uv sync --locked --extra dev`, then `uv run gmv-visualizer`. No .NET and no Windows capture library is installed or needed. Sessions go to `~/.local/share/GranularMusicVisualizer/sessions` and settings to `~/.config/GranularMusicVisualizer` (the XDG folders), never into the checkout. See [docs/LINUX.md](docs/LINUX.md).
+
 ```powershell
 .venv\Scripts\python.exe -m pytest -q
 .venv\Scripts\python.exe -m ruff check src tests scripts
@@ -78,7 +84,7 @@ Install Python 3.14 and `uv`, then run `./Setup.ps1`. Dependency versions are pi
 .venv\Scripts\python.exe scripts\benchmark.py
 ```
 
-Each run produces an independent session under `sessions/`: manifest, capture information, feature CSV, realtime event JSONL, replayable message JSONL, performance JSON, summary, advanced output and error log. Session files, recordings, helper binaries and machine-specific evidence are ignored by Git. The canonical repository is [Ralkero/granular-audio-visualizer](https://github.com/Ralkero/granular-audio-visualizer); completed development milestones are committed and pushed there as the project progresses.
+Each run produces an independent session under `sessions/` (on Linux, under the user's data folder): manifest, capture information, feature CSV, realtime event JSONL, replayable message JSONL, performance JSON, summary, advanced output and error log. Session files, recordings, helper binaries and machine-specific evidence are ignored by Git. The canonical repository is [Ralkero/granular-audio-visualizer](https://github.com/Ralkero/granular-audio-visualizer); completed development milestones are committed and pushed there as the project progresses.
 
 ## Analysis interface
 
@@ -100,7 +106,7 @@ Subscribers have independent bounded queues; slow consumers lose their oldest me
 
 ## Current limitations
 
-This is an initial Phase One implementation, not a claim that every acceptance criterion has been validated. User-assisted Spotify playback, pause/resume with audible browser audio, start while paused, seek/skip and quit/restart were observed using the Sound BlasterX G6. Physical device unplug/replug, default-device switching, alternate devices and Linux capture remain unverified. The PortAudio system fallback silently lost audio under load and drifted; the native system backend showed no drift in two paired ten-minute runs on one device (limits in the Phase 1.1 report, Milestone 7). Physical sound-to-screen latency is unmeasured. Musical accuracy is validated with synthetic fixtures, not an annotated music corpus. Percussion labels and tempo are preliminary heuristics with uncalibrated confidence scores.
+This is an initial Phase One implementation, not a claim that every acceptance criterion has been validated. User-assisted Spotify playback, pause/resume with audible browser audio, start while paused, seek/skip and quit/restart were observed using the Sound BlasterX G6. Physical device unplug/replug, default-device switching and alternate devices remain unverified. Linux has no capture backend: it analyses files and replays sessions only ([docs/LINUX.md](docs/LINUX.md)). The PortAudio system fallback silently lost audio under load and drifted; the native system backend showed no drift in two paired ten-minute runs on one device (limits in the Phase 1.1 report, Milestone 7). Physical sound-to-screen latency is unmeasured. Musical accuracy is validated with synthetic fixtures, not an annotated music corpus. Percussion labels and tempo are preliminary heuristics with uncalibrated confidence scores.
 
 No Spotify login, playback routing, system volume changes, protected-content bypass, GPU or NVIDIA dependency is used. The application does not control the player. Unsupported/protected audio may yield silence. Short-term loudness is RMS dBFS, not LUFS. See [measured performance and validation](docs/VALIDATION.md) for precise scope.
 

@@ -4,11 +4,10 @@ from pathlib import Path
 from threading import Event
 from time import perf_counter
 
+from . import paths, sources
 from .engine import Engine
 from .models import AnalysisConfig
 from .sources.file import FileAudioSource
-from .sources.system_native import system_audio_source
-from .sources.windows import list_output_devices
 
 
 def main(argv=None):
@@ -32,7 +31,11 @@ def main(argv=None):
     file.add_argument("path")
     file.add_argument("--realtime", action="store_true")
     for command in (capture, file):
-        command.add_argument("--sessions", default="sessions")
+        command.add_argument(
+            "--sessions",
+            default=None,
+            help="Folder for the session's logs (default: %s)" % paths.command_line_sessions(),
+        )
         command.add_argument("--no-log", action="store_true")
         command.add_argument("--advanced", action="store_true")
     replay_cmd = commands.add_parser("replay")
@@ -59,7 +62,7 @@ def main(argv=None):
 
         return app_main(getattr(args, "replay", None), getattr(args, "speed", 1.0))
     if args.command == "devices":
-        print(json.dumps(list_output_devices(), indent=2))
+        print(json.dumps(sources.list_output_devices(), indent=2))
         return
     if args.command == "replay":
         from threading import Thread
@@ -81,20 +84,25 @@ def main(argv=None):
             stop.set()
         worker.join()
         return
-    if args.command == "capture" and args.pid:
-        from .sources.application import ApplicationAudioSource
-
-        source = ApplicationAudioSource(args.pid)
-    else:
-        source = (
-            system_audio_source(args.device, args.system_backend)
-            if args.command == "capture"
-            else FileAudioSource(args.path, realtime=args.realtime)
-        )
+    try:
+        if args.command == "capture" and args.pid:
+            source = sources.application_audio_source(pid=args.pid)
+        elif args.command == "capture":
+            source = sources.system_audio_source(args.device, args.system_backend)
+        else:
+            source = FileAudioSource(args.path, realtime=args.realtime)
+    except sources.Unavailable as exc:  # a capture source this system does not have
+        raise SystemExit(str(exc)) from exc
+    session_root = Path(args.sessions) if args.sessions else paths.command_line_sessions()
+    if not args.no_log:
+        try:
+            paths.writable_folder(session_root, "session logs")
+        except RuntimeError as exc:
+            raise SystemExit(str(exc)) from exc
     engine = Engine(
         source,
         AnalysisConfig(advanced=args.advanced),
-        session_root=Path(args.sessions),
+        session_root=session_root,
         logging=not args.no_log,
     )
     engine.start()

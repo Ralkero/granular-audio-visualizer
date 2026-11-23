@@ -41,13 +41,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import paths
+from .. import host, paths
 from ..visualizer.state import ROWS
 from ..visualizer.themes import DEFAULT as DEFAULT_THEME
 from ..visualizer.themes import THEMES
 from ..visualizer.themes import radiant_palette
 from ..visualizer.window import VisualizerWindow
-from .controller import DEFAULT_EDGES, SOURCES, SessionController, Settings, discover
+from .controller import (
+    DEFAULT_EDGES,
+    SessionController,
+    Settings,
+    available_sources,
+    discover,
+)
 
 DRAWER_WIDTH = 440
 STYLE = """
@@ -162,7 +168,8 @@ class SettingsDrawer(QFrame):
     def build_source(self):
         self.heading("Audio source")
         self.source = Combo()
-        for key, title in SOURCES:
+        offered = available_sources()  # what this system has: gmv.host
+        for key, title in offered:
             self.source.addItem(title, key)
         self.devices, self.applications = Combo(), Combo()
         self.file = QLineEdit()
@@ -179,6 +186,11 @@ class SettingsDrawer(QFrame):
         self.form.addRow("File", row(self.file, self.browse_file))
         self.form.addRow(self.refresh)
         self.form.addRow(self.source_note)
+        # A system without live capture has no device or application to choose or refresh.
+        kinds = {key for key, _ in offered}
+        self.form.setRowVisible(self.devices, "device" in kinds)
+        self.form.setRowVisible(self.applications, "application" in kinds)
+        self.form.setRowVisible(self.refresh, bool(kinds & {"device", "application"}))
         self.source.currentIndexChanged.connect(self.source_changed)
         for signal in (
             self.source.currentIndexChanged,
@@ -616,15 +628,16 @@ class SettingsDrawer(QFrame):
         self.applications.setEnabled(kind == "application")
         self.file.setEnabled(kind == "file")
         self.browse_file.setEnabled(kind == "file")
-        self.source_note.setText(
-            {
-                "system": "Everything playing on the default output. Volume and routing are not changed.",
-                "device": "Everything playing on the chosen output device.",
-                "application": "Only the chosen application and its child processes. It never "
-                "falls back to capturing everything.",
-                "file": "The file is analysed at playback speed; it is not played aloud.",
-            }[kind]
-        )
+        note = {
+            "system": "Everything playing on the default output. Volume and routing are not changed.",
+            "device": "Everything playing on the chosen output device.",
+            "application": "Only the chosen application and its child processes. It never "
+            "falls back to capturing everything.",
+            "file": "The file is analysed at playback speed; it is not played aloud.",
+        }[kind]
+        if not host.live_capture():
+            note = f"{host.capture_note()} {note} A recorded session can be replayed below."
+        self.source_note.setText(note)
 
     def show_capabilities(self):
         def state(path, what):
@@ -667,7 +680,7 @@ class SettingsDrawer(QFrame):
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Choose weights",
-            str(paths.models_folder()),
+            str(paths.models_start_folder()),
             "Weights and models (*.npz *.json)"
             if target is self.guitar_model
             else "Weights (*.npz)",
@@ -857,24 +870,24 @@ class MainWindow(QWidget):
         self.drawer.export_session.clicked.connect(self.export_session)
         self.drawer.replay.clicked.connect(self.choose_replay)
         self.discovered.connect(self.sources_found)
+        # The weights to start with: the environment's, else the first found in the model
+        # folders (paths.model_folders). Remembered settings and a choice in the drawer
+        # replace them below; nothing found here ever replaces a chosen file.
         for name, default in (
             (
                 "activity_model",
-                os.environ.get("GMV_ACTIVITY_MODEL") or paths.models_folder() / "activity_v2.npz",
+                os.environ.get("GMV_ACTIVITY_MODEL") or paths.default_model("activity_v2.npz"),
             ),
             (
                 "guitar_model",
-                os.environ.get("GMV_GUITAR_MODEL") or paths.models_folder() / "guitar_v1.npz",
+                os.environ.get("GMV_GUITAR_MODEL") or paths.default_model("guitar_v1.npz"),
             ),
         ):
-            if Path(default).is_file():
+            if default and Path(default).is_file():
                 getattr(self.drawer, name).setText(str(default))
         self.drawer.wanted_device = None
         if remember:
-            try:
-                self.drawer.restore(json.loads(QSettings().value("settings", "{}")))
-            except (TypeError, ValueError):
-                pass
+            self.restore_settings()
             self.apply_build_defaults()
         self.sync_layout_controls()
         self.poller = QTimer(self)
@@ -1180,7 +1193,38 @@ class MainWindow(QWidget):
                         f"per frame · buffers {report['buffers_mib']} MiB"
                     )
                 lines["Radiant renderer"] = text
+            lines.update(self.describe_system())
             drawer.diagnostics.setText("\n".join(f"{key}: {value}" for key, value in lines.items()))
+
+    def restore_settings(self):
+        """Bring back what the last run remembered. Settings that cannot be read are not
+        thrown away: a copy stays beside the ones that replace them when the window closes."""
+        store = QSettings()
+        saved = store.value("settings", "{}")
+        try:
+            saved = json.loads(saved)
+        except (TypeError, ValueError):
+            store.setValue("settings_unreadable", saved)
+            self.problem = "The remembered settings could not be read; a copy was kept"
+            return
+        try:
+            self.drawer.restore(saved)
+        except (TypeError, ValueError):
+            pass
+        if not store.isWritable():
+            self.problem = f"Settings cannot be saved: {store.fileName()} is not writable"
+
+    def describe_system(self):
+        """Lines for Diagnostics that do not change while the application runs."""
+        app = QApplication.instance()
+        return {
+            "System": (
+                f"{host.name()} · Qt platform {app.platformName()} "
+                f"({app.property('gmv_qt_platform') or 'not chosen here'})"
+            ),
+            "Sessions folder": str(self.controller.session_root),
+            "Settings": QSettings().fileName(),
+        }
 
     def apply_build_defaults(self):
         """A packaged build starts with the weights it was made with. Each set of weights is
@@ -1201,12 +1245,65 @@ class MainWindow(QWidget):
         event.accept()
 
 
+def platform_plugin_problem(name):
+    """Why Qt could not start on the platform plugin ``name``, or "". Qt ends the process
+    when the plugin it was told to use does not load, with a message that does not say
+    which library is missing; this looks first, so the failure can be explained."""
+    if host.system() != "linux":
+        return ""
+    if name == "xcb" and not os.environ.get("DISPLAY"):
+        return "DISPLAY is not set, so there is no X11 display to open a window on."
+    import ctypes
+
+    from PySide6.QtCore import QLibraryInfo
+
+    if ";" in name or ":" in name:
+        return ""  # a list of plugins, or one with arguments: left to Qt
+    folder = Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath)) / "platforms"
+    plugin = folder / f"libq{name}.so"
+    if not plugin.is_file():
+        if any(folder.glob(f"libq{name}-*.so")):
+            return ""  # a family of plugins under one name (wayland): left to Qt
+        have = ", ".join(sorted(f.stem[4:] for f in folder.glob("libq*.so"))) or "none"
+        return f"This Qt has no platform plugin of that name. It has: {have}."
+    try:
+        ctypes.CDLL(str(plugin))
+    except OSError as exc:
+        hint = (
+            " Install the package that provides it (Arch, CachyOS, SteamOS: xcb-util-cursor; "
+            "Debian, Ubuntu: libxcb-cursor0)."
+            if "xcb-cursor" in str(exc)
+            else ""
+        )
+        return f"A library it needs is missing: {exc}.{hint}"
+    return ""
+
+
+def start_qt():
+    """The ``QApplication``, made after the platform plugin has been chosen (``gmv.host``):
+    Qt reads that choice only while it starts. Says on standard error which plugin is in
+    use and why whenever the application chose one, and always on Linux."""
+    chosen, reason = host.select_qt_platform(arguments=sys.argv)
+    if chosen:
+        problem = platform_plugin_problem(chosen)
+        if problem:
+            raise SystemExit(
+                f'Granular Music Visualizer cannot start on the Qt platform "{chosen}" '
+                f"({reason}). {problem} To let Qt choose, set {host.QT_OVERRIDE}=auto."
+            )
+    app = QApplication(sys.argv)
+    app.setProperty("gmv_qt_platform", reason)
+    if sys.stderr is not None and (chosen or host.system() == "linux"):
+        print(f"gmv: Qt platform {app.platformName()} ({reason})", file=sys.stderr)
+    return app
+
+
 def application():
     # Analysis and drawing are separate threads of one interpreter. Letting them hand over
     # every millisecond (the default is five) keeps a busy analysis frame from holding up
     # a paint, and a paint from holding up analysis.
     sys.setswitchinterval(0.001)
-    app = QApplication.instance() or QApplication(sys.argv)
+    app = QApplication.instance() or start_qt()
     app.setOrganizationName("GranularMusicVisualizer")
     app.setApplicationName("Granular Music Visualizer")
     app.setStyle("Fusion")

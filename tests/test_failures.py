@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
@@ -68,6 +69,7 @@ def test_ambiguous_restart_is_not_selected(monkeypatch):
     assert not source._find_restart() and source.pid == 99 and source.restarts == 0
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="launches the Windows capture helper")
 def test_helper_launch_failure_is_explicit_and_closes_queue(monkeypatch):
     from gmv.sources import application
     from gmv.buffer import BoundedQueue

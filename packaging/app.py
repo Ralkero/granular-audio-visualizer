@@ -1,7 +1,9 @@
 """Entry point of the packaged application (see ``Build App.ps1``).
 
 ``--self-check OUT.json`` runs a short session on a generated sound file without touching
-saved settings and writes what happened, to confirm that a build is complete.
+saved settings and writes what happened, to confirm that a build is complete. It also runs
+from a checkout (``python packaging/app.py --self-check OUT.json``); on a system without live
+capture the capture part is left out and the report says so.
 """
 
 import json
@@ -34,12 +36,18 @@ def self_check(report):
     import numpy as np
     import soundfile as sf
 
-    from gmv import paths
+    from gmv import host, paths
     from gmv.app.controller import discover
     from gmv.app.window import MainWindow, application
 
     app = application()
-    result = {"packaged": paths.packaged(), "capture_helper": paths.capture_helper().is_file()}
+    result = {
+        "packaged": paths.packaged(),
+        "capture_helper": paths.capture_helper_available(),
+        "system": host.system(),
+        "qt_platform": app.platformName(),
+        "audio_sources": list(host.audio_sources()),
+    }
     with tempfile.TemporaryDirectory() as folder:
         rate, seconds = 48000, 20
         t = np.arange(rate * seconds) / rate
@@ -116,6 +124,11 @@ def self_check(report):
         while window.controller.running and perf_counter() < deadline:
             app.processEvents()
             sleep(0.01)
+        if not host.live_capture():
+            result["live_capture"] = host.capture_note()
+            window.close()
+            Path(report).write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
+            return 0
         drawer.source.setCurrentIndex(drawer.source.findData("system"))
         window.start()
         result["live_problem_at_start"] = window.problem
