@@ -4,10 +4,10 @@ Status when written (2026-11-22): audit only. No application code, configuration
 dependency or packaging file was changed to write this. The port had not started.
 
 > Update, 2026-11-23: phase 1a has since been implemented (section M) and validated on a
-> real CachyOS desktop the same day (section N). Phase 1b, live capture through PipeWire,
-> is next and has not started. Sections A to L are the audit as it was written on
-> 2026-11-22 and have not been changed. Setup, launch and the CachyOS results in full:
-> [LINUX.md](LINUX.md).
+> real CachyOS desktop the same day (section N), and phase 1b, capture of the system's
+> default output through PipeWire's PulseAudio service, implemented and validated there too
+> (section O). Sections A to L are the audit as it was written on 2026-11-22 and have not
+> been changed. Setup, launch and the CachyOS results in full: [LINUX.md](LINUX.md).
 
 Written 2026-11-22 against branch `main` at `084b443` ("Radiant radial theme with a palette
 of its own (phase 1)"), level with `origin/main`, with uncommitted Radiant work in the tree
@@ -958,7 +958,7 @@ are in brackets.
 | Phase | Work | Status (2026-11-23) |
 |---|---|---|
 | 1a [H: 1] | Native Linux start-up, file analysis, recording, replay, platform foundations | Implemented and validated on CachyOS; two test fixes still to reach `main` (N.3) |
-| 1b [H: 2] | Live system-audio capture through PipeWire's PulseAudio server | Next; not started |
+| 1b [H: 2] | Live system-audio capture through PipeWire's PulseAudio server | Implemented and validated on CachyOS (section O); following a change of output between real devices not yet tried |
 | 2 [H: 3] | Linux GPU and Qt rendering validation beyond the CachyOS configuration tried | Partly seen on CachyOS (N.1); the rest remains |
 | 3 [H: 4] | Flatpak packaging | Not started |
 | 4 [H: 5] | SteamOS Gaming Mode integration | Not started; needs a Steam Deck |
@@ -968,10 +968,10 @@ are in brackets.
   (section N) and needed no application change. Left: the two test fixes reaching `main`,
   the resource-tracker fix to `tests/test_remote.py` (local and uncommitted) and the replay
   test fix in pull request #1 (open).
-- **Phase 1b [H: phase 2]: system-audio capture.** `PulseMonitorSource` over libpulse as
-  designed in C.3 to C.5; list it in `host.LIVE_CAPTURE` and build it in `gmv.sources`;
-  the 10-minute `clock_probe` acceptance run; default-sink change, unplug and
-  suspend/resume producing new segments.
+- **Phase 1b [H: phase 2]: system-audio capture.** Done; what was built and how it differs
+  from C.3 to C.5 is in section O. Left from H's acceptance: a default-sink change, an
+  unplug and a suspend on real hardware (tested against a stand-in only), and a PulseAudio
+  server.
 - **Phase 2 [H: phase 3]: Linux GPU and Qt rendering validation.** Seen on CachyOS
   (section N): Radiant, Classic and Spectrum bars drawn on Mesa (radeonsi) under `wayland`
   and under `xcb` through Xwayland, with the default context (no D.2 surface format was
@@ -1069,4 +1069,137 @@ comparable with the "about 5 ms per frame on an RX 9070 XT at 1920×1080" measur
   also the primary screen.
 - A session with the user's own music, watched as it plays.
 - Other graphics cards and drivers; resizing, full screen and long sessions.
-- Live capture: phase 1b, not started.
+- Live capture: phase 1b, not started. (Since done: section O.)
+
+---
+
+## O. Phase 1b: system-audio capture (2026-11-23)
+
+This section was added with phase 1b. Linux now captures what the system plays on its
+default output, from that output's monitor, through the PulseAudio protocol PipeWire serves
+(`pipewire-pulse`). The engine, the analysis, the event attribution, the visual state, the
+renderers and the session format are the ones Windows uses; nothing in them changed. CachyOS
+on a desktop is not SteamOS (section I): nothing here shows whether a Flatpak may record a
+monitor (K.1) or how SteamOS's audio graph behaves.
+
+### O.1 What was built, against C and H's phase 2
+
+| Planned | Built | Why it differs |
+|---|---|---|
+| `PulseMonitorSource` over libpulse through ctypes, a pull-model record stream with the server's timing info (C.3, C.4) | `PulseSystemAudioSource` (`src/gmv/sources/system_pulse.py`): `parec`, libpulse's own recorder, as a child process, read from its pipe in 10 ms blocks by one thread; `pactl --format=json` for discovery | No binding to write or keep, no Python audio callback, and the server still buffers while Python is busy, which is what C.3 wanted from a pull-model stream. The cost: no `pa_timing_info`, so no server latency is known; the clock is anchored on delivery instead (O.2) |
+| The default sink's monitor (C.3) | As planned. The default sink and its monitor are asked for, and the monitor is recorded only once the server's JSON names it the monitor of that sink (`monitor_source` of the source); never a microphone | |
+| — | The stream is opened with `node.dont-reconnect`, `node.dont-fallback` and `node.dont-move` (seen applied to the stream's node on CachyOS), and the source it records from is checked every 2 s | A stream whose output goes away is destroyed instead of being moved, for instance to a microphone. PulseAudio itself ignores those properties; the check covers it |
+| Formats and channels (C.5) | 32-bit float, little-endian, stereo, at the monitor's own rate; the server mixes other layouts down | The engine accepts any rate, so no resampling is asked for |
+| Default-sink change, unplug, suspend producing new segments (H, phase 2) | The default output is asked for every 0.5 s; a change closes the stream and opens one on the new monitor as a new segment. A stream that ends or fails is reopened after 0.5, 1, 2, 4, then at most 5 s, with the reason in the status line. A suspend is seen by `CLOCK_BOOTTIME` moving away from `CLOCK_MONOTONIC` | |
+| `host.LIVE_CAPTURE` and `gmv.sources` (M.4) | `LIVE_CAPTURE["linux"] = ("system",)`; `sources.system_audio_source` builds the PulseAudio backend on Linux. The drawer offers *System audio (PipeWire)* and *Audio file*; device and application capture are not offered and are refused in a sentence | |
+| — | `scripts/validate_linux.py --audio-capture` and `scripts/capture_probe_linux.py`. The ordinary validation never records (`platform_smoke.py --no-live`); the packaged self-check checks capture on Windows only | Capture records what the user plays, so it is opt-in |
+
+Not changed: `engine.py`, `dsp.py`, the analyzers, `models.py`, `session.py`, the renderers
+and their shaders, the Windows capture modules. No Python dependency was added: `pactl` and
+`parec` are system programs (on CachyOS and Arch in `libpulse`).
+
+### O.2 The clock, and what it claims
+
+`parec` reports no capture times. The clock counts the stream's samples and anchors the count
+on delivery (`DeliveryClock`): a block delivered at `t` whose last frame is stream frame `n`
+means frame 0 was captured no later than `t − n / rate`. The first 100 ms of each stream are
+measured, not published, and the lowest such bound becomes the anchor, so published times are
+not later than delivery by more than 10 ms (well inside half an analysis window, 23 ms, so
+evidence is never from the future for `contract.eligible_for_live_impact`). Measured on
+CachyOS: PipeWire delivers whole periods of 1024 frames (21.3 ms at 48 kHz), the first data
+about 89 ms after `parec` starts, and the bound settles within a few milliseconds over the
+first seconds. The lateness of each later block against the anchor is watched as a floor
+over 2 s of delivery. A floor more than 20 ms behind (lost audio, a slow output clock) or
+10 ms ahead (a fast output clock) moves the anchor to the floor and starts a new run, marked
+as a discontinuity; at most a block or two is left out, so the timeline never goes back. A
+pause in delivery of more than 0.25 s, or a suspend, starts a new run measured afresh. How
+long the sound took from the application to the monitor, or from the monitor to the
+speakers, is not known and not claimed.
+
+The output's clock and the computer's are not the same clock. Over ten minutes on CachyOS the
+floor fell steadily from +5.9 to −0.2 ms: the Sound BlasterX G6 ran about 11 ppm fast against
+`CLOCK_MONOTONIC`. At that rate the clock corrects itself about every 15 minutes, leaving out
+a block or two each time and restarting the analysis context there (a discontinuity, as for
+any gap). A first version re-measured for 100 ms at each correction and allowed 5 ms ahead;
+this measurement is why it was changed. In thirty minutes with the clock as it is now, the
+one correction came between the 23rd and 24th minute (the floor had fallen from +5.1 to
+−9.3 ms) and left out 20 ms of audio.
+
+### O.3 Tested, without a sound server
+
+`tests/test_system_pulse.py` (28 tests) runs against `tests/fake_pulse.py`, a stand-in for
+`pactl` and `parec` that pretends to be a server with two outputs (one with an awkward name,
+one at 44.1 kHz) and a microphone, and delivers a known signal in real time. `conftest.py`
+points the real client programs at a server that does not exist, so no test records
+anything. Covered: the default output and its monitor; every refusal (no server, no default
+output, a default that is not listed, no monitor, a monitor not listed, a source that is not
+that output's monitor, missing `pactl`, missing `parec`, an old `pactl`); the exact samples,
+channel order and gain; contiguous sample-clock times never later than delivery; the
+arguments `parec` gets; stopping, six times in a row, with no process or thread left; a stream
+ending by itself; the server going away and coming back; the output disappearing before a new
+default exists; a new default output followed without a restart and never two streams at
+once; a stream moved to the microphone being stopped; a slow reader losing the oldest blocks
+while capture goes on; the clock's anchoring, lost audio, a fast output clock, a pause in
+delivery and a suspend; and a captured session analysed by the engine, logged without audio
+and replayed. The platform tests now expect Linux to offer System audio and refuse device and
+application capture in a sentence.
+
+The whole suite on the phase 1b branch, on CachyOS: 546 passed, 3 skipped, 3 failed. The 3
+failures are the known `tests/test_remote.py` resource-tracker failures (N.3), whose fix is
+not on this branch; on the same code without phase 1b the suite gave 517 passed, 3 skipped,
+3 failed. The 29 more that pass are the new tests; no test that passed before fails. A
+second run, after the last changes, gave the same plus one failure of the intermittent replay
+test of N.3 (5 onsets live, 4 replayed: its known symptom, in code phase 1b does not touch);
+its fix is in pull request #1, not on this branch.
+
+### O.4 Validated on CachyOS
+
+The machine of section N; PipeWire 1.6.11 with `pipewire-pulse`, WirePlumber 0.5.19,
+`libpulse` 17.0; default output a Sound BlasterX G6 (USB, 24-bit stereo, 48 kHz). What was
+playing was captured, quietly; no test signal was played and nothing about the server, the
+default output, the routing or the volume was changed. The full figures are in
+[LINUX.md](LINUX.md#system-audio-on-cachyos-phase-1b-2026-11-23).
+
+- **Discovery:** the default output and its monitor were found through `pactl`; the monitor
+  was confirmed as that output's; the stream's node carried the three `node.dont-*`
+  properties and recorded the monitor named.
+- **`scripts/validate_linux.py --audio-capture`: 70 of 70 checks passed.** In each of the
+  four window runs (Wayland, Xwayland, Wayland forced) the window offered System audio and
+  captured the default output for six seconds through the separate analysis process: 203 to
+  205 frames. Every phase 1a check passed again.
+- **Ten minutes** (`scripts/capture_probe_linux.py --seconds 600`): 29,990 of 30,000 frames,
+  one segment, no dropped block, no discontinuity, no correction of the clock, no recovery;
+  capture to publication 33 ms median and 37 ms at the 95th percentile; the capturing
+  process at 7 to 9% of one core; a clean stop; the logged session (no audio in it) replayed
+  in full after capture had stopped. The output's clock ran about 11 ppm fast against
+  `CLOCK_MONOTONIC` (O.2). That run used the clock's first version; no correction was due in
+  it.
+- **Thirty minutes**, with the clock as it is now: 89,988 of 90,000 frames, no dropped block,
+  no recovery, exactly one correction (O.2) and so one discontinuity; capture to publication
+  28 ms median and 35 ms at the 95th percentile; 8.9% of one core with `parec` included;
+  a clean stop and a full replay. Memory stayed at about 128 MiB over a separate three-minute
+  capture that kept no records (`parec` 5.7 MiB).
+
+### O.5 Implemented, but not tried on real hardware
+
+Each of these is covered by the stand-in tests (O.3), not by a real device or server:
+
+- following a change of default output between two real devices (the machine has a second
+  output, a game controller's, but changing the user's default output was out of bounds);
+- an output unplugged while captured, and a monitor that disappears;
+- the sound server stopping and coming back;
+- a suspend and resume while capturing;
+- a stream moved off the monitor (PipeWire refuses to move it; PulseAudio itself would not,
+  and the 2 s check covers that case);
+- a PulseAudio server (only PipeWire's was tried), and a monitor at a rate other than 48 kHz;
+- capture for longer than thirty minutes.
+
+### O.6 Still outstanding
+
+- A session with music the user plays and watches, judged by eye: not done.
+- Capture of one output device, of one application or its process tree, and of a microphone:
+  not offered on Linux and not planned for phase 1b; per-application capture through native
+  PipeWire stays future work (C.6).
+- Flatpak packaging and whether a Flatpak may record a monitor (K.1); SteamOS's audio graph,
+  Gaming Mode, Gamescope, the Steam Deck's performance and handheld controls: phases 3 to 5.
+  Nothing in this section is evidence about any of them.

@@ -1,17 +1,26 @@
 """Check GMV's Linux foundation on a real Linux desktop and write a report.
 
-    uv run python scripts/validate_linux.py            # about two minutes
-    uv run python scripts/validate_linux.py --tests    # and the whole test suite (several more)
+    uv run python scripts/validate_linux.py                   # about two minutes
+    uv run python scripts/validate_linux.py --tests           # and the whole test suite
+    uv run python scripts/validate_linux.py --audio-capture   # and live capture (records)
 
 The application window opens and closes by itself a few times: once as the session gives
 it, once more to see that settings came back, and once on each Qt platform the session has
 (``GMV_QT_PLATFORM=xcb``, ``GMV_QT_PLATFORM=wayland``). Each time it analyses a generated
 WAV and a FLAC, records the sessions, replays one and shows Radiant.
 
+Live capture records what the system plays, so it is checked only when asked for with
+``--audio-capture``: then each window run also captures the default output for a few
+seconds, and ``capture_probe_linux.py`` records it for ``--capture-seconds`` and measures
+it. Without it the sound server is only asked, read-only, whether capture could run. Nothing
+is ever played and no volume, device or routing is changed. A machine that cannot capture
+(no server, no default output, no monitor, missing client programs) is reported as an
+environment note, not as a failure of the application.
+
 Nothing of yours is read or changed: the XDG folders are pointed at a scratch folder for the
 runs, which is removed afterwards. The report is printed and saved under the cache folder
 (``~/.cache/GranularMusicVisualizer/validation/``); it holds no audio and no file names of
-yours. Live capture is not checked: Linux has none yet.
+yours.
 """
 
 import argparse
@@ -27,6 +36,18 @@ from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 SMOKE = Path(__file__).with_name("platform_smoke.py")
+PROBE = Path(__file__).with_name("capture_probe_linux.py")
+# Read-only: can system audio be captured here? (asks the sound server; records nothing)
+DISCOVER = (
+    "import json\n"
+    "from gmv.sources import system_pulse as pulse\n"
+    "try:\n"
+    "    found = pulse.check()\n"
+    "    print(json.dumps({'server': found.server, 'output': found.description,\n"
+    "                      'monitor_rate': found.rate}))\n"
+    "except pulse.PulseProblem as problem:\n"
+    "    print(json.dumps({'problem': str(problem)}))\n"
+)
 SESSION_VARIABLES = (
     "XDG_SESSION_TYPE",
     "XDG_CURRENT_DESKTOP",
@@ -85,6 +106,12 @@ def launch(arguments, environment, cwd, timeout=240):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--tests", action="store_true", help="also run the whole test suite")
+    parser.add_argument(
+        "--audio-capture",
+        action="store_true",
+        help="also capture what the system plays and measure it (records; plays nothing)",
+    )
+    parser.add_argument("--capture-seconds", type=float, default=20, help="with --audio-capture")
     parser.add_argument("--output", default="", help="where to save the report")
     parser.add_argument("--anyway", action="store_true", help="run on a system that is not Linux")
     args = parser.parse_args()
@@ -100,6 +127,13 @@ def main():
     def check(name, passed, detail=""):
         checks.append({"check": name, "passed": bool(passed), "detail": str(detail)})
         print(f"  {'ok  ' if passed else 'FAIL'}  {name}" + (f": {detail}" if detail else ""), flush=True)
+
+    notes = report["environment"] = []
+
+    def note(text):
+        """Something about the machine, not a failure of the application."""
+        notes.append(text)
+        print(f"  env   {text}", flush=True)
 
     with tempfile.TemporaryDirectory(prefix="gmv-validation-") as scratch:
         scratch = Path(scratch)
@@ -126,6 +160,7 @@ def main():
             print(f"\n{title}", flush=True)
             out = scratch / f"run{number}.json"
             arguments = [str(SMOKE), str(out)] + (["--remember"] if linux else [])
+            arguments += [] if args.audio_capture else ["--no-live"]
             done = launch(arguments, environment | extra, elsewhere)
             found = json.loads(out.read_text(encoding="utf-8")) if out.is_file() else {}
             report["runs"][title] = done | {"report": found}
@@ -145,6 +180,15 @@ def main():
             )
             if not host.live_capture():
                 check("it says live capture is not there yet", found["source_note"].startswith(host.capture_note()), found["source_note"][:70])
+            elif linux:
+                check("System audio is offered", "System audio (PipeWire)" in found["source_choices"], ", ".join(found["source_choices"]))
+            live = found.get("live")
+            if isinstance(live, dict):  # --audio-capture: the window captured the default output
+                frames = live.get("frames_analysed") or 0
+                if live.get("problem_at_start") and "pactl" in live["problem_at_start"]:
+                    note(f"live capture in the window could not start: {live['problem_at_start'][:160]}")
+                else:
+                    check("live capture in the window", frames > 100 and not live.get("engine_error"), f"{frames} frames in 6 s; {live.get('states', [])[-1:]}")
             for name, entry in found["files"].items():
                 good = entry.get("finished") and (entry.get("frames_analysed") or 0) > 100 and not entry.get("engine_error")
                 check(f"{name} analysed", good, f"{entry.get('frames_analysed')} frames, {entry.get('onsets_shown')} onsets shown, problem '{entry.get('problem_at_start')}'")
@@ -162,13 +206,42 @@ def main():
                 check("settings came back", found["restored"] == {"mode": "radial", "expressive": True}, json.dumps(found["restored"]))
         check("nothing was written in the working directory", list(elsewhere.iterdir()) == [])
 
-        print("\nthe command line", flush=True)
-        done = launch(["-m", "gmv.cli", "capture", "--seconds", "1"], environment, elsewhere, 60)
-        report["runs"]["gmv capture"] = done
-        if host.live_capture():
-            check("capture runs", done["exit"] == 0)
+        if linux and host.live_capture():
+            print("\nsystem audio", flush=True)
+            done = launch(["-c", DISCOVER], environment, elsewhere, 60)
+            report["runs"]["system audio discovery"] = done
+            try:
+                found = json.loads(done["stdout"].strip().splitlines()[-1])
+            except (ValueError, IndexError):
+                found = {"problem": f"discovery did not run: {done['stderr'][-300:]}"}
+            check("the sound server was asked without an error", done["exit"] == 0, done["stderr"][-200:])
+            if found.get("problem"):
+                note(f"system audio cannot be captured here: {found['problem']}")
+            else:
+                note(f"capture would record {found['output']} through {found['server']} ({found['monitor_rate']} Hz)")
+            if args.audio_capture and not found.get("problem"):
+                out = scratch / "capture.json"
+                arguments = [str(PROBE), "--seconds", str(args.capture_seconds), "--report", str(out)]
+                print(f"  recording for {args.capture_seconds:g} s (what is playing decides what is measured)", flush=True)
+                done = launch(arguments, environment, elsewhere, args.capture_seconds + 120)
+                probe = json.loads(out.read_text(encoding="utf-8")) if out.is_file() else {}
+                report["runs"]["capture probe"] = done | {"report": probe}
+                for entry in probe.get("checks", []):
+                    check(f"capture: {entry['check']}", entry["passed"], entry["detail"])
+                if not probe:
+                    check("capture: the probe ran", False, done["stderr"][-300:])
+                else:
+                    print(f"  note  capture to publication {probe.get('capture_to_publish_ms')} ms; clock {probe.get('clock')}")
+            elif not args.audio_capture:
+                print("  note  live capture not checked (records; ask for it with --audio-capture)")
         else:
-            check("capture is refused in one sentence", done["exit"] == 1 and done["stderr"].strip() == f"{host.capture_note()} Choose an audio file, or replay a recorded session.", done["stderr"].strip()[:120])
+            print("\nthe command line", flush=True)
+            done = launch(["-m", "gmv.cli", "capture", "--seconds", "1"], environment, elsewhere, 60)
+            report["runs"]["gmv capture"] = done
+            if host.live_capture():
+                check("capture runs", done["exit"] == 0)
+            else:
+                check("capture is refused in one sentence", done["exit"] == 1 and done["stderr"].strip() == f"{host.capture_note()} Choose an audio file, or replay a recorded session.", done["stderr"].strip()[:120])
         if args.tests:
             print("\nthe test suite (several minutes)", flush=True)
             done = launch(["-m", "pytest", "-q", "-p", "no:cacheprovider"], environment, REPOSITORY, 3600)

@@ -7,8 +7,10 @@ the application's files are) and ``gmv.sources`` (how the capture backends are r
 * Windows: capture of the system output, of one output device and of one application.
   Settings are in the registry; a checkout keeps sessions and models in the repository, a
   packaged build in ``%LOCALAPPDATA%`` and beside its executable.
-* Linux: audio files and replay of recorded sessions. There is no capture backend yet.
-  Settings, sessions and models are in the XDG base directories.
+* Linux: capture of the system output (the default output's monitor, through the PulseAudio
+  service PipeWire provides), audio files and replay of recorded sessions. No capture of one
+  output device or of one application. Settings, sessions and models are in the XDG base
+  directories.
 
 Nothing here imports Qt or a capture library, and nothing here touches the disk: these are
 answers, not actions.
@@ -22,8 +24,10 @@ APPLICATION = "GranularMusicVisualizer"  # the folder name; also the settings' o
 QT_OVERRIDE = "GMV_QT_PLATFORM"
 
 # The sources a system can capture from, in the order they are offered. A system that is
-# not listed has no live capture; an audio file can be analysed everywhere.
-LIVE_CAPTURE = {"windows": ("system", "device", "application")}
+# not listed has no live capture; an audio file can be analysed everywhere. Being listed
+# says the program has the backend, not that the machine can use it now: Linux needs a
+# PulseAudio-compatible server and its client programs, which the backend checks.
+LIVE_CAPTURE = {"windows": ("system", "device", "application"), "linux": ("system",)}
 
 
 def system():

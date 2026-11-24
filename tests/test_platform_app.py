@@ -91,19 +91,28 @@ def onsets(window):
 # -- the sources a window offers ---------------------------------------------------------------
 
 
-def test_linux_offers_the_audio_file_and_says_live_capture_is_not_there_yet(window):
+def test_linux_offers_system_audio_through_pipewire_and_the_audio_file(window):
     drawer = window.drawer
-    assert [drawer.source.itemData(i) for i in range(drawer.source.count())] == ["file"]
-    assert drawer.settings().source == "file" and Settings().source == "file"
+    offered = [(drawer.source.itemData(i), drawer.source.itemText(i)) for i in range(2)]
+    assert drawer.source.count() == 2
+    assert offered == [("system", "System audio (PipeWire)"), ("file", "Audio file")]
+    assert drawer.settings().source == "system" and Settings().source == "system"
     for hidden in (drawer.devices, drawer.applications, drawer.refresh):
-        assert not drawer.form.isRowVisible(hidden)
-    assert drawer.form.isRowVisible(drawer.source) and drawer.file.isEnabled()
+        assert not drawer.form.isRowVisible(hidden)  # no device or application to choose
     note = drawer.source_note.text()
-    assert note.startswith(NOT_YET) and "replayed" in note
-    assert "PipeWire" not in note and "PulseAudio" not in note
-    assert "No file selected" in window.status.text()
-    assert "system output" not in window.status.text()
+    assert "default output" in note and "monitor" in note and "Not the microphone" in note
+    assert "capture follows it" in note and NOT_YET not in note
+    assert "Default system output" in window.status.text()
+    drawer.source.setCurrentIndex(drawer.source.findData("file"))
+    assert drawer.file.isEnabled() and "not played aloud" in drawer.source_note.text()
     assert drawer.replay.isEnabled()  # a recorded session can always be replayed
+
+
+def test_system_audio_that_cannot_start_is_explained_and_the_window_carries_on(window):
+    window.start()  # Linux opens on System audio; in the tests no sound server answers
+    assert "Unable to start" in window.status.text() and "pactl" in window.status.text()
+    assert window.toggle.text() == "Start" and not window.controller.running
+    assert window.controller.engine is None
 
 
 def test_windows_offers_every_source_it_always_did(app, linux, monkeypatch):
@@ -135,16 +144,17 @@ def test_windows_offers_every_source_it_always_did(app, linux, monkeypatch):
 
 def test_a_source_this_system_does_not_have_is_refused_in_words_not_by_a_missing_library(window):
     drawer = window.drawer
-    drawer.restore({"source": "system", "device": "Speakers [Loopback]"})  # saved on Windows
-    assert drawer.settings().source == "file"
-    for kind in ("system", "device", "application"):
+    drawer.restore({"source": "device", "device": "Speakers [Loopback]"})  # saved on Windows
+    assert drawer.settings().source == "system"  # the nearest Linux has: the default output
+    for kind, name in (("device", "one output device"), ("application", "one application")):
         settings = Settings(source=kind, device="Speakers", application={"pid": os.getpid()})
         with pytest.raises(ValueError) as refused:
             audio_source(settings)
-        assert str(refused.value).startswith(NOT_YET)
-        with pytest.raises(ValueError, match="not available on Linux yet"):
+        assert str(refused.value).startswith(f"Capture of {name} is not available on Linux")
+        with pytest.raises(ValueError, match="is not available on Linux"):
             window.controller.prepare(settings)
     assert window.controller.engine is None
+    drawer.source.setCurrentIndex(drawer.source.findData("file"))
     window.start()  # no file chosen yet: the ordinary message, and the window carries on
     assert "Choose an existing audio file" in window.status.text()
     assert window.toggle.text() == "Start"
@@ -178,6 +188,7 @@ def test_linux_analyses_a_file_records_its_session_in_the_data_folder_and_replay
         pytest.skip(f"this libsndfile does not write {extension}")
     audio = clicks(linux / "music" / f"clicks.{extension}", **FORMATS[extension])
     drawer = window.drawer
+    drawer.source.setCurrentIndex(drawer.source.findData("file"))
     drawer.file.setText(str(audio))
     drawer.logging.setChecked(True)
     window.start()
@@ -273,6 +284,7 @@ def test_a_sessions_folder_that_cannot_be_written_is_explained_and_nothing_stops
     main = opened()
     try:
         assert main.problem == ""  # opening the window needs no folder
+        main.drawer.source.setCurrentIndex(main.drawer.source.findData("file"))
         main.drawer.file.setText(str(write_clicks(linux / "clicks.wav", seconds=2)))
         main.drawer.logging.setChecked(True)
         main.start()
@@ -546,9 +558,15 @@ def test_the_linux_command_line_records_in_the_data_folder_from_any_directory(tm
     assert named.returncode == 0 and len(list((elsewhere / "mine").iterdir())) == 1
 
 
-def test_the_linux_command_line_refuses_capture_in_one_sentence(tmp_path):
+def test_the_linux_command_line_explains_capture_it_cannot_do(tmp_path):
+    # In the tests no sound server answers (conftest), and on a system pretending to be
+    # Linux pactl may not even be installed: either way one sentence naming pactl.
     done = run_python(AS_LINUX + COMMAND, "capture", "--seconds", "1", cwd=tmp_path)
-    assert done.returncode == 1 and done.stderr.strip().startswith(NOT_YET)
+    assert done.returncode == 1 and "pactl" in done.stderr
     assert "Traceback" not in done.stderr and list(tmp_path.iterdir()) == []
+    device = run_python(AS_LINUX + COMMAND, "capture", "--device", "Speakers", cwd=tmp_path)
+    assert device.returncode == 1 and device.stderr.strip().startswith(
+        "Capture of one output device is not available on Linux"
+    )
     devices = run_python(AS_LINUX + COMMAND, "devices", cwd=tmp_path)
     assert devices.returncode == 0 and json.loads(devices.stdout) == []

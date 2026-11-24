@@ -8,6 +8,10 @@ from pathlib import Path
 from time import perf_counter
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# No test records what this machine plays: the PulseAudio client programs (pactl, parec)
+# are pointed at a server that does not exist, in this process and in every process it
+# starts. Tests of the Linux capture backend use tests/fake_pulse.py instead.
+os.environ["PULSE_SERVER"] = "unix:/nonexistent/gmv-tests-have-no-sound-server"
 
 import pytest
 

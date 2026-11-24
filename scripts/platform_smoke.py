@@ -5,6 +5,7 @@ has live capture, capture the default output for a few seconds (nothing is playe
 
     python scripts/platform_smoke.py OUT.json
     python scripts/platform_smoke.py OUT.json --remember      # also save and restore settings
+    python scripts/platform_smoke.py OUT.json --no-live       # never start live capture
 
 Without ``--remember`` no setting is read or written. With it the application's own
 settings store is used, so point ``XDG_CONFIG_HOME`` at a scratch folder first unless the
@@ -43,6 +44,7 @@ def main():
     parser.add_argument("report")
     parser.add_argument("--remember", action="store_true", help="use the settings store")
     parser.add_argument("--sessions", default="", help="folder for sessions (default: the application's)")
+    parser.add_argument("--no-live", action="store_true", help="do not start live capture")
     args = parser.parse_args()
 
     from PySide6.QtCore import QSettings, qVersion
@@ -148,7 +150,7 @@ def main():
         pump(lambda: False, 0.6)
         result["diagnostics"] = drawer.diagnostics.text().splitlines()
 
-        if host.live_capture():
+        if host.live_capture() and not args.no_live:
             drawer.source.setCurrentIndex(drawer.source.findData("system"))
             drawer.logging.setChecked(False)
             window.start()
@@ -173,7 +175,7 @@ def main():
             window.stop()
             pump(lambda: not window.controller.running, 10)
         else:
-            result["live"] = host.capture_note()
+            result["live"] = host.capture_note() or "not started (--no-live)"
 
         if args.remember:  # something to find again on the next run
             drawer.mode.setCurrentIndex(drawer.mode.findData("radial"))

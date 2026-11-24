@@ -24,13 +24,17 @@ SOURCES = (
     ("application", "Application / process tree"),
     ("file", "Audio file"),
 )
+# Where a source is offered under another name on a system: Linux captures the default
+# output's monitor through PipeWire, and says so.
+TITLES = {"linux": {"system": "System audio (PipeWire)"}}
 DEFAULT_EDGES = AnalysisConfig().band_edges
 
 
 def available_sources():
     """The entries of ``SOURCES`` this system has, in the order they are offered."""
     offered = host.audio_sources()
-    return tuple(entry for entry in SOURCES if entry[0] in offered)
+    titles = TITLES.get(host.system(), {})
+    return tuple((key, titles.get(key, title)) for key, title in SOURCES if key in offered)
 
 
 def default_source():
