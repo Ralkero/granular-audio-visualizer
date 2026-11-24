@@ -1,10 +1,13 @@
 # Linux
 
 Status: **phases 1a and 1b of the Linux port, validated on a real CachyOS desktop on
-2026-11-23.** The application starts from a source checkout on Linux, analyses audio files,
+2026-11-23, and phase 1c, the Arch package, built and installed there on 2026-11-24.** The
+application starts from a source checkout on Linux, analyses audio files,
 records sessions and replays them (phase 1a), and **captures what the system plays on its
 default output** through PipeWire's PulseAudio service (phase 1b,
 [System audio](#system-audio)), with the same engine and the same renderers as on Windows.
+On CachyOS and Arch Linux it can also be built as a native Pacman package and installed as
+an ordinary desktop application (phase 1c, [The Arch package](#the-arch-package-cachyos-arch-linux)).
 Linux does not capture one output device, one application or a microphone. The test suite
 passes there apart from the three known `tests/test_remote.py` failures and the intermittent
 replay test, whose fixes are not yet on `main` (see
@@ -20,8 +23,8 @@ research behind it, is [LINUX_PORT_AUDIT.md](LINUX_PORT_AUDIT.md).
 ## What is there, and what is not
 
 "Yes" below means implemented, tested (on Windows with the system set to Linux, or against a
-stand-in sound server), and run on one CachyOS desktop on 2026-11-23 (see
-[What has been checked](#what-has-been-checked)).
+stand-in sound server), and run on one CachyOS desktop on 2026-11-23, or for the package on
+2026-11-24 (see [What has been checked](#what-has-been-checked)).
 
 | | Linux, as implemented |
 |---|---|
@@ -32,9 +35,74 @@ stand-in sound server), and run on one CachyOS desktop on 2026-11-23 (see
 | Classic, Spectrum bars and Radiant | Yes; on CachyOS all three were drawn, Radiant on the graphics card (AMD RX 9070 XT, Mesa 26.3.1). Other graphics cards and drivers not tried |
 | Capture what the system plays on its default output (System audio) | Yes, from the default output's monitor through PipeWire's PulseAudio service; following a change of default output tested against a stand-in only |
 | Capture one output device, one application, or a microphone | **No.** Not offered; see below |
-| Packaged build, desktop entry, Flatpak | No |
+| Native Arch package (Pacman), with menu entry and icon | Yes, built with `makepkg` from `packaging/arch/` (phase 1c); see [The Arch package](#the-arch-package-cachyos-arch-linux) |
+| Flatpak, AUR, other distributions' packages | No |
+
+## The Arch package (CachyOS, Arch Linux)
+
+On CachyOS and Arch Linux GMV can be installed as an ordinary Pacman package: it then has an
+entry in the application menu with its icon, the commands `gmv-visualizer` and `gmv` in
+`/usr/bin`, uses the system's own Python and Qt, and is upgraded and removed with Pacman.
+It is not on the AUR or in any repository: the package is built on your machine from the
+recipe in `packaging/arch/`, which [packaging/arch/README.md](../packaging/arch/README.md)
+explains step by step.
+
+```sh
+git clone https://github.com/Ralkero/granular-audio-visualizer.git
+cd granular-audio-visualizer/packaging/arch
+makepkg --syncdeps --cleanbuild        # as yourself, never as root
+sudo pacman -U granular-music-visualizer-*.pkg.tar.zst
+```
+
+`makepkg` downloads the exact commit the `PKGBUILD` names from GitHub, checks it against the
+SHA-256 written in the recipe, builds a wheel with the system's Python and checks that the
+installed copy finds its shaders. It does not use the files of your checkout, a `.venv` or
+`uv`. `--syncdeps` asks for your password to install the build tools and dependencies it
+lacks from the Arch repositories; `pacman -U` asks for it to install GMV.
+
+| Installed | Where |
+|---|---|
+| The program (Python package `gmv`) | `/usr/lib/python3.X/site-packages/gmv/` |
+| Commands `gmv-visualizer` (the window), `gmv` (command line), `gmv-control` (the same window, older name) | `/usr/bin/` |
+| Menu entry | `/usr/share/applications/granular-music-visualizer.desktop` |
+| Icon, 16 to 512 pixels | `/usr/share/icons/hicolor/SIZE/apps/granular-music-visualizer.png` |
+| This guide, the README and the dependency notes | `/usr/share/doc/granular-music-visualizer/` |
+
+**Dependencies.** All from the Arch repositories, none bundled: `python`, `pyside6`,
+`python-numpy`, `python-scipy`, `python-soundfile`, `python-pydantic`, `python-psutil`,
+`libpulse` (for `pactl` and `parec`, which System audio runs) and `hicolor-icon-theme`.
+Optional: a PulseAudio-compatible sound server for System audio (`pipewire-pulse`, which
+CachyOS has already, or `pulseaudio`; the package never installs or replaces one) and
+`python-onnxruntime-cpu` for context recognition models. Without a sound server the
+application still starts, analyses files and replays sessions.
+
+**Starting it.** From the application menu (KDE: *Multimedia → Granular Music Visualizer*),
+or `gmv-visualizer` in a terminal, from any folder. `gmv visualizer`, `gmv file`,
+`gmv capture`, `gmv replay` and `gmv devices` work as in a checkout (see [Launch](#launch),
+without `uv run`). The research commands `gmv corpus`, `gmv review` and `gmv evidence` and
+`python -m gmv.schema_export` belong to a checkout: their defaults are folders of the
+repository.
+
+**Your files.** Settings, sessions, your own models and the cache are in the same folders as
+from a checkout ([Where things are kept](#where-things-are-kept)), never in `/usr`. The
+package installs none of them and carries no model weights: put weight files in
+`~/.local/share/GranularMusicVisualizer/models/`, or choose them in Settings (**Choose…**
+opens that folder, made the first time). Upgrading or removing the package does not touch
+these folders.
+
+**Updating.** Build the newer recipe the same way and install it with `sudo pacman -U`;
+Pacman replaces the program's files and leaves your settings, sessions and models alone.
+
+**Removing.** `sudo pacman -R granular-music-visualizer`. Your settings, sessions and models
+stay where they are; delete `~/.config/GranularMusicVisualizer`,
+`~/.local/share/GranularMusicVisualizer` and `~/.cache/GranularMusicVisualizer` yourself if
+you want them gone.
 
 ## Requirements
+
+These are for running GMV from a source checkout, as it is developed. The Arch package above
+needs none of them.
+
 
 - Linux on x86-64 with glibc 2.34 or newer (the PySide6 6.12 wheel is `manylinux_2_34`).
   aarch64 wheels exist for every dependency but were not tried.
@@ -117,7 +185,8 @@ weights (`guitar_v1.npz`) separately:
 
 1. the file named by `GMV_ACTIVITY_MODEL` / `GMV_GUITAR_MODEL`;
 2. `$XDG_DATA_HOME/GranularMusicVisualizer/models/`;
-3. the checkout's `.model-cache/`.
+3. the checkout's `.model-cache/` (a checkout only: the Arch package has no models folder of
+   its own and carries no weights).
 
 A file chosen in Settings is remembered and always wins over these; nothing found in a
 folder ever replaces it. Only those two file names are looked for: a recognition model
@@ -427,6 +496,26 @@ out a block or two (see [System audio](#system-audio)). Nothing in the ten-minut
 reached a correction, so both versions behaved the same there; the thirty-minute run, with
 the clock as it is now, showed its one correction.
 
+### The Arch package on CachyOS (phase 1c, 2026-11-24)
+
+The same machine, with Pacman and `makepkg` 7.1.0. The details are in
+[LINUX_PORT_AUDIT.md, section P](LINUX_PORT_AUDIT.md#p-phase-1c-native-arch-package-2026-11-24).
+
+| Step | What it showed |
+|---|---|
+| `makepkg --syncdeps --cleanbuild --log`, as the user, of commit `5271e33` | Built without a warning. `--syncdeps` installed `pyside6`, `python-numpy`, `python-scipy`, `python-soundfile` (with their own dependencies) and the build tools from the CachyOS repositories, the user typing the password. The build's own check ran the installed copy away from the source tree: "9 fragment shaders read, commands import" |
+| The package | `granular-music-visualizer-0.2.0.r7.g5271e33-1-any.pkg.tar.zst`: 1.6 MB, 5.0 MiB installed, 449 files, all owned by root |
+| `sudo pacman -U` | Installed; `pacman -Qkk` found 0 altered files |
+| `scripts/validate_linux.py`, run with the system's Python from an empty folder so that only the installed copy could be imported | **59 of 59 checks passed**: four window runs (Wayland, Wayland again, Xwayland, Wayland forced), each offering System audio, analysing a WAV and a FLAC, recording the sessions in the data folder and replaying them with the same times; settings remembered; Radiant on the graphics card; nothing written in the working directory; the sound server asked, read-only, without an error. Scratch XDG folders, no recording from the sound server |
+| Afterwards | `pacman -Qkk` still 0 altered; nothing left running; the user's own GMV folders unchanged |
+| Upgrade: the recipe moved to commit `fe6d6dd`, built again and installed with `sudo pacman -U` | `0.2.0.r7.g5271e33-1` upgraded to `0.2.0.r9.gfe6d6dd-1`; the program's files identical, only the Linux guide changed; `pacman -Qkk` 0 altered; the user's settings and sessions byte for byte as before |
+| Used by the owner: the upgraded package started through its menu entry, with the owner's own settings | The owner reported the menu entry and its icon, the window's and taskbar's icon, the visuals following the music, and all three modes working (the owner's judgement by eye). It left a complete 78-second System audio session with music playing: 3,893 frames, nothing dropped, no discontinuity, capture to publication 37 ms median; the window closed normally with nothing left running. **Choose…** for weights and a replay were not done in that run; both are checked automatically on the installed copy |
+
+The whole test suite on the phase 1c branch, on this machine: **562 passed, 3 skipped,
+3 failed**, the failures being the three known `tests/test_remote.py` ones
+([above](#the-test-suite-on-cachyos)); the 15 new tests of `tests/test_install_layout.py`
+passed.
+
 ### On Windows, with the system set to Linux (before CachyOS)
 
 When phase 1a was written no Linux machine was available: the development machine is
@@ -474,8 +563,15 @@ CachyOS run:
   out of bounds for the validation.
 - System audio on a PulseAudio server (only PipeWire's was tried), at a rate other than
   48 kHz, and for longer than thirty minutes.
-- What System audio looks like with music the user plays and watches, judged by eye (see
-  above).
+- What System audio looks like with music the user plays and watches, judged by eye in any
+  detail. The owner watched it once, for about a minute in the installed package, and
+  reported that the visuals followed the music in all three modes
+  ([The Arch package on CachyOS](#the-arch-package-on-cachyos-phase-1c-2026-11-24)); that is
+  the only look so far.
+- The Arch package on Arch Linux itself, or on any machine but the CachyOS desktop above;
+  `namcap` on the recipe and the package.
+- In the installed package, by hand: **Choose…** opening the models folder, and replaying a
+  session (both checked automatically on the installed copy, not yet by the owner).
 
 ### Checking it on Linux (CachyOS)
 
@@ -535,10 +631,11 @@ not done on the validation machine.
   computer's costs a block or two of audio and an analysis restart every quarter of an hour
   or so (11 ppm, as measured on the CachyOS machine).
 - A file is analysed at playing speed and is not played aloud.
-- **No packaging.** No installed desktop entry, no installed icon, no Flatpak: the
-  application is started from the checkout with `uv run gmv-visualizer`. On Wayland the
-  window icon comes from a desktop entry, so the window is expected to have a generic icon
-  there.
+- **Packaging is the Arch package only.** It is built on the user's machine with
+  `makepkg`; it is not on the AUR or in a repository, and there is no Flatpak or package for
+  other distributions. Run from a checkout, the window says it is
+  `granular-music-visualizer` (its desktop entry's name) but no entry is installed, so on
+  Wayland it shows a generic icon unless the Arch package is installed too.
 - Radiant on the graphics card has been run on one Linux driver only: Mesa 26.3.1 (radeonsi)
   on an AMD RX 9070 XT. If its OpenGL context cannot be made, the application falls back to
   the geometry-only Radiant and Diagnostics says so, as on Windows. No software renderer is

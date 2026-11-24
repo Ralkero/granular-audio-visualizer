@@ -32,6 +32,11 @@ gmv-visualizer = "gmv.app.window:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# Files the program reads at run time that are not Python: without this a wheel (and so the
+# Arch package) would leave them out. The Windows build adds them itself (Build App.ps1).
+[tool.setuptools.package-data]
+"gmv.visualizer.themes.radiant_gpu" = ["shaders/*.glsl", "shaders/*.frag", "shaders/*.vert"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

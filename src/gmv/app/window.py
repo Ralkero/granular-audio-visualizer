@@ -689,10 +689,18 @@ class SettingsDrawer(QFrame):
             self.file.setText(path)
 
     def choose_weights(self, target):
+        start = paths.models_start_folder()
+        if not start.is_dir() and start == paths.user_models_folder():
+            # The user's own models folder (an installed package has no other): made now,
+            # so the dialog opens where model files belong, and the home folder if it can't.
+            try:
+                paths.writable_folder(start, "model files")
+            except RuntimeError:
+                start = Path.home()
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Choose weights",
-            str(paths.models_start_folder()),
+            str(start),
             "Weights and models (*.npz *.json)"
             if target is self.guitar_model
             else "Weights (*.npz)",
@@ -1319,10 +1327,21 @@ def application():
     app.setOrganizationName("GranularMusicVisualizer")
     app.setApplicationName("Granular Music Visualizer")
     app.setStyle("Fusion")
-    icon = paths.icon()
-    if icon is not None:  # title bar, taskbar and Alt+Tab; the executable has its own copy
-        app.setWindowIcon(QIcon(str(icon)))
+    if host.system() == "linux":
+        # Wayland compositors (and KDE on X11) match a window to its desktop entry by this
+        # name, which gives the taskbar and the task switcher the entry's name and icon.
+        app.setDesktopFileName(paths.APP_ID)
+    icon = window_icon()
+    if not icon.isNull():  # title bar, taskbar and Alt+Tab; the executable has its own copy
+        app.setWindowIcon(icon)
     return app
+
+
+def window_icon():
+    """The icon file of a checkout or packaged build; for an installed package, the icon
+    its package put in the system's icon theme. A null icon when there is neither."""
+    icon = paths.icon()
+    return QIcon(str(icon)) if icon is not None else QIcon.fromTheme(paths.APP_ID)
 
 
 def main(replay=None, speed=1.0):

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Granular Music Visualizer
+GenericName=Music Visualizer
+Comment=Visualize the music your computer plays, or an audio file, as it happens
+Exec=gmv-visualizer
+Icon=granular-music-visualizer
+Terminal=false
+Categories=AudioVideo;Audio;
+Keywords=music;visualizer;visualiser;spectrum;audio;sound;

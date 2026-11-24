@@ -1,0 +1,88 @@
+# Maintainer: Ralkero <Ralkero@users.noreply.github.com>
+#
+# Granular Music Visualizer as a native Arch package, built from one pinned commit of the
+# repository. How to build it, install it and update the pin: README.md beside this file.
+
+pkgname=granular-music-visualizer
+_commit=fe6d6dd399d33629ae54031f1ff2948dfc89dff5
+pkgver=0.2.0.r9.gfe6d6dd
+pkgrel=1
+pkgdesc='Live music visualizer for system audio and audio files: Classic, Spectrum Bars and Radiant (OpenGL)'
+arch=('any')
+url='https://github.com/Ralkero/granular-audio-visualizer'
+license=('GPL-3.0-or-later')
+depends=(
+  'hicolor-icon-theme'
+  'libpulse'
+  'pyside6'
+  'python'
+  'python-numpy'
+  'python-psutil'
+  'python-pydantic'
+  'python-scipy'
+  'python-soundfile'
+)
+makedepends=(
+  'python-build'
+  'python-installer'
+  'python-setuptools'
+)
+optdepends=(
+  'pipewire-pulse: System audio capture through PipeWire (or run pulseaudio)'
+  'python-onnxruntime-cpu: context recognition models (no weights are included)'
+)
+source=("$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz")
+sha256sums=('bfe1864c542f46ab9f2f7efabd8f3c386d65ee864315e8121775ae42b1462060')
+
+_srcdir=granular-audio-visualizer-$_commit
+
+build() {
+  cd "$_srcdir"
+  python -m build --wheel --no-isolation
+}
+
+check() {
+  # Install the wheel into a scratch root and run that copy, away from the source tree: it
+  # must take itself for an installed package, find every shader and import its commands.
+  local root="$srcdir/check-root"
+  rm -rf "$root"
+  python -m installer --destdir="$root" "$_srcdir"/dist/*.whl
+  local site
+  site="$root$(python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+  local command
+  for command in gmv gmv-control gmv-visualizer; do
+    test -x "$root/usr/bin/$command"
+  done
+  cd "$srcdir"
+  QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$site" python - <<'EOF'
+import os
+
+import gmv
+import gmv.app.window
+import gmv.cli
+from gmv import paths
+from gmv.visualizer.themes.radiant_gpu import resources
+
+assert gmv.__file__.startswith(os.environ["PYTHONPATH"]), gmv.__file__
+assert paths.installed(), "the installed copy took itself for a checkout or a packaged build"
+assert paths.models_folder() is None and paths.icon() is None
+fragments = sorted(resources.FOLDER.glob("*.frag"))
+assert fragments, f"no shaders in {resources.FOLDER}"
+for text in [resources.vertex()] + [resources.fragment(f.stem) for f in fragments]:
+    assert "#include" not in text
+print(f"installed copy: {len(fragments)} fragment shaders read, commands import")
+EOF
+}
+
+package() {
+  cd "$_srcdir"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+  install -Dm644 "packaging/arch/$pkgname.desktop" -t "$pkgdir/usr/share/applications/"
+  local size
+  for size in 16 22 24 32 48 64 128 256; do
+    install -Dm644 "packaging/arch/icons/$size.png" \
+      "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/$pkgname.png"
+  done
+  install -Dm644 packaging/icon.png "$pkgdir/usr/share/icons/hicolor/512x512/apps/$pkgname.png"
+  install -Dm644 README.md docs/LINUX.md docs/DEPENDENCIES.md -t "$pkgdir/usr/share/doc/$pkgname/"
+}

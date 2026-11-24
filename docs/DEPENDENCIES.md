@@ -53,6 +53,35 @@ No dependency was added, removed or made platform-specific for Linux. `uv.lock` 
 
 `uv.lock` was brought in line with `pyproject.toml` in this phase: the optional `recognition` extra (`onnxruntime` with `flatbuffers` and `protobuf`) had been added to `pyproject.toml` without relocking, so `uv sync --locked`, which `Setup.ps1` runs and Linux setup uses, would refuse the lock. `uv lock` added those three packages and changed no existing pin. The supported Python versions are unchanged (3.11 and newer).
 
+## Arch package (port phase 1c)
+
+The Arch package (`packaging/arch/PKGBUILD`) bundles no dependency and no Python
+environment: the wheel is installed into the system's Python, and every dependency is an
+Arch package that Pacman installs and updates. `uv.lock` plays no part in it; the versions
+are whatever the Arch repositories have, which must satisfy the ranges in `pyproject.toml`.
+
+| Python project dependency (`pyproject.toml`) | Arch runtime package | Notes |
+|---|---|---|
+| Python 3.11 or newer | `python` | The system's Python (3.14 on CachyOS, November 2026). |
+| `PySide6-Essentials` 6.8 to 6 | `pyside6` | Arch's build against the system Qt 6 (`qt6-base`); has `QtOpenGL` and `QtOpenGLWidgets`, which Radiant uses. Not the PyPI wheel. |
+| `numpy` 2.2 to 2 | `python-numpy` | |
+| `scipy` 1.15 to 1 | `python-scipy` | |
+| `soundfile` 0.13 to 0 | `python-soundfile` | Uses the system's `libsndfile` (the PyPI wheel brings its own). |
+| `pydantic` 2.10 to 2 | `python-pydantic` | |
+| `psutil` 7 | `python-psutil` | |
+| `PyAudioWPatch`, `pycaw` | none | Windows only (`sys_platform == 'win32'` markers). |
+| (not Python) `pactl`, `parec` for System audio | `libpulse` | Client programs only; not a sound server. |
+| (not Python) the icon theme the icons go in | `hicolor-icon-theme` | |
+
+| Optional | Arch package | Notes |
+|---|---|---|
+| A PulseAudio-compatible sound server, for System audio | `pipewire-pulse` (CachyOS's default) or `pulseaudio` | Listed as optional and never pulled in: the package does not install, replace or configure a sound server. Without one, files and replay still work. |
+| `onnxruntime` (`recognition` extra) | `python-onnxruntime-cpu` | For context recognition models only. The CPU build is the one named; the CUDA and ROCm builds would also work but are not needed. No weights are packaged. |
+
+| Build only (`makedepends`) | Notes |
+|---|---|
+| `python-build`, `python-installer`, `python-setuptools` | The Arch way for a PEP 517 project: `python -m build --wheel --no-isolation`, then `python -m installer --destdir="$pkgdir"`. setuptools 70.1 and newer make wheels without `python-wheel`, so it is not listed. No pip, no `uv`, nothing downloaded from PyPI. |
+
 ## Context recognition (optional)
 
 | Dependency | Decision | Notes |

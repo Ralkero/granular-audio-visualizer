@@ -28,32 +28,6 @@ CAPTURE_MODULES = (
 AS_LINUX = "import gmv.host as host; host.system = lambda: 'linux'\n"
 
 
-@pytest.fixture
-def home(monkeypatch, tmp_path):
-    """A home directory of the test's own, with no XDG variable set."""
-    folder = tmp_path / "home"
-    folder.mkdir()
-    for variable in ("HOME", "USERPROFILE"):
-        monkeypatch.setenv(variable, str(folder))
-    for variable in XDG:
-        monkeypatch.delenv(variable, raising=False)
-    assert Path.home() == folder
-    return folder
-
-
-@pytest.fixture
-def linux(monkeypatch, home):
-    monkeypatch.setattr(host, "system", lambda: "linux")
-    return home
-
-
-@pytest.fixture
-def windows(monkeypatch, home, tmp_path):
-    monkeypatch.setattr(host, "system", lambda: "windows")
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
-    return tmp_path / "local"
-
-
 def run_python(code, *arguments, cwd=None, **environment):
     """Run ``code`` in an interpreter of its own; a value of None removes a variable."""
     env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", **environment}

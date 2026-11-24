@@ -1,0 +1,6 @@
+# What makepkg leaves here: the downloaded source, its build folders, the package and logs.
+/src/
+/pkg/
+/*.tar.gz
+/*.pkg.tar.*
+/*.log
