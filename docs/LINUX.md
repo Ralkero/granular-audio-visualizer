@@ -1,29 +1,32 @@
 # Linux
 
-Status: **phase 1a of the Linux port** (2026-11-23), **implemented but not yet run on a real
-Linux system.** The application is made to start from a source checkout on Linux, analyse
-audio files, record sessions and replay them, with the same engine and the same renderers
-as on Windows. That behaviour is tested on Windows by telling the program it is on Linux;
-no Linux machine was available to run it on. It does **not** capture what the system plays:
-there is no PipeWire or PulseAudio backend yet. Nothing here is a claim about Flatpak,
-SteamOS or the Steam Deck.
+Status: **phase 1a of the Linux port** (2026-11-23), **validated on a real CachyOS desktop
+on 2026-11-23.** The application starts from a source checkout on Linux, analyses audio
+files, records sessions and replays them, with the same engine and the same renderers as on
+Windows. Every check of the application in `scripts/validate_linux.py` passed there. The
+test suite passes there only with two test fixes that are not yet on `main` (see
+[What has been checked](#what-has-been-checked)). It does **not** capture what the system
+plays: there is no PipeWire or PulseAudio backend yet, and that is the next phase (1b).
+CachyOS on a desktop is not SteamOS: nothing here is a claim about Flatpak, SteamOS, Steam's
+Gaming Mode or the Steam Deck.
 
-What exactly was and was not checked, and the commands that check it on Linux, are in
+What was run on CachyOS, what was measured there, what was only tested on Windows, what is
+still unchecked, and the commands that check it, are in
 [What has been checked](#what-has-been-checked). The plan for the whole port, and the
 research behind it, is [LINUX_PORT_AUDIT.md](LINUX_PORT_AUDIT.md).
 
 ## What is there, and what is not
 
-"Yes" below means implemented and covered by tests that run on Windows with the system set
-to Linux, not observed on Linux.
+"Yes" below means implemented, tested on Windows with the system set to Linux, and run on
+one CachyOS desktop on 2026-11-23 (see [What has been checked](#what-has-been-checked)).
 
 | | Linux, as implemented |
 |---|---|
-| Open the application window | Yes |
-| Analyse an audio file (WAV, FLAC, OGG, MP3 and whatever else libsndfile reads) | Yes |
+| Open the application window | Yes; on CachyOS under Wayland and under Xwayland |
+| Analyse an audio file (WAV, FLAC, OGG, MP3 and whatever else libsndfile reads) | Yes; on CachyOS WAV and FLAC in the window, and WAV, FLAC, OGG and MP3 in the test suite |
 | Record a session's analysis logs | Yes, in the user's data folder |
 | Replay a recorded session, from Linux or from Windows | Yes |
-| Classic, Spectrum bars and Radiant | The same code as on Windows; Radiant on the graphics card is not yet validated on Linux drivers |
+| Classic, Spectrum bars and Radiant | Yes; on CachyOS all three were drawn, Radiant on the graphics card (AMD RX 9070 XT, Mesa 26.3.1). Other graphics cards and drivers not tried |
 | Capture the system's output, one output device, or one application | **No.** Not offered; see below |
 | Packaged build, desktop entry, Flatpak | No |
 
@@ -121,7 +124,7 @@ with that sentence, not with a missing-library error. There is no stand-in backe
 returns silence or pretends to capture.
 
 Capture through PipeWire's PulseAudio server is the next phase (1b); it will be another
-`AudioSource` and nothing else in the program changes for it.
+`AudioSource` and nothing else in the program changes for it. None of it is written yet.
 
 ## Qt platform (Wayland, X11, Gamescope)
 
@@ -183,19 +186,125 @@ uv run ruff check .
   Three are for a real Linux only (POSIX permissions, Qt's settings file, loading Qt's
   plugins) and are skipped on Windows; one is for Windows only (launching the capture
   helper) and is skipped on Linux.
+- On Linux two more are skipped while their optional packages are not installed:
+  `tests/test_recognition.py` needs ONNX Runtime (the `recognition` extra) and
+  `tests/test_review_experiment.py` needs PyTorch. A Linux run set up with `--extra dev`
+  therefore reports 3 skipped.
 - The Radiant graphics-card tests start a real OpenGL context in a process of their own.
-  Without a display, or without OpenGL 3.3, they are skipped with the reason. Their passing
-  on Linux is part of the rendering phase, not this one.
+  Without a display, or without OpenGL 3.3, they are skipped with the reason. On CachyOS
+  (AMD RX 9070 XT, Mesa 26.3.1, from a KDE Plasma Wayland session) they ran and passed.
 - No test reads or writes the user's settings, sessions or models.
 
 ## What has been checked
 
-**Nothing in this phase has been run on a real Linux system.** No Linux machine was available
-when it was written: the development machine is Windows 11, it has no WSL distribution to
-work in, and the container engine installed on it did not start. No virtual machine, WSL
-distribution or other system was installed to get one. So, as of 2026-11-23:
+Phase 1a was written and first tested on Windows, with `gmv.host` told it was on Linux,
+because no Linux system was available. On 2026-11-23 it was run on a real Linux desktop.
+The two are kept apart below: what was run on CachyOS, what was tested on Windows before
+that, and what has not been checked anywhere.
 
-Checked on Windows 11 (Python 3.14.3, PySide6 6.12.0):
+### On CachyOS (2026-11-23)
+
+The machine: CachyOS (kernel 7.3.5-2-cachyos, glibc 2.44, x86-64), KDE Plasma on Wayland,
+an AMD Radeon RX 9070 XT with Mesa 26.3.1; Python 3.14.10, PySide6 and Qt 6.12.0; a clone
+of `main` at `766a3f7` with its own `.venv` made by `uv`. The run:
+
+```sh
+uv run python scripts/validate_linux.py --tests
+```
+
+The script points the XDG folders at a scratch folder and starts the application from an
+empty working directory, so none of the user's own settings or sessions were read or
+written. It opened the real window on the desktop four times. **59 of its 60 checks
+passed.** The one that failed was *the test suite passes* ([below](#the-test-suite-on-cachyos));
+every check of the application itself passed.
+
+| Window run | Qt platform, with the reason the application gave | Drawn during the file analyses |
+|---|---|---|
+| As the session gives it | `wayland` (Qt's own choice) | Spectrum bars |
+| Again, to find the remembered settings | `wayland` (Qt's own choice) | Radial, Classic theme (the remembered mode) |
+| `GMV_QT_PLATFORM=xcb` | `xcb`, through the Plasma session's Xwayland | Radial, Classic theme |
+| `GMV_QT_PLATFORM=wayland` | `wayland` | Radial, Classic theme |
+
+In each of the four runs:
+
+- the window opened, ran and closed cleanly (exit 0 in about 17 s, no thread left running)
+  and said on standard error which Qt platform it used and why;
+- the source list offered *Audio file* only, with the note that live capture is not
+  available on Linux yet;
+- a generated four-second click track was analysed as a WAV (16-bit) and as a FLAC
+  (24-bit): 198 frames, 25 events and 7 onsets shown for each, with no engine error;
+- each analysis recorded a complete session, without audio, in
+  `$XDG_DATA_HOME/GranularMusicVisualizer/sessions/`;
+- the FLAC was deleted and its session replayed: the same 7 onsets at the recorded times,
+  marked as a replay;
+- Radiant was shown for two seconds, drawn on the graphics card;
+- the settings file was in `$XDG_CONFIG_HOME/GranularMusicVisualizer/`, and the second run
+  found the settings the first had left (Radial, Expressive).
+
+Also: nothing was written in the working directory, and `gmv capture` was refused with one
+sentence: *"Live system audio capture is not available on Linux yet. Choose an audio file,
+or replay a recorded session."* The window runs used the scratch XDG folders only; the
+default folders with the variables unset (`~/.config`, `~/.local/share`) are covered by the
+test suite, which ran on the same machine. The report records that frames were drawn, not
+how they looked.
+
+**Measured in that run.** These are one run's figures for short generated files on this
+machine, not what another machine or real music will do. The analysis runs in a process of
+its own. The figures are what Diagnostics showed at the end of each window run, so they are
+for the last file analysed (the FLAC), and the CPU and memory are the analysis process's.
+
+| | Range over the four window runs |
+|---|---|
+| Analysis (DSP) time per 20 ms block, 95th percentile | 2.5–2.7 ms, against a budget of 20 ms |
+| Instrument analysis, 95th percentile, inside the analysis pass | 0.99–1.02 ms per frame |
+| Analysis process | CPU 17–18% of one core; memory 122 MiB |
+| Losses | capture 0, native 0, logger 0, discontinuities 0; messages lost between the analysis process and the window 0 |
+| Radiant's renderer | AMD Radeon RX 9070 XT (radeonsi, gfx1201), OpenGL 4.6 Compatibility Profile, Mesa 26.3.1, GLSL 4.60 |
+| Radiant, the last frame measured | 1.38–1.39 ms on the graphics card; 0.66–0.78 ms to submit it |
+
+The window's size was not recorded and the Radiant figure is a single frame, so it is not
+comparable with the 1920×1080 measurements made on Windows.
+
+#### The test suite on CachyOS
+
+In the validation run: 517 passed, 3 skipped, **3 failed**. Two separate problems turned up
+on Linux, both in tests, neither in the application:
+
+- **The 3 failures**, all in `tests/test_remote.py` at `assert not children()`. On Linux a
+  worker started with `spawn` leaves Python's multiprocessing resource tracker running for
+  the life of the parent, and the test counted the tracker as a worker left behind; the
+  worker itself had exited. Windows has no resource tracker. The fix is in the test only. It
+  is **local and uncommitted**, on branch `fix/linux-resource-tracker-test` in the CachyOS
+  checkout, and is not on GitHub.
+- **An intermittent failure** of
+  `tests/test_app.py::test_replay_runs_inside_the_same_window_with_original_times`, seen in
+  later runs (1 of 6 runs on its own, and once in another full run; it passed in the
+  validation run). No message was dropped. Since `e1d4a3a` the view takes in at most about
+  6 ms of messages per frame and leaves the rest queued for the next, and the test read the
+  markers one frame after a 100× replay had ended. The fix makes the replay tests wait until
+  the view has taken in every message. It is in
+  [pull request #1](https://github.com/Ralkero/granular-audio-visualizer/pull/1), **open and
+  not merged**.
+
+With both fixes applied, the whole suite on the same machine: **520 passed, 3 skipped,
+0 failed.** That was a working tree with both fixes, not `main` as published. Until both are
+on `main`, `main` still shows the 3 `test_remote.py` failures on Linux, and the replay test
+can still fail now and then.
+
+The 3 skipped on Linux: `tests/test_failures.py` (it launches the Windows capture helper),
+and `tests/test_recognition.py` and `tests/test_review_experiment.py`, whose optional
+packages (ONNX Runtime, PyTorch) are not installed with `--extra dev`. The three Linux-only
+tests ran and passed, and so did the Radiant graphics-card tests
+(`tests/test_radiant_plasma.py`, `tests/test_radiant_smoke.py`). No other test written on
+Windows needed a Windows-only mark.
+
+### On Windows, with the system set to Linux (before CachyOS)
+
+When phase 1a was written no Linux machine was available: the development machine is
+Windows 11, it has no WSL distribution to work in, and the container engine installed on it
+did not start. No virtual machine, WSL distribution or other system was installed to get
+one. What follows was checked on Windows 11 (Python 3.14.3, PySide6 6.12.0) before the
+CachyOS run:
 
 - The platform boundary, by telling `gmv.host` which system it is (58 tests in
   `tests/test_host.py` and `tests/test_platform_app.py`; 55 run on Windows): the XDG folders
@@ -209,21 +318,27 @@ Checked on Windows 11 (Python 3.14.3, PySide6 6.12.0):
   Gamescope rule, the override and Qt's own overrides; Qt started only after the choice; the
   command line recording in the data folder from another working directory.
 - Windows unchanged: the whole suite (519 passed, 4 skipped; three of the skips are the
-  Linux-only tests below); the real window with its four sources, file analysis, replay,
+  Linux-only tests, which have since passed on CachyOS); the real window with its four sources, file analysis, replay,
   Radiant on the graphics card and live capture through the native helper; the command
   line's `devices`, `file` and `capture`.
 
-Not checked anywhere yet, and to be checked on Linux:
+### Not checked yet
 
-- `uv sync` on Linux and the application window actually opening, on Wayland and on X11.
-- The three Linux-only tests: a read-only folder refused (POSIX permissions), Qt's settings
-  file landing in `XDG_CONFIG_HOME`, and Qt's own platform plugins found loadable.
-- The rest of the existing test suite on Linux. It was written on Windows; one test that
-  launches the Windows capture helper is marked Windows-only, and others may turn out to
-  need the same (the research tools `gmv evidence` and `gmv review` are the likeliest).
-- The plugin check's messages against a real missing library.
-- The Gamescope rule inside a real Gamescope, nested or in Steam's Gaming Mode.
-- Radiant's shaders on Mesa or any Linux driver (the rendering phase).
+- Steam's Gaming Mode, and a nested Gamescope (`gamescope -- uv run gmv-visualizer`): the
+  Gamescope rule has not run inside any Gamescope.
+- Anything on SteamOS or a Steam Deck: its audio setup, its graphics, its performance.
+- A native X11 desktop session. `xcb` ran only through the Xwayland of a Plasma Wayland
+  session.
+- Whether KWin puts the window on a chosen screen under Wayland, where the compositor places
+  windows itself. The validation windows were on `DP-2`, which is also the primary screen
+  there, so this is not settled.
+- A session with music of the user's own, watched as it plays. The generated click tracks
+  show that the pipeline works; they do not replace looking at the visualizer with real
+  music.
+- The plugin check's messages against a real missing library (nothing was missing on the
+  CachyOS machine).
+- Other graphics cards and drivers; resizing, full screen and long sessions on Linux.
+- Live capture: it is not implemented.
 
 ### Checking it on Linux (CachyOS)
 
@@ -251,18 +366,22 @@ cat ~/.config/GranularMusicVisualizer/*.conf           # the settings it remembe
 gamescope -- uv run gmv-visualizer                     # optional: a nested Gamescope
 ```
 
-(The work of this phase is not on GitHub until it is committed and pushed; until then copy
-the checkout to the Linux machine instead of cloning.)
-
 ## Known limitations
 
-- No live capture (see above). This is the next phase.
-- Radiant on the graphics card has not been validated on Linux drivers. If its OpenGL context
-  cannot be made, the application falls back to the geometry-only Radiant and Diagnostics
-  says so, as on Windows. No software renderer is selected by GMV.
-- The interface names "Segoe UI" as its font; Linux is expected to use the system's default sans font.
-- No desktop entry or installed icon. On Wayland the window icon comes from a desktop entry,
-  so the window is expected to have a generic icon there.
+- **No live capture.** Linux offers the audio file and the replay of recorded sessions only:
+  it cannot capture the system's output, one output device or one application. A file is
+  analysed at playing speed and is not played aloud. PipeWire capture is the next phase
+  (1b); none of it is written yet.
+- **No packaging.** No installed desktop entry, no installed icon, no Flatpak: the
+  application is started from the checkout with `uv run gmv-visualizer`. On Wayland the
+  window icon comes from a desktop entry, so the window is expected to have a generic icon
+  there.
+- Radiant on the graphics card has been run on one Linux driver only: Mesa 26.3.1 (radeonsi)
+  on an AMD RX 9070 XT. If its OpenGL context cannot be made, the application falls back to
+  the geometry-only Radiant and Diagnostics says so, as on Windows. No software renderer is
+  selected by GMV.
+- The interface names "Segoe UI" as its font, which a Linux system usually does not have;
+  Qt then uses the system's default sans font.
 - `Open folder` under Sessions asks the desktop to open the session folder
   (`QDesktopServices`); it needs a file manager and `xdg-open`.
 - The Windows capture tools in `scripts/` (`clock_probe.py`, `validate_capture.py`,
