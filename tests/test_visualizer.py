@@ -414,6 +414,14 @@ def write_clicks(path, seconds=4):
     return path
 
 
+def caught_up(view):
+    """Whether ``view`` has taken in every message queued for it. A frame takes in a burst
+    a bounded share at a time and leaves the rest queued for the next frames, so a stream that
+    has ended may still have messages waiting. Check that it has ended first, then this: then
+    nothing more can arrive."""
+    return view.subscription is None or len(view.subscription) == 0
+
+
 def test_live_engine_feeds_the_window_and_the_session_replays_with_original_times(
     window, tmp_path, app
 ):
@@ -422,7 +430,8 @@ def test_live_engine_feeds_the_window_and_the_session_replays_with_original_time
     window.attach(engine.bus, source="file")
     engine.start()
     assert engine.done.wait(30) and engine.error is None
-    window.tick()
+    while not caught_up(window):  # the whole session is queued: it takes several frames
+        window.tick()
     live_onsets = [mark.time for mark in window.state.markers if mark.kind == "onset"]
     assert len(live_onsets) >= 6 and window.state.spectrum is not None
     assert not window.state.replayed
@@ -432,12 +441,11 @@ def test_live_engine_feeds_the_window_and_the_session_replays_with_original_time
     window.attach(session.bus, source=session.title)
     session.start()
     deadline = perf_counter() + 20
-    while not session.finished and perf_counter() < deadline:
+    while not (session.finished and caught_up(window)) and perf_counter() < deadline:
         window.tick()
         app.processEvents()
-    window.tick()
     session.stop()
-    assert session.finished and session.error is None
+    assert session.finished and session.error is None and caught_up(window)
     assert window.state.replayed and window.canvas.condition == "stopped"
     replayed = [mark.time for mark in window.state.markers if mark.kind == "onset"]
     assert replayed == pytest.approx(live_onsets)  # audio timestamps, not replay arrival times
