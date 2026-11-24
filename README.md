@@ -141,3 +141,11 @@ gmv review --workdir review-local\pilot-v1 report
 ```
 
 See [capture test matrix and legacy single-file import format](docs/CAPTURE_VALIDATION.md), [schema 1.1 / replay / stale-event policy](docs/SCHEMA.md), and [isolated Demucs benchmark](experiments/separation/README.md). Demucs is an offline research experiment: overlap throughput, latency, synthetic quality and unresolved weight licensing did not justify live integration. The control center distinguishes observed/candidate/predicted/delayed events, reports separate losses and helper resources, and shows pending hardware checks. Raw recording stays off.
+
+## Licence
+
+Copyright (C) 2026 Ralkero.
+
+Granular Music Visualizer is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License in [`LICENSE`](LICENSE) for more details.
+
+The licence covers the source code in this repository. Model weights are not part of the repository and keep their own terms: the weights published with the [0.1.1 release](https://github.com/Ralkero/granular-audio-visualizer/releases/tag/v0.1.1) are for non-commercial use only (CC BY-NC-SA 4.0, attribution in `models/MODEL-LICENCES.txt`). Datasets used for evaluation are not included and stay under their owners' terms.
