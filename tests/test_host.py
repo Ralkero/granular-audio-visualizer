@@ -263,11 +263,8 @@ def test_windows_has_every_capture_source_and_the_file(windows):
         sources.require(key)  # nothing is refused
 
 
-@pytest.mark.parametrize("system", ["linux", "other"])
-def test_a_system_without_a_capture_backend_has_the_file_and_nothing_that_pretends(
-    monkeypatch, system
-):
-    monkeypatch.setattr(host, "system", lambda: system)
+def test_a_system_without_a_capture_backend_has_the_file_and_nothing_that_pretends(monkeypatch):
+    monkeypatch.setattr(host, "system", lambda: "other")
     assert host.audio_sources() == ("file",)
     assert not host.live_capture()
     sources.require("file")
@@ -277,19 +274,36 @@ def test_a_system_without_a_capture_backend_has_the_file_and_nothing_that_preten
     assert sources.list_output_devices() == [] and sources.list_audio_applications() == []
 
 
-def test_linux_says_plainly_that_live_capture_is_not_there_yet(linux):
-    assert host.capture_note() == "Live system audio capture is not available on Linux yet."
+def test_linux_has_system_capture_and_the_file_but_no_device_or_application(linux):
+    assert host.audio_sources() == ("system", "file")
+    assert host.live_capture() and host.capture_note() == ""
+    sources.require("system")
+    sources.require("file")
+    for key, name in (("device", "one output device"), ("application", "one application")):
+        with pytest.raises(sources.Unavailable, match=f"Capture of {name} is not available"):
+            sources.require(key)
+    assert sources.list_output_devices() == [] and sources.list_audio_applications() == []
+
+
+def test_linux_capture_is_built_by_the_pulseaudio_backend(linux, monkeypatch):
+    from gmv.sources import system_pulse
+
+    asked = []
+    monkeypatch.setattr(
+        system_pulse, "system_audio_source", lambda *a: asked.append(a) or "pulse source"
+    )
+    assert sources.system_audio_source() == "pulse source"
+    assert asked == [(None, "auto")]
     for build in (
-        sources.system_audio_source,
         lambda: sources.system_audio_source("Speakers [Loopback]"),
         lambda: sources.application_audio_source(pid=os.getpid()),
     ):
         with pytest.raises(sources.Unavailable) as refused:
             build()
         message = str(refused.value)
-        assert message.startswith("Live system audio capture is not available on Linux yet.")
-        assert "audio file" in message and "replay" in message
-        assert "PipeWire" not in message and "WASAPI" not in message
+        assert "is not available on Linux" in message
+        assert "audio file" in message and "replay" in message and "WASAPI" not in message
+    assert asked == [(None, "auto")]  # nothing more was built
 
 
 def test_windows_capture_is_built_by_the_windows_backend(windows, monkeypatch):
@@ -308,9 +322,11 @@ def test_windows_capture_is_built_by_the_windows_backend(windows, monkeypatch):
     assert asked == [(None, "auto"), ("Speakers [Loopback]", "portaudio"), {"pid": 7}]
 
 
-def test_linux_never_loads_a_capture_backend(tmp_path):
-    """Starting the application, looking for sources and being refused a capture source
-    load nothing of the Windows backends: not the modules, not their libraries."""
+def test_linux_never_loads_a_windows_capture_backend(tmp_path):
+    """Starting the application, looking for sources, asking for system capture and being
+    refused the sources Linux does not have load nothing of the Windows backends: not the
+    modules, not their libraries. (No sound server answers in the tests, so system capture
+    is refused here too, in a sentence about pactl.)"""
     code = AS_LINUX + (
         "import sys\n"
         "from gmv.app.controller import Settings, audio_source, available_sources, discover\n"
@@ -318,12 +334,14 @@ def test_linux_never_loads_a_capture_backend(tmp_path):
         "app = application()\n"
         f"window = MainWindow(session_root=r'{tmp_path}', remember=False, discover_sources=False)\n"
         "assert discover() == ([], [], ''), discover()\n"
-        "assert [key for key, _ in available_sources()] == ['file']\n"
-        "for kind in ('system', 'device', 'application'):\n"
+        "assert [key for key, _ in available_sources()] == ['system', 'file']\n"
+        "expected = {'system': 'pactl', 'device': 'not available on Linux',\n"
+        "            'application': 'not available on Linux'}\n"
+        "for kind, said in expected.items():\n"
         "    try:\n"
         "        audio_source(Settings(source=kind, device='x', application={'pid': 1}))\n"
         "    except ValueError as refused:\n"
-        "        assert 'not available on Linux yet' in str(refused), refused\n"
+        "        assert said in str(refused), refused\n"
         "    else:\n"
         "        raise SystemExit(kind + ' was built')\n"
         "window.close()\n"

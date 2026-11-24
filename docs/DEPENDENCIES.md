@@ -49,7 +49,7 @@ No dependency was added, removed or made platform-specific for Linux. `uv.lock` 
 | PySide6 Essentials | Wheel `manylinux_2_34` (glibc 2.34+) | Brings Qt and its platform plugins (`xcb`, `wayland`, `offscreen`). The plugins use system libraries: for `xcb`, `xcb-util-cursor` and the other `xcb-util-*` libraries and `libxkbcommon-x11`; for `wayland`, `wayland` and `libxkbcommon`; OpenGL through the system's `libGL`/`libEGL`. None is a Python dependency; [LINUX.md](LINUX.md) lists the packages. |
 | NumPy, SciPy, SoundFile, Pydantic, psutil | Linux wheels | The SoundFile wheel carries its own libsndfile, so file formats do not depend on the system's. |
 | ONNX Runtime (optional `recognition` extra) | Linux wheels for Python 3.11 to 3.14 | |
-| PipeWire, PulseAudio | None | No capture backend yet; nothing was added for one. |
+| PipeWire (`pipewire-pulse`) or PulseAudio, with `pactl` and `parec` | System programs, not Python dependencies | System audio (phase 1b) runs `pactl` and `parec` as subprocesses (`gmv.sources.system_pulse`); no Python package was added for it. On CachyOS and Arch both programs are in `libpulse`. Needed only for System audio. |
 
 `uv.lock` was brought in line with `pyproject.toml` in this phase: the optional `recognition` extra (`onnxruntime` with `flatbuffers` and `protobuf`) had been added to `pyproject.toml` without relocking, so `uv sync --locked`, which `Setup.ps1` runs and Linux setup uses, would refuse the lock. `uv lock` added those three packages and changed no existing pin. The supported Python versions are unchanged (3.11 and newer).
 

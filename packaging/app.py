@@ -124,8 +124,10 @@ def self_check(report):
         while window.controller.running and perf_counter() < deadline:
             app.processEvents()
             sleep(0.01)
-        if not host.live_capture():
-            result["live_capture"] = host.capture_note()
+        if not host.live_capture() or host.system() != "windows":
+            # The packaged build and its tone player are Windows ones; Linux capture is
+            # checked by scripts/validate_linux.py --audio-capture.
+            result["live_capture"] = host.capture_note() or "not checked by the self-check here"
             window.close()
             Path(report).write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
             return 0

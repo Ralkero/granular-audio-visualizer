@@ -41,7 +41,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import host, paths
+from .. import host, paths, sources
 from ..visualizer.state import ROWS
 from ..visualizer.themes import DEFAULT as DEFAULT_THEME
 from ..visualizer.themes import THEMES
@@ -56,6 +56,13 @@ from .controller import (
 )
 
 DRAWER_WIDTH = 440
+# What "system" captures, where a system says more than the general sentence.
+SYSTEM_NOTES = {
+    "linux": "Everything the system plays on its default output: Spotify, games, browsers "
+    "and other applications, recorded from that output's monitor through PipeWire. Not the "
+    "microphone. When the default output changes, capture follows it. Volume and routing "
+    "are not changed.",
+}
 STYLE = """
 QWidget#app { background: #05060a; }
 QWidget#topbar { background: #0a0c13; border-bottom: 1px solid #1c2030; }
@@ -629,7 +636,10 @@ class SettingsDrawer(QFrame):
         self.file.setEnabled(kind == "file")
         self.browse_file.setEnabled(kind == "file")
         note = {
-            "system": "Everything playing on the default output. Volume and routing are not changed.",
+            "system": SYSTEM_NOTES.get(
+                host.system(),
+                "Everything playing on the default output. Volume and routing are not changed.",
+            ),
             "device": "Everything playing on the chosen output device.",
             "application": "Only the chosen application and its child processes. It never "
             "falls back to capturing everything.",
@@ -637,6 +647,8 @@ class SettingsDrawer(QFrame):
         }[kind]
         if not host.live_capture():
             note = f"{host.capture_note()} {note} A recorded session can be replayed below."
+        elif kind == "system":
+            note = " ".join(filter(None, (note, sources.system_capture_problem())))
         self.source_note.setText(note)
 
     def show_capabilities(self):

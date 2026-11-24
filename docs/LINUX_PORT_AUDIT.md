@@ -1,11 +1,13 @@
 # Linux and Steam Deck port: audit and plan
 
-Status: audit only. No application code, configuration, dependency or packaging file was
-changed to write this. The port has not started.
+Status when written (2026-11-22): audit only. No application code, configuration,
+dependency or packaging file was changed to write this. The port had not started.
 
-> Update, 2026-11-23: phase 1a has since been implemented. What was done, and what is still
-> unverified, is in section M at the end. Sections A to L are the audit as it was written on
-> 2026-11-22 and have not been changed. Setup and launch on Linux: [LINUX.md](LINUX.md).
+> Update, 2026-11-23: phase 1a has since been implemented (section M) and validated on a
+> real CachyOS desktop the same day (section N), and phase 1b, capture of the system's
+> default output through PipeWire's PulseAudio service, implemented and validated there too
+> (section O). Sections A to L are the audit as it was written on 2026-11-22 and have not
+> been changed. Setup, launch and the CachyOS results in full: [LINUX.md](LINUX.md).
 
 Written 2026-11-22 against branch `main` at `084b443` ("Radiant radial theme with a palette
 of its own (phase 1)"), level with `origin/main`, with uncommitted Radiant work in the tree
@@ -868,11 +870,12 @@ files and replay, and Windows is unchanged. No capture backend, no packaging, no
 the engine, the analysis or the renderers.
 
 **State.** Implemented and tested on Windows, with the Linux behaviour exercised by telling
-the platform module which system it is. **Not run on a real Linux system**: none was
-available (no WSL distribution to work in; the container engine on the development machine
-did not start; nothing was installed to get one). Every statement below that says "Linux
-does X" is what the code and its tests establish, not something observed on Linux.
-[LINUX.md](LINUX.md) has the commands that check it on CachyOS.
+the platform module which system it is, and since validated on a real CachyOS desktop on
+2026-11-23 (section N). When this section was first written no Linux system was available
+(no WSL distribution to work in; the container engine on the development machine did not
+start; nothing was installed to get one), so M.1 and M.2 describe what the code and its
+tests establish, not something observed on Linux. M.3 sets that beside what CachyOS
+showed. [LINUX.md](LINUX.md) has the commands that check it on Linux.
 
 ### M.1 What was done, against section L
 
@@ -883,7 +886,7 @@ does X" is what the code and its tests establish, not something observed on Linu
 | 3. Controller and drawer | `available_sources()`; `Settings.source` defaults to the first of them; the drawer lists only those and hides the device, application and refresh rows without live capture; the note says *"Live system audio capture is not available on Linux yet."* | The command line goes through the registry as well; its `--sessions` default is the data folder on Linux |
 | 4. Qt platform | `app.window.start_qt()` applies `host.select_qt_platform()` before the `QApplication` is made | Rule and override below (M.2). A plugin GMV asked for is checked for loadability first; the choice and its reason are printed and shown in Diagnostics |
 | 5. `packaging/app.py` | The self-check leaves the capture part out on a system without live capture and says so | |
-| 6. Tests | `tests/test_host.py`, `tests/test_platform_app.py` (58 tests) | Windows capture tests were **not** skipped wholesale: they are pure logic and import cleanly. One test that launches the helper (`subprocess.CREATE_NO_WINDOW`) is marked Windows-only. Whether others need it is not known until the suite runs on Linux |
+| 6. Tests | `tests/test_host.py`, `tests/test_platform_app.py` (58 tests) | Windows capture tests were **not** skipped wholesale: they are pure logic and import cleanly. One test that launches the helper (`subprocess.CREATE_NO_WINDOW`) is marked Windows-only. Whether others need it is not known until the suite runs on Linux (since answered on CachyOS: none did; N.3) |
 | 7. This document | Section M | |
 
 Also done: `paths.writable_folder` (a sessions folder that cannot be made or written is one
@@ -930,34 +933,52 @@ list would also fall through to `xcb` when Wayland is listed first and cannot be
 
 ### M.3 Acceptance, honestly
 
-| Criterion | State |
-|---|---|
-| Starts from a Linux checkout | Not observed. Nothing Windows-only is imported on the way (tested in a process told it is Linux) |
-| XDG locations for settings and data | Tested with the variables set, unset, empty, relative. The settings file's place is Qt's doing and is asserted by a Linux-only test that has not run |
-| Windows paths unchanged | Tested; existing tests pass unchanged |
-| Linux offers only supported sources; no advertised capture | Tested |
-| File analysis, session logging, replay on Linux | Tested through the real window with the system set to Linux, on Windows' libsndfile and Qt. Not observed on Linux |
-| Normal Qt platform selection | The decision is tested for Wayland and X11 sessions (nothing forced). Qt's own behaviour on a Linux desktop not observed |
-| Gaming Mode `xcb` mechanism | Tested as a decision; documented; overridable. Not tried in Gamescope |
-| Windows-only APIs do not block Linux start-up | Tested (no capture module or library loaded) |
-| Renderers untouched | Yes; their tests pass unchanged |
-| Windows regressions | Whole suite 519 passed, 4 skipped; real window and command line checked |
+The middle column is what was established on Windows before any Linux system was available;
+the right column is what the CachyOS run of 2026-11-23 showed (section N).
+
+| Criterion | Tested on Windows, the system set to Linux | On CachyOS, 2026-11-23 |
+|---|---|---|
+| Starts from a Linux checkout | Nothing Windows-only is imported on the way (tested in a process told it is Linux) | Yes: four window runs from an empty working directory, each closed cleanly |
+| XDG locations for settings and data | Tested with the variables set, unset, empty, relative. The settings file's place is Qt's doing and is asserted by a Linux-only test that could not run there | Yes: sessions and the settings file where expected (validation, with the XDG folders pointed at a scratch folder); the Linux-only settings-file test passed |
+| Windows paths unchanged | Tested; existing tests pass unchanged | Not applicable |
+| Linux offers only supported sources; no advertised capture | Tested | Yes: *Audio file* only, with the note; `gmv capture` refused in one sentence |
+| File analysis, session logging, replay on Linux | Tested through the real window with the system set to Linux, on Windows' libsndfile and Qt | Yes: WAV and FLAC in the window (198 frames, 7 onsets each), sessions complete without audio, replay after the audio was deleted with the same onset times; WAV, FLAC, OGG, MP3 and a session in the form Windows writes it (CRLF, Windows paths) in the test suite |
+| Normal Qt platform selection | The decision is tested for Wayland and X11 sessions (nothing forced) | Yes on KDE Plasma Wayland: Qt chose `wayland` itself; `GMV_QT_PLATFORM=xcb` (through Xwayland) and `GMV_QT_PLATFORM=wayland` were honoured, each with its reason. No native X11 session tried |
+| Gaming Mode `xcb` mechanism | Tested as a decision; documented; overridable | Not tried: no Gamescope, nested or in Gaming Mode |
+| Windows-only APIs do not block Linux start-up | Tested (no capture module or library loaded) | Yes |
+| Renderers untouched | Yes; their tests pass unchanged | Spectrum bars, Radial (Classic) and Radiant on the graphics card were drawn (AMD RX 9070 XT, Mesa 26.3.1); the Radiant graphics-card tests passed |
+| Full suite on Linux apart from Windows-only tests (H, phase 1) | Could not run | `main`: 517 passed, 3 skipped, 3 failed. With two test fixes not yet on `main`: 520 passed, 3 skipped (N.3) |
+| Windows regressions | Whole suite 519 passed, 4 skipped; real window and command line checked | Not applicable |
 
 ### M.4 What remains
 
 The phases are numbered here as they are now planned; the audit's own numbers (section H)
 are in brackets.
 
-- **Phase 1a, to finish:** run `scripts/validate_linux.py --tests` on CachyOS; fix what the
-  existing suite shows on Linux.
-- **Phase 1b [H: phase 2]: system-audio capture.** `PulseMonitorSource` over libpulse as
-  designed in C.3 to C.5; list it in `host.LIVE_CAPTURE` and build it in `gmv.sources`;
-  the 10-minute `clock_probe` acceptance run; default-sink change, unplug and
-  suspend/resume producing new segments.
-- **Phase 2 [H: phase 3]: Linux GPU and Qt rendering validation.** Radiant, Classic and
-  Spectrum bars on Mesa under `wayland` and `xcb`; the explicit default surface format
-  (D.2) if the default context turns out wrong; the GPU test probe on Linux; composition
-  of the canvas over the OpenGL view (D.3); a nested Gamescope.
+| Phase | Work | Status (2026-11-23) |
+|---|---|---|
+| 1a [H: 1] | Native Linux start-up, file analysis, recording, replay, platform foundations | Implemented and validated on CachyOS; two test fixes still to reach `main` (N.3) |
+| 1b [H: 2] | Live system-audio capture through PipeWire's PulseAudio server | Implemented and validated on CachyOS (section O); following a change of output between real devices not yet tried |
+| 2 [H: 3] | Linux GPU and Qt rendering validation beyond the CachyOS configuration tried | Partly seen on CachyOS (N.1); the rest remains |
+| 3 [H: 4] | Flatpak packaging | Not started |
+| 4 [H: 5] | SteamOS Gaming Mode integration | Not started; needs a Steam Deck |
+| 5 [H: 6] | Handheld refinement | Not started; needs measurements on a Steam Deck |
+
+- **Phase 1a, to close:** the run of `scripts/validate_linux.py --tests` on CachyOS is done
+  (section N) and needed no application change. Left: the two test fixes reaching `main`,
+  the resource-tracker fix to `tests/test_remote.py` (local and uncommitted) and the replay
+  test fix in pull request #1 (open).
+- **Phase 1b [H: phase 2]: system-audio capture.** Done; what was built and how it differs
+  from C.3 to C.5 is in section O. Left from H's acceptance: a default-sink change, an
+  unplug and a suspend on real hardware (tested against a stand-in only), and a PulseAudio
+  server.
+- **Phase 2 [H: phase 3]: Linux GPU and Qt rendering validation.** Seen on CachyOS
+  (section N): Radiant, Classic and Spectrum bars drawn on Mesa (radeonsi) under `wayland`
+  and under `xcb` through Xwayland, with the default context (no D.2 surface format was
+  needed), and the GPU test probe and Radiant's graphics-card tests passing on Linux. Still
+  open: other drivers and graphics cards; a native X11 session; resizing, full screen and
+  theme switching while running; composition of the canvas over the OpenGL view (D.3)
+  judged by eye; a nested Gamescope.
 - **Phase 3 [H: phase 4]: Flatpak.** Manifest on the KDE runtime with the PySide BaseApp;
   shaders as package data; desktop entry, metainfo, icons; the model-redistribution
   constraint (F.7); the application ID (F.6).
@@ -967,3 +988,218 @@ are in brackets.
   capture.
 - **Phase 5 [H: phase 6]: handheld refinement.** Touch-sized controls, render scale and
   frame-rate defaults for the Deck's GPU, power, measured on the device.
+
+---
+
+## N. Phase 1a: real CachyOS validation (2026-11-23)
+
+This section was added after the first run on a real Linux system. It summarizes what was
+run and measured; the full list of checks is in
+[LINUX.md](LINUX.md#on-cachyos-2026-11-23). CachyOS on a desktop is not SteamOS (section I):
+nothing here shows how GMV behaves on a Steam Deck, in Gaming Mode or as a Flatpak.
+
+### N.1 What was run
+
+- **Machine:** CachyOS, kernel 7.3.5-2-cachyos, glibc 2.44, x86-64; KDE Plasma on Wayland;
+  AMD Radeon RX 9070 XT with Mesa 26.3.1; Python 3.14.10, PySide6 and Qt 6.12.0; a clone of
+  `main` at `766a3f7` with its own `.venv` made by `uv`. `perf_counter` there is
+  `clock_gettime(CLOCK_MONOTONIC)` and monotonic, as H's phase 1 acceptance asks.
+- **Run:** `uv run python scripts/validate_linux.py --tests`, which points the XDG folders at
+  a scratch folder and starts the application from an empty working directory.
+- **Result: 59 of 60 checks passed.** The failed check was the test suite (N.3). Every check
+  of the application passed:
+  - the real window opened, ran and closed cleanly four times: as the session gives it and
+    again for the remembered settings (Qt chose `wayland` both times), with
+    `GMV_QT_PLATFORM=xcb` (through Xwayland) and with `GMV_QT_PLATFORM=wayland`, each time
+    saying which platform it used and why;
+  - in each run a generated WAV and FLAC were analysed (198 frames and 7 onsets each), their
+    sessions recorded complete and without audio in the XDG data folder, and the FLAC's
+    session replayed after the file was deleted, with the same onset times;
+  - Spectrum bars (first run) and Radial with the Classic theme (the other three) were drawn
+    during the analyses, and Radiant on the graphics card in every run;
+  - the settings file was in the XDG configuration folder and the settings came back; only
+    *Audio file* was offered; `gmv capture` was refused in one sentence; nothing was written
+    in the working directory.
+
+### N.2 Measured
+
+One run's figures, for short generated files, on this one machine: not a guarantee for
+another machine or for music. They are what Diagnostics showed at the end of each window
+run, so they are for the FLAC analysis; CPU and memory are the analysis process's.
+
+| | Range over the four window runs |
+|---|---|
+| Analysis (DSP) time per 20 ms block, 95th percentile | 2.5–2.7 ms, against a budget of 20 ms |
+| Analysis process | CPU 17–18% of one core; memory 122 MiB |
+| Losses | None: capture, native, logger, discontinuities and messages between the processes all 0 |
+| Radiant, the last frame measured | 1.38–1.39 ms on the graphics card (radeonsi, OpenGL 4.6, GLSL 4.60) |
+
+The window's size was not recorded and the Radiant figure is a single frame, so it is not
+comparable with the "about 5 ms per frame on an RX 9070 XT at 1920×1080" measured on Windows
+(section A).
+
+### N.3 The test suite, and the two test fixes
+
+- **Validation run:** 517 passed, 3 skipped, 3 failed. The failures were in
+  `tests/test_remote.py`. On Linux a `spawn` worker leaves Python's multiprocessing resource
+  tracker running for the life of the parent, and the test counted the tracker as a worker
+  left behind; the worker had exited, and Windows has no resource tracker. The fix is in the
+  test only, and is **local and uncommitted** on branch `fix/linux-resource-tracker-test` in
+  the CachyOS checkout.
+- **An intermittent failure** in later runs:
+  `tests/test_app.py::test_replay_runs_inside_the_same_window_with_original_times`. It was
+  test timing, not dropped messages: since `e1d4a3a` the view takes in a bounded share of
+  messages per frame, and the test read the markers one frame after a 100× replay had ended.
+  The fix, in the tests only, is in
+  [pull request #1](https://github.com/Ralkero/granular-audio-visualizer/pull/1), **open and
+  not merged**.
+- **With both fixes applied:** 520 passed, 3 skipped, 0 failed. That is not `main` as
+  published.
+- The 3 skips are the test that launches the Windows capture helper and two tests whose
+  optional packages (ONNX Runtime, PyTorch) are not installed with `--extra dev`. The three
+  Linux-only tests and the Radiant graphics-card tests ran and passed. No other test written
+  on Windows needed a Windows-only mark (M.1, item 6).
+
+### N.4 Still not shown
+
+- Steam's Gaming Mode and a nested Gamescope; anything on SteamOS or a Steam Deck. Section K
+  stays open.
+- A native X11 desktop session: `xcb` ran only through Xwayland.
+- Whether KWin honours a chosen screen under Wayland: the windows were on `DP-2`, which is
+  also the primary screen.
+- A session with the user's own music, watched as it plays.
+- Other graphics cards and drivers; resizing, full screen and long sessions.
+- Live capture: phase 1b, not started. (Since done: section O.)
+
+---
+
+## O. Phase 1b: system-audio capture (2026-11-23)
+
+This section was added with phase 1b. Linux now captures what the system plays on its
+default output, from that output's monitor, through the PulseAudio protocol PipeWire serves
+(`pipewire-pulse`). The engine, the analysis, the event attribution, the visual state, the
+renderers and the session format are the ones Windows uses; nothing in them changed. CachyOS
+on a desktop is not SteamOS (section I): nothing here shows whether a Flatpak may record a
+monitor (K.1) or how SteamOS's audio graph behaves.
+
+### O.1 What was built, against C and H's phase 2
+
+| Planned | Built | Why it differs |
+|---|---|---|
+| `PulseMonitorSource` over libpulse through ctypes, a pull-model record stream with the server's timing info (C.3, C.4) | `PulseSystemAudioSource` (`src/gmv/sources/system_pulse.py`): `parec`, libpulse's own recorder, as a child process, read from its pipe in 10 ms blocks by one thread; `pactl --format=json` for discovery | No binding to write or keep, no Python audio callback, and the server still buffers while Python is busy, which is what C.3 wanted from a pull-model stream. The cost: no `pa_timing_info`, so no server latency is known; the clock is anchored on delivery instead (O.2) |
+| The default sink's monitor (C.3) | As planned. The default sink and its monitor are asked for, and the monitor is recorded only once the server's JSON names it the monitor of that sink (`monitor_source` of the source); never a microphone | |
+| — | The stream is opened with `node.dont-reconnect`, `node.dont-fallback` and `node.dont-move` (seen applied to the stream's node on CachyOS), and the source it records from is checked every 2 s | A stream whose output goes away is destroyed instead of being moved, for instance to a microphone. PulseAudio itself ignores those properties; the check covers it |
+| Formats and channels (C.5) | 32-bit float, little-endian, stereo, at the monitor's own rate; the server mixes other layouts down | The engine accepts any rate, so no resampling is asked for |
+| Default-sink change, unplug, suspend producing new segments (H, phase 2) | The default output is asked for every 0.5 s; a change closes the stream and opens one on the new monitor as a new segment. A stream that ends or fails is reopened after 0.5, 1, 2, 4, then at most 5 s, with the reason in the status line. A suspend is seen by `CLOCK_BOOTTIME` moving away from `CLOCK_MONOTONIC` | |
+| `host.LIVE_CAPTURE` and `gmv.sources` (M.4) | `LIVE_CAPTURE["linux"] = ("system",)`; `sources.system_audio_source` builds the PulseAudio backend on Linux. The drawer offers *System audio (PipeWire)* and *Audio file*; device and application capture are not offered and are refused in a sentence | |
+| — | `scripts/validate_linux.py --audio-capture` and `scripts/capture_probe_linux.py`. The ordinary validation never records (`platform_smoke.py --no-live`); the packaged self-check checks capture on Windows only | Capture records what the user plays, so it is opt-in |
+
+Not changed: `engine.py`, `dsp.py`, the analyzers, `models.py`, `session.py`, the renderers
+and their shaders, the Windows capture modules. No Python dependency was added: `pactl` and
+`parec` are system programs (on CachyOS and Arch in `libpulse`).
+
+### O.2 The clock, and what it claims
+
+`parec` reports no capture times. The clock counts the stream's samples and anchors the count
+on delivery (`DeliveryClock`): a block delivered at `t` whose last frame is stream frame `n`
+means frame 0 was captured no later than `t − n / rate`. The first 100 ms of each stream are
+measured, not published, and the lowest such bound becomes the anchor, so published times are
+not later than delivery by more than 10 ms (well inside half an analysis window, 23 ms, so
+evidence is never from the future for `contract.eligible_for_live_impact`). Measured on
+CachyOS: PipeWire delivers whole periods of 1024 frames (21.3 ms at 48 kHz), the first data
+about 89 ms after `parec` starts, and the bound settles within a few milliseconds over the
+first seconds. The lateness of each later block against the anchor is watched as a floor
+over 2 s of delivery. A floor more than 20 ms behind (lost audio, a slow output clock) or
+10 ms ahead (a fast output clock) moves the anchor to the floor and starts a new run, marked
+as a discontinuity; at most a block or two is left out, so the timeline never goes back. A
+pause in delivery of more than 0.25 s, or a suspend, starts a new run measured afresh. How
+long the sound took from the application to the monitor, or from the monitor to the
+speakers, is not known and not claimed.
+
+The output's clock and the computer's are not the same clock. Over ten minutes on CachyOS the
+floor fell steadily from +5.9 to −0.2 ms: the Sound BlasterX G6 ran about 11 ppm fast against
+`CLOCK_MONOTONIC`. At that rate the clock corrects itself about every 15 minutes, leaving out
+a block or two each time and restarting the analysis context there (a discontinuity, as for
+any gap). A first version re-measured for 100 ms at each correction and allowed 5 ms ahead;
+this measurement is why it was changed. In thirty minutes with the clock as it is now, the
+one correction came between the 23rd and 24th minute (the floor had fallen from +5.1 to
+−9.3 ms) and left out 20 ms of audio.
+
+### O.3 Tested, without a sound server
+
+`tests/test_system_pulse.py` (28 tests) runs against `tests/fake_pulse.py`, a stand-in for
+`pactl` and `parec` that pretends to be a server with two outputs (one with an awkward name,
+one at 44.1 kHz) and a microphone, and delivers a known signal in real time. `conftest.py`
+points the real client programs at a server that does not exist, so no test records
+anything. Covered: the default output and its monitor; every refusal (no server, no default
+output, a default that is not listed, no monitor, a monitor not listed, a source that is not
+that output's monitor, missing `pactl`, missing `parec`, an old `pactl`); the exact samples,
+channel order and gain; contiguous sample-clock times never later than delivery; the
+arguments `parec` gets; stopping, six times in a row, with no process or thread left; a stream
+ending by itself; the server going away and coming back; the output disappearing before a new
+default exists; a new default output followed without a restart and never two streams at
+once; a stream moved to the microphone being stopped; a slow reader losing the oldest blocks
+while capture goes on; the clock's anchoring, lost audio, a fast output clock, a pause in
+delivery and a suspend; and a captured session analysed by the engine, logged without audio
+and replayed. The platform tests now expect Linux to offer System audio and refuse device and
+application capture in a sentence.
+
+The whole suite on the phase 1b branch, on CachyOS: 546 passed, 3 skipped, 3 failed. The 3
+failures are the known `tests/test_remote.py` resource-tracker failures (N.3), whose fix is
+not on this branch; on the same code without phase 1b the suite gave 517 passed, 3 skipped,
+3 failed. The 29 more that pass are the new tests; no test that passed before fails. A
+second run, after the last changes, gave the same plus one failure of the intermittent replay
+test of N.3 (5 onsets live, 4 replayed: its known symptom, in code phase 1b does not touch);
+its fix is in pull request #1, not on this branch.
+
+### O.4 Validated on CachyOS
+
+The machine of section N; PipeWire 1.6.11 with `pipewire-pulse`, WirePlumber 0.5.19,
+`libpulse` 17.0; default output a Sound BlasterX G6 (USB, 24-bit stereo, 48 kHz). What was
+playing was captured, quietly; no test signal was played and nothing about the server, the
+default output, the routing or the volume was changed. The full figures are in
+[LINUX.md](LINUX.md#system-audio-on-cachyos-phase-1b-2026-11-23).
+
+- **Discovery:** the default output and its monitor were found through `pactl`; the monitor
+  was confirmed as that output's; the stream's node carried the three `node.dont-*`
+  properties and recorded the monitor named.
+- **`scripts/validate_linux.py --audio-capture`: 70 of 70 checks passed.** In each of the
+  four window runs (Wayland, Xwayland, Wayland forced) the window offered System audio and
+  captured the default output for six seconds through the separate analysis process: 203 to
+  205 frames. Every phase 1a check passed again.
+- **Ten minutes** (`scripts/capture_probe_linux.py --seconds 600`): 29,990 of 30,000 frames,
+  one segment, no dropped block, no discontinuity, no correction of the clock, no recovery;
+  capture to publication 33 ms median and 37 ms at the 95th percentile; the capturing
+  process at 7 to 9% of one core; a clean stop; the logged session (no audio in it) replayed
+  in full after capture had stopped. The output's clock ran about 11 ppm fast against
+  `CLOCK_MONOTONIC` (O.2). That run used the clock's first version; no correction was due in
+  it.
+- **Thirty minutes**, with the clock as it is now: 89,988 of 90,000 frames, no dropped block,
+  no recovery, exactly one correction (O.2) and so one discontinuity; capture to publication
+  28 ms median and 35 ms at the 95th percentile; 8.9% of one core with `parec` included;
+  a clean stop and a full replay. Memory stayed at about 128 MiB over a separate three-minute
+  capture that kept no records (`parec` 5.7 MiB).
+
+### O.5 Implemented, but not tried on real hardware
+
+Each of these is covered by the stand-in tests (O.3), not by a real device or server:
+
+- following a change of default output between two real devices (the machine has a second
+  output, a game controller's, but changing the user's default output was out of bounds);
+- an output unplugged while captured, and a monitor that disappears;
+- the sound server stopping and coming back;
+- a suspend and resume while capturing;
+- a stream moved off the monitor (PipeWire refuses to move it; PulseAudio itself would not,
+  and the 2 s check covers that case);
+- a PulseAudio server (only PipeWire's was tried), and a monitor at a rate other than 48 kHz;
+- capture for longer than thirty minutes.
+
+### O.6 Still outstanding
+
+- A session with music the user plays and watches, judged by eye: not done.
+- Capture of one output device, of one application or its process tree, and of a microphone:
+  not offered on Linux and not planned for phase 1b; per-application capture through native
+  PipeWire stays future work (C.6).
+- Flatpak packaging and whether a Flatpak may record a monitor (K.1); SteamOS's audio graph,
+  Gaming Mode, Gamescope, the Steam Deck's performance and handheld controls: phases 3 to 5.
+  Nothing in this section is evidence about any of them.
