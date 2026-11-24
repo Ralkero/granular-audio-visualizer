@@ -48,6 +48,7 @@ if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
 $out = "dist/$name"
 Copy-Item $helper "$out/ProcessLoopback" -Recurse -Force
 Copy-Item $icon "$out/app.ico" -Force  # the running application's window icon
+Copy-Item 'LICENSE' "$out/LICENSE" -Force  # the GPL terms, for anyone the build is passed on to
 New-Item -ItemType Directory -Force "$out/models" | Out-Null
 $defaults = @{}
 if (Test-Path '.model-cache/activity_v2.npz') { Copy-Item '.model-cache/activity_v2.npz' "$out/models" }
