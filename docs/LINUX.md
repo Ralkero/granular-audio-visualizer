@@ -67,6 +67,7 @@ lacks from the Arch repositories; `pacman -U` asks for it to install GMV.
 | Menu entry | `/usr/share/applications/granular-music-visualizer.desktop` |
 | Icon, 16 to 512 pixels | `/usr/share/icons/hicolor/SIZE/apps/granular-music-visualizer.png` |
 | This guide, the README and the dependency notes | `/usr/share/doc/granular-music-visualizer/` |
+| The licence text (GPL-3.0-or-later) | `/usr/lib/python3.X/site-packages/granular_music_visualizer-VERSION.dist-info/licenses/LICENSE` |
 
 **Dependencies.** All from the Arch repositories, none bundled: `python`, `pyside6`,
 `python-numpy`, `python-scipy`, `python-soundfile`, `python-pydantic`, `python-psutil`,
@@ -509,6 +510,7 @@ The same machine, with Pacman and `makepkg` 7.1.0. The details are in
 | `scripts/validate_linux.py`, run with the system's Python from an empty folder so that only the installed copy could be imported | **59 of 59 checks passed**: four window runs (Wayland, Wayland again, Xwayland, Wayland forced), each offering System audio, analysing a WAV and a FLAC, recording the sessions in the data folder and replaying them with the same times; settings remembered; Radiant on the graphics card; nothing written in the working directory; the sound server asked, read-only, without an error. Scratch XDG folders, no recording from the sound server |
 | Afterwards | `pacman -Qkk` still 0 altered; nothing left running; the user's own GMV folders unchanged |
 | Upgrade: the recipe moved to commit `fe6d6dd`, built again and installed with `sudo pacman -U` | `0.2.0.r7.g5271e33-1` upgraded to `0.2.0.r9.gfe6d6dd-1`; the program's files identical, only the Linux guide changed; `pacman -Qkk` 0 altered; the user's settings and sessions byte for byte as before |
+| Upgrade again, after the licence and this phase were merged: the recipe moved to `main` at `8520190` | `0.2.0.r9.gfe6d6dd-1` upgraded to `0.2.0.r15.g8520190-1`; the program's files identical; the licence now in the package's Python metadata with its text; `pacman -Qkk` 0 altered; the user's settings and sessions byte for byte as before |
 | Used by the owner: the upgraded package started through its menu entry, with the owner's own settings | The owner reported the menu entry and its icon, the window's and taskbar's icon, the visuals following the music, and all three modes working (the owner's judgement by eye). It left a complete 78-second System audio session with music playing: 3,893 frames, nothing dropped, no discontinuity, capture to publication 37 ms median; the window closed normally with nothing left running. **Choose…** for weights and a replay were not done in that run; both are checked automatically on the installed copy |
 
 The whole test suite on the phase 1c branch, on this machine: **562 passed, 3 skipped,

@@ -4,8 +4,8 @@
 # repository. How to build it, install it and update the pin: README.md beside this file.
 
 pkgname=granular-music-visualizer
-_commit=fe6d6dd399d33629ae54031f1ff2948dfc89dff5
-pkgver=0.2.0.r9.gfe6d6dd
+_commit=8520190cf11217a904c11fa636f7dd38b1f7ac12
+pkgver=0.2.0.r15.g8520190
 pkgrel=1
 pkgdesc='Live music visualizer for system audio and audio files: Classic, Spectrum Bars and Radiant (OpenGL)'
 arch=('any')
@@ -32,7 +32,7 @@ optdepends=(
   'python-onnxruntime-cpu: context recognition models (no weights are included)'
 )
 source=("$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz")
-sha256sums=('bfe1864c542f46ab9f2f7efabd8f3c386d65ee864315e8121775ae42b1462060')
+sha256sums=('ce41e8db7d94b1dac728506e55a9c59946fc9d4b4f5dd8b20f50beb291d7593c')
 
 _srcdir=granular-audio-visualizer-$_commit
 

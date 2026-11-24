@@ -1308,6 +1308,16 @@ files of 449, no file under the package's folders was left that Pacman does not 
 user's 23 GMV files (settings and two sessions) had the same SHA-256 as before the upgrade.
 The program being byte for byte the one P.3 validated, the validation was not repeated.
 
+After pull requests #4 (the GPL-3.0-or-later licence) and #5 (this phase) were merged, the
+recipe was moved again, to `main` at `8520190` (`0.2.0.r15.g8520190`; GitHub's archive
+again matched `git archive` file for file). Built without a warning, `check()` passing, and
+installed over `0.2.0.r9.gfe6d6dd-1` with `sudo pacman -U`. Against the package before it,
+the program's files are the same bytes; what changed is the licence, now in the wheel's
+metadata (`License-Expression: GPL-3.0-or-later`) with its text in the `dist-info`
+`licenses/` folder (451 files), and the README and Linux guide. `pacman -Qkk` found 0
+altered files, nothing was left running, and the user's 34 GMV files (settings and three
+sessions) were byte for byte as before.
+
 ### P.5 Used by the owner
 
 The upgraded package (`0.2.0.r9.gfe6d6dd-1`) was started through its menu entry
