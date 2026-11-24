@@ -1,4 +1,4 @@
-"""Fixtures shared by the tests that draw."""
+"""Fixtures shared by the tests: homes and systems of their own, and the ones that draw."""
 
 import json
 import os
@@ -14,6 +14,41 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ["PULSE_SERVER"] = "unix:/nonexistent/gmv-tests-have-no-sound-server"
 
 import pytest
+
+
+XDG = ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME")
+
+
+@pytest.fixture
+def home(monkeypatch, tmp_path):
+    """A home directory of the test's own, with no XDG variable set."""
+    folder = tmp_path / "home"
+    folder.mkdir()
+    for variable in ("HOME", "USERPROFILE"):
+        monkeypatch.setenv(variable, str(folder))
+    for variable in XDG:
+        monkeypatch.delenv(variable, raising=False)
+    assert Path.home() == folder
+    return folder
+
+
+@pytest.fixture
+def linux(monkeypatch, home):
+    """This is Linux, with ``home`` as the home directory."""
+    from gmv import host
+
+    monkeypatch.setattr(host, "system", lambda: "linux")
+    return home
+
+
+@pytest.fixture
+def windows(monkeypatch, home, tmp_path):
+    """This is Windows, with ``home`` as the home directory; returns ``%LOCALAPPDATA%``."""
+    from gmv import host
+
+    monkeypatch.setattr(host, "system", lambda: "windows")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    return tmp_path / "local"
 
 
 @pytest.fixture(scope="module")
