@@ -7,7 +7,7 @@ from time import perf_counter, sleep
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from test_visualizer import write_clicks
+from test_visualizer import caught_up, write_clicks
 
 from gmv import host
 from gmv.app.controller import Settings, analysis_config, audio_source
@@ -143,16 +143,16 @@ def test_replay_runs_inside_the_same_window_with_original_times(window, app, tmp
     use_file(window, write_clicks(tmp_path / "clicks.wav", seconds=3), logging=True)
     window.start()
     engine = window.controller.engine
-    assert pump(window, app, lambda: engine.done.is_set(), timeout=20)
-    window.view.tick()
+    # Ended is not enough: the view takes in a burst over several frames, and at 100x the
+    # whole replay arrives as one burst. Wait until it has taken in all that was sent.
+    assert pump(window, app, lambda: engine.done.is_set() and caught_up(window.view), timeout=20)
     live = [mark.time for mark in window.view.state.markers if mark.kind == "onset"]
     assert len(live) >= 4 and window.controller.session_path.is_dir()
     window.replay(window.controller.session_path, speed=100)
     assert window.problem == "" and "Replaying" in window.status.text()
     assert window.toggle.text() == "Stop"
     session = window.controller.replaying
-    assert pump(window, app, lambda: session.finished)
-    window.view.tick()
+    assert pump(window, app, lambda: session.finished and caught_up(window.view))
     assert window.view.state.replayed
     assert [m.time for m in window.view.state.markers if m.kind == "onset"] == pytest.approx(live)
     window.stop()

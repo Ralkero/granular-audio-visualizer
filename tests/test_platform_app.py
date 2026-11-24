@@ -17,7 +17,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 import soundfile as sf
 from test_host import AS_LINUX, GAMESCOPE, WAYLAND_DESKTOP, X11_DESKTOP, run_python
-from test_visualizer import write_clicks
+from test_visualizer import caught_up, write_clicks
 
 from gmv import host, paths
 from gmv.app import window as app_window
@@ -184,8 +184,7 @@ def test_linux_analyses_a_file_records_its_session_in_the_data_folder_and_replay
     engine = window.controller.engine
     assert window.problem == "" and window.controller.running
     assert isinstance(engine.source, AudioSource) and engine.source.kind == "file_audio"
-    assert pump(window, app, lambda: engine.done.is_set())
-    window.view.tick()
+    assert pump(window, app, lambda: engine.done.is_set() and caught_up(window.view))
     assert engine.error is None and not window.controller.running
     live = onsets(window)
     assert len(live) >= 3 and len(window.view.state.frames) > 20
@@ -203,8 +202,7 @@ def test_linux_analyses_a_file_records_its_session_in_the_data_folder_and_replay
     window.replay(session, speed=100)
     assert window.problem == "" and "Replaying" in window.status.text()
     replaying = window.controller.replaying
-    assert pump(window, app, lambda: replaying.finished)
-    window.view.tick()
+    assert pump(window, app, lambda: replaying.finished and caught_up(window.view))
     assert replaying.error is None and window.view.state.replayed
     assert onsets(window) == pytest.approx(live)
     window.stop()
@@ -258,8 +256,7 @@ def test_a_session_recorded_on_windows_replays_as_it_is(window, app, linux):
     window.replay(copy / "messages.jsonl", speed=200)  # the file, as the dialog gives it
     assert window.problem == "" and copy.name in window.status.text()
     replaying = window.controller.replaying
-    assert pump(window, app, lambda: replaying.finished)
-    window.view.tick()
+    assert pump(window, app, lambda: replaying.finished and caught_up(window.view))
     assert replaying.error is None and window.view.state.replayed
     expected = [m["timestamp"] for m in recorded if m.get("event_type") == "onset"]
     assert len(expected) >= 4 and onsets(window) == pytest.approx(expected)
