@@ -1,10 +1,13 @@
 # Linux
 
 Status: **phases 1a and 1b of the Linux port, validated on a real CachyOS desktop on
-2026-11-23.** The application starts from a source checkout on Linux, analyses audio files,
+2026-11-23, and phase 1c, the Arch package, built and installed there on 2026-11-24.** The
+application starts from a source checkout on Linux, analyses audio files,
 records sessions and replays them (phase 1a), and **captures what the system plays on its
 default output** through PipeWire's PulseAudio service (phase 1b,
 [System audio](#system-audio)), with the same engine and the same renderers as on Windows.
+On CachyOS and Arch Linux it can also be built as a native Pacman package and installed as
+an ordinary desktop application (phase 1c, [The Arch package](#the-arch-package-cachyos-arch-linux)).
 Linux does not capture one output device, one application or a microphone. The test suite
 passes there apart from the three known `tests/test_remote.py` failures and the intermittent
 replay test, whose fixes are not yet on `main` (see
@@ -20,8 +23,8 @@ research behind it, is [LINUX_PORT_AUDIT.md](LINUX_PORT_AUDIT.md).
 ## What is there, and what is not
 
 "Yes" below means implemented, tested (on Windows with the system set to Linux, or against a
-stand-in sound server), and run on one CachyOS desktop on 2026-11-23 (see
-[What has been checked](#what-has-been-checked)).
+stand-in sound server), and run on one CachyOS desktop on 2026-11-23, or for the package on
+2026-11-24 (see [What has been checked](#what-has-been-checked)).
 
 | | Linux, as implemented |
 |---|---|
@@ -493,6 +496,24 @@ out a block or two (see [System audio](#system-audio)). Nothing in the ten-minut
 reached a correction, so both versions behaved the same there; the thirty-minute run, with
 the clock as it is now, showed its one correction.
 
+### The Arch package on CachyOS (phase 1c, 2026-11-24)
+
+The same machine, with Pacman and `makepkg` 7.1.0. The details are in
+[LINUX_PORT_AUDIT.md, section P](LINUX_PORT_AUDIT.md#p-phase-1c-native-arch-package-2026-11-24).
+
+| Step | What it showed |
+|---|---|
+| `makepkg --syncdeps --cleanbuild --log`, as the user, of commit `5271e33` | Built without a warning. `--syncdeps` installed `pyside6`, `python-numpy`, `python-scipy`, `python-soundfile` (with their own dependencies) and the build tools from the CachyOS repositories, the user typing the password. The build's own check ran the installed copy away from the source tree: "9 fragment shaders read, commands import" |
+| The package | `granular-music-visualizer-0.2.0.r7.g5271e33-1-any.pkg.tar.zst`: 1.6 MB, 5.0 MiB installed, 449 files, all owned by root |
+| `sudo pacman -U` | Installed; `pacman -Qkk` found 0 altered files |
+| `scripts/validate_linux.py`, run with the system's Python from an empty folder so that only the installed copy could be imported | **59 of 59 checks passed**: four window runs (Wayland, Wayland again, Xwayland, Wayland forced), each offering System audio, analysing a WAV and a FLAC, recording the sessions in the data folder and replaying them with the same times; settings remembered; Radiant on the graphics card; nothing written in the working directory; the sound server asked, read-only, without an error. Scratch XDG folders, no recording from the sound server |
+| Afterwards | `pacman -Qkk` still 0 altered; nothing left running; the user's own GMV folders unchanged |
+
+The whole test suite on the phase 1c branch, on this machine: **562 passed, 3 skipped,
+3 failed**, the failures being the three known `tests/test_remote.py` ones
+([above](#the-test-suite-on-cachyos)); the 15 new tests of `tests/test_install_layout.py`
+passed.
+
 ### On Windows, with the system set to Linux (before CachyOS)
 
 When phase 1a was written no Linux machine was available: the development machine is
@@ -542,6 +563,12 @@ CachyOS run:
   48 kHz, and for longer than thirty minutes.
 - What System audio looks like with music the user plays and watches, judged by eye (see
   above).
+- The Arch package on Arch Linux itself, or on any machine but the CachyOS desktop above;
+  `namcap` on the recipe and the package; an upgrade from one package to the next.
+- The installed package used by hand: its menu entry and icon, the taskbar icon, System
+  audio with music playing, the three modes on screen, **Choose…** opening the models
+  folder, and a session recorded and replayed. The validation above shows the installed copy
+  works; nobody has yet looked at it.
 
 ### Checking it on Linux (CachyOS)
 

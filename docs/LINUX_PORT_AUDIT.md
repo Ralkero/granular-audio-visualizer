@@ -8,6 +8,9 @@ dependency or packaging file was changed to write this. The port had not started
 > default output through PipeWire's PulseAudio service, implemented and validated there too
 > (section O). Sections A to L are the audit as it was written on 2026-11-22 and have not
 > been changed. Setup, launch and the CachyOS results in full: [LINUX.md](LINUX.md).
+>
+> Update, 2026-11-24: phase 1c, a native Arch package built with `makepkg` and installed
+> with Pacman on the CachyOS desktop (section P). It is not the Flatpak of F and phase 4.
 
 Written 2026-11-22 against branch `main` at `084b443` ("Radiant radial theme with a palette
 of its own (phase 1)"), level with `origin/main`, with uncommitted Radiant work in the tree
@@ -1203,3 +1206,106 @@ Each of these is covered by the stand-in tests (O.3), not by a real device or se
 - Flatpak packaging and whether a Flatpak may record a monitor (K.1); SteamOS's audio graph,
   Gaming Mode, Gamescope, the Steam Deck's performance and handheld controls: phases 3 to 5.
   Nothing in this section is evidence about any of them.
+
+## P. Phase 1c: native Arch package (2026-11-24)
+
+This section was added with phase 1c. GMV can now be built on CachyOS or Arch Linux as an
+ordinary Pacman package and installed beside the system's own Python and Qt: a menu entry
+with its icon, the commands in `/usr/bin`, the user's files in the XDG folders, upgrades and
+removal through Pacman. This is not phase 4 of H: F's recommendation of a Flatpak for SteamOS
+stands, and nothing here is evidence about a Flatpak, its permissions (F.3, K.1), SteamOS or
+the Steam Deck. The package is built locally from the recipe in `packaging/arch/`; it is not
+on the AUR or in any repository. How to build, install, update and remove it:
+[LINUX.md](LINUX.md#the-arch-package-cachyos-arch-linux) and
+[packaging/arch/README.md](../packaging/arch/README.md).
+
+### P.1 What was built
+
+| Needed | Built |
+|---|---|
+| Know that it runs as an installed package (F.5) | `paths.installed()`: neither a PyInstaller build nor a checkout (a checkout has `pyproject.toml` and `src/gmv` two folders above `gmv`). The three ways GMV runs are now named in `gmv.paths` |
+| The shaders installed with the code (F.2, F.5) | Radiant's GLSL files are package data in `pyproject.toml` (`[tool.setuptools.package-data]`), so the wheel and the sdist carry all 15. `resources.FOLDER`, beside the module, finds them unchanged |
+| No writes beside the program (F.5) | An installed copy has no models folder of its own: models are looked for in `$XDG_DATA_HOME/GranularMusicVisualizer/models/` only, and Settings → **Choose…** opens that folder, made the first time (the home folder if it cannot be made). Sessions, settings and the cache were already in the XDG folders on Linux (M) |
+| Menu entry and icon | `packaging/arch/granular-music-visualizer.desktop` (`desktop-file-validate` passes), and the icon at 16 to 512 pixels in the `hicolor` theme. The window sets its desktop file name, so KDE's Wayland taskbar matches it to the entry and its icon; an installed copy takes its window icon from the theme |
+| A Pacman package | `packaging/arch/PKGBUILD`: one pinned, pushed commit downloaded from GitHub and checked by SHA-256; `python -m build --wheel --no-isolation` and `python -m installer`, the usual way for a PEP 517 project on Arch; every dependency an Arch package, nothing from PyPI and no `uv`; `arch=('any')`. `check()` installs the wheel in a scratch root and runs that copy away from the source tree: it must take itself for an installed package and read every shader with its includes resolved |
+
+Not changed: the engine, the analysis, capture (Windows and Linux), the renderers and their
+shaders, the session format, `uv.lock`, the Windows build (`Build App.ps1`) and how a
+checkout or a PyInstaller build finds its models and its icon. No dependency was added to
+`pyproject.toml`.
+
+The recipe cannot name the commit that contains it, so it always builds an earlier commit:
+the menu entry and icons it installs come from that commit.
+
+### P.2 Automated tests
+
+`tests/test_install_layout.py` (15 tests) builds the installed layout in a scratch folder and
+checks: a checkout, an installed copy and a PyInstaller build are told apart; an installed
+copy looks for models in the user's folder only, writes nothing beside itself (on Linux and
+on Windows), and has no icon file; a checkout is unchanged; every non-Python file under
+`src/gmv` is declared as package data; a copy installed outside the source tree, run in its
+own interpreter, reads every shader and writes nothing; the three commands are declared; the
+desktop entry's fields; the icon sizes; the window's desktop file name and its icon from a
+theme; **Choose…** making the models folder and opening there. The `home`, `linux` and
+`windows` fixtures moved from `tests/test_host.py` to `tests/conftest.py`, so both files use
+them.
+
+The whole suite on the phase 1c branch, on CachyOS, run in a terminal the owner could
+watch: **562 passed, 3 skipped, 3 failed** in 3 minutes 7 seconds. The 15 new tests passed.
+The 3 failures are the known `tests/test_remote.py` resource-tracker failures (N.3): each
+found the same leftover process, Python's multiprocessing resource tracker; their fix is not
+on `main`. The 3 skipped are the ones of N.3 (the Windows capture helper, and ONNX Runtime
+and PyTorch not installed). The intermittent replay test passed in this run; its fix
+(pull request #1) is still not on `main`.
+
+### P.3 Built and installed on CachyOS
+
+The machine of section N (CachyOS, kernel 7.3.5-2-cachyos, Python 3.14.10, Qt and PySide6
+6.12.0, Mesa 26.3.1 on an AMD RX 9070 XT, PipeWire 1.6.11), Pacman and `makepkg` 7.1.0.
+
+- **Build:** `makepkg --syncdeps --cleanbuild --log` as the user, of commit `5271e33`
+  (`0.2.0.r7.g5271e33-1`). `--syncdeps` installed, with the user's password, what the
+  machine lacked from the CachyOS repositories: `pyside6` 6.12.0 (the checkout had used the
+  PyPI wheel in its `.venv`), `python-numpy` 2.5.5, `python-scipy` 1.18.1,
+  `python-soundfile` 0.14.0 and their dependencies, then `python-build` 1.6.1,
+  `python-installer` 1.1.0 and `python-setuptools` 84.2.1. The build, `check()` and
+  `package()` logs have no warning. `check()`: "installed copy: 9 fragment shaders read,
+  commands import".
+- **The package:** 1.6 MB compressed, 5.0 MiB installed, 449 files (Pacman's count, folders
+  included), all owned by root. 118 Python modules with their compiled `.pyc` files, the 15
+  shaders, the three commands, the menu entry, nine icons and three documents.
+- **Install:** `sudo pacman -U`, the user typing the password. `pacman -Qkk` then found 0
+  altered files of 449.
+- **The installed copy, run:** `scripts/validate_linux.py`, started with `/usr/bin/python -I`
+  from an empty folder in `/tmp` so that only the installed `gmv` could be imported (the
+  report's model folders confirm it: the user's folder alone, which only an installed copy
+  gives). **59 of 59 checks passed**: four window runs (Wayland, Wayland again with the
+  remembered settings, Xwayland, Wayland forced), each offering System audio and Audio file,
+  analysing a WAV and a FLAC (198 frames, 7 onsets each), recording complete sessions without
+  audio in the data folder, replaying with the same times, closing with nothing left
+  running; settings remembered between runs; Radiant on the graphics card (AMD RX 9070 XT,
+  radeonsi, OpenGL 4.6, Mesa 26.3.1; 1.37 ms on the graphics card, 0.65 ms to submit, for the
+  frame measured); nothing written in the working directory; the sound server asked,
+  read-only, without an error ("Sound BlasterX G6 Analog Stereo through PulseAudio (on
+  PipeWire 1.6.11), 48000 Hz"). The validation points the XDG folders at a scratch folder;
+  it did not record from the sound server (no `--audio-capture`).
+- **Afterwards:** `pacman -Qkk` still 0 altered; no file under the package's folders that
+  Pacman does not own; no GMV or `parec` process left; the user's own GMV folders the same as
+  before (23 files compared).
+
+### P.4 Still outstanding
+
+- Upgrading from one package to the next with Pacman, the user's files kept: not done yet.
+- The owner's own test of the installed package (the menu entry and its icon, the taskbar
+  icon, System audio with music the owner plays, the three modes on screen, **Choose…**
+  opening the models folder, a session recorded and replayed): not done yet. Nothing in P.3
+  was looked at by a person; the window runs report that frames were drawn, not how they
+  looked.
+- Installing on Arch Linux itself, or on any machine but this one: not done. The recipe uses
+  only Arch's own packages, but only CachyOS's builds of them have been tried.
+- `namcap` was not run (it is not installed on the machine, and installing more tools was out
+  of bounds for this phase).
+- The AUR, a Flatpak (phase 4), packages for other distributions, and signed releases: not
+  started.
+- Everything outstanding in M.4, N.4 and O.5 still is: the package changes how GMV is
+  installed, not what it does.
