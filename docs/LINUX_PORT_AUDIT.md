@@ -1293,12 +1293,26 @@ The machine of section N (CachyOS, kernel 7.3.5-2-cachyos, Python 3.14.10, Qt an
   Pacman does not own; no GMV or `parec` process left; the user's own GMV folders the same as
   before (23 files compared).
 
-### P.4 Still outstanding
+### P.4 Upgraded with Pacman
 
-- Upgrading from one package to the next with Pacman, the user's files kept: not done yet.
+The recipe was moved to commit `fe6d6dd`, the one that records P.1 to P.3, as its README
+says (`_commit`, `pkgver` `0.2.0.r9.gfe6d6dd`, the new SHA-256; GitHub's archive of that
+commit was compared with `git archive` of it, file for file, and matched). `makepkg
+--syncdeps --cleanbuild --log` built it without a warning and without asking for anything,
+every dependency being installed already; `check()` passed again. The two packages hold the
+same 449 files, and the same bytes in all but one: the Linux guide in
+`/usr/share/doc/granular-music-visualizer/`, the only file of the package that changed
+between the two commits. `sudo pacman -U`, the user typing the password, upgraded
+`0.2.0.r7.g5271e33-1` to `0.2.0.r9.gfe6d6dd-1`. Afterwards `pacman -Qkk` found 0 altered
+files of 449, no file under the package's folders was left that Pacman does not own, and the
+user's 23 GMV files (settings and two sessions) had the same SHA-256 as before the upgrade.
+The program being byte for byte the one P.3 validated, the validation was not repeated.
+
+### P.5 Still outstanding
+
 - The owner's own test of the installed package (the menu entry and its icon, the taskbar
   icon, System audio with music the owner plays, the three modes on screen, **Choose…**
-  opening the models folder, a session recorded and replayed): not done yet. Nothing in P.3
+  opening the models folder, a session recorded and replayed): not confirmed. Nothing in P.3
   was looked at by a person; the window runs report that frames were drawn, not how they
   looked.
 - Installing on Arch Linux itself, or on any machine but this one: not done. The recipe uses

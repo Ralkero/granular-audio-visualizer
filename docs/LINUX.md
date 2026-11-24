@@ -508,6 +508,7 @@ The same machine, with Pacman and `makepkg` 7.1.0. The details are in
 | `sudo pacman -U` | Installed; `pacman -Qkk` found 0 altered files |
 | `scripts/validate_linux.py`, run with the system's Python from an empty folder so that only the installed copy could be imported | **59 of 59 checks passed**: four window runs (Wayland, Wayland again, Xwayland, Wayland forced), each offering System audio, analysing a WAV and a FLAC, recording the sessions in the data folder and replaying them with the same times; settings remembered; Radiant on the graphics card; nothing written in the working directory; the sound server asked, read-only, without an error. Scratch XDG folders, no recording from the sound server |
 | Afterwards | `pacman -Qkk` still 0 altered; nothing left running; the user's own GMV folders unchanged |
+| Upgrade: the recipe moved to commit `fe6d6dd`, built again and installed with `sudo pacman -U` | `0.2.0.r7.g5271e33-1` upgraded to `0.2.0.r9.gfe6d6dd-1`; the program's files identical, only the Linux guide changed; `pacman -Qkk` 0 altered; the user's settings and sessions byte for byte as before |
 
 The whole test suite on the phase 1c branch, on this machine: **562 passed, 3 skipped,
 3 failed**, the failures being the three known `tests/test_remote.py` ones
@@ -564,11 +565,11 @@ CachyOS run:
 - What System audio looks like with music the user plays and watches, judged by eye (see
   above).
 - The Arch package on Arch Linux itself, or on any machine but the CachyOS desktop above;
-  `namcap` on the recipe and the package; an upgrade from one package to the next.
+  `namcap` on the recipe and the package.
 - The installed package used by hand: its menu entry and icon, the taskbar icon, System
   audio with music playing, the three modes on screen, **Choose…** opening the models
-  folder, and a session recorded and replayed. The validation above shows the installed copy
-  works; nobody has yet looked at it.
+  folder, and a session recorded and replayed: not confirmed yet. The validation above shows
+  the installed copy works; it does not show how it looks.
 
 ### Checking it on Linux (CachyOS)
 
