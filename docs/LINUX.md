@@ -32,9 +32,74 @@ stand-in sound server), and run on one CachyOS desktop on 2026-11-23 (see
 | Classic, Spectrum bars and Radiant | Yes; on CachyOS all three were drawn, Radiant on the graphics card (AMD RX 9070 XT, Mesa 26.3.1). Other graphics cards and drivers not tried |
 | Capture what the system plays on its default output (System audio) | Yes, from the default output's monitor through PipeWire's PulseAudio service; following a change of default output tested against a stand-in only |
 | Capture one output device, one application, or a microphone | **No.** Not offered; see below |
-| Packaged build, desktop entry, Flatpak | No |
+| Native Arch package (Pacman), with menu entry and icon | Yes, built with `makepkg` from `packaging/arch/` (phase 1c); see [The Arch package](#the-arch-package-cachyos-arch-linux) |
+| Flatpak, AUR, other distributions' packages | No |
+
+## The Arch package (CachyOS, Arch Linux)
+
+On CachyOS and Arch Linux GMV can be installed as an ordinary Pacman package: it then has an
+entry in the application menu with its icon, the commands `gmv-visualizer` and `gmv` in
+`/usr/bin`, uses the system's own Python and Qt, and is upgraded and removed with Pacman.
+It is not on the AUR or in any repository: the package is built on your machine from the
+recipe in `packaging/arch/`, which [packaging/arch/README.md](../packaging/arch/README.md)
+explains step by step.
+
+```sh
+git clone https://github.com/Ralkero/granular-audio-visualizer.git
+cd granular-audio-visualizer/packaging/arch
+makepkg --syncdeps --cleanbuild        # as yourself, never as root
+sudo pacman -U granular-music-visualizer-*.pkg.tar.zst
+```
+
+`makepkg` downloads the exact commit the `PKGBUILD` names from GitHub, checks it against the
+SHA-256 written in the recipe, builds a wheel with the system's Python and checks that the
+installed copy finds its shaders. It does not use the files of your checkout, a `.venv` or
+`uv`. `--syncdeps` asks for your password to install the build tools and dependencies it
+lacks from the Arch repositories; `pacman -U` asks for it to install GMV.
+
+| Installed | Where |
+|---|---|
+| The program (Python package `gmv`) | `/usr/lib/python3.X/site-packages/gmv/` |
+| Commands `gmv-visualizer` (the window), `gmv` (command line), `gmv-control` (the same window, older name) | `/usr/bin/` |
+| Menu entry | `/usr/share/applications/granular-music-visualizer.desktop` |
+| Icon, 16 to 512 pixels | `/usr/share/icons/hicolor/SIZE/apps/granular-music-visualizer.png` |
+| This guide, the README and the dependency notes | `/usr/share/doc/granular-music-visualizer/` |
+
+**Dependencies.** All from the Arch repositories, none bundled: `python`, `pyside6`,
+`python-numpy`, `python-scipy`, `python-soundfile`, `python-pydantic`, `python-psutil`,
+`libpulse` (for `pactl` and `parec`, which System audio runs) and `hicolor-icon-theme`.
+Optional: a PulseAudio-compatible sound server for System audio (`pipewire-pulse`, which
+CachyOS has already, or `pulseaudio`; the package never installs or replaces one) and
+`python-onnxruntime-cpu` for context recognition models. Without a sound server the
+application still starts, analyses files and replays sessions.
+
+**Starting it.** From the application menu (KDE: *Multimedia → Granular Music Visualizer*),
+or `gmv-visualizer` in a terminal, from any folder. `gmv visualizer`, `gmv file`,
+`gmv capture`, `gmv replay` and `gmv devices` work as in a checkout (see [Launch](#launch),
+without `uv run`). The research commands `gmv corpus`, `gmv review` and `gmv evidence` and
+`python -m gmv.schema_export` belong to a checkout: their defaults are folders of the
+repository.
+
+**Your files.** Settings, sessions, your own models and the cache are in the same folders as
+from a checkout ([Where things are kept](#where-things-are-kept)), never in `/usr`. The
+package installs none of them and carries no model weights: put weight files in
+`~/.local/share/GranularMusicVisualizer/models/`, or choose them in Settings (**Choose…**
+opens that folder, made the first time). Upgrading or removing the package does not touch
+these folders.
+
+**Updating.** Build the newer recipe the same way and install it with `sudo pacman -U`;
+Pacman replaces the program's files and leaves your settings, sessions and models alone.
+
+**Removing.** `sudo pacman -R granular-music-visualizer`. Your settings, sessions and models
+stay where they are; delete `~/.config/GranularMusicVisualizer`,
+`~/.local/share/GranularMusicVisualizer` and `~/.cache/GranularMusicVisualizer` yourself if
+you want them gone.
 
 ## Requirements
+
+These are for running GMV from a source checkout, as it is developed. The Arch package above
+needs none of them.
+
 
 - Linux on x86-64 with glibc 2.34 or newer (the PySide6 6.12 wheel is `manylinux_2_34`).
   aarch64 wheels exist for every dependency but were not tried.
@@ -117,7 +182,8 @@ weights (`guitar_v1.npz`) separately:
 
 1. the file named by `GMV_ACTIVITY_MODEL` / `GMV_GUITAR_MODEL`;
 2. `$XDG_DATA_HOME/GranularMusicVisualizer/models/`;
-3. the checkout's `.model-cache/`.
+3. the checkout's `.model-cache/` (a checkout only: the Arch package has no models folder of
+   its own and carries no weights).
 
 A file chosen in Settings is remembered and always wins over these; nothing found in a
 folder ever replaces it. Only those two file names are looked for: a recognition model
@@ -535,10 +601,11 @@ not done on the validation machine.
   computer's costs a block or two of audio and an analysis restart every quarter of an hour
   or so (11 ppm, as measured on the CachyOS machine).
 - A file is analysed at playing speed and is not played aloud.
-- **No packaging.** No installed desktop entry, no installed icon, no Flatpak: the
-  application is started from the checkout with `uv run gmv-visualizer`. On Wayland the
-  window icon comes from a desktop entry, so the window is expected to have a generic icon
-  there.
+- **Packaging is the Arch package only.** It is built on the user's machine with
+  `makepkg`; it is not on the AUR or in a repository, and there is no Flatpak or package for
+  other distributions. Run from a checkout, the window says it is
+  `granular-music-visualizer` (its desktop entry's name) but no entry is installed, so on
+  Wayland it shows a generic icon unless the Arch package is installed too.
 - Radiant on the graphics card has been run on one Linux driver only: Mesa 26.3.1 (radeonsi)
   on an AMD RX 9070 XT. If its OpenGL context cannot be made, the application falls back to
   the geometry-only Radiant and Diagnostics says so, as on Windows. No software renderer is
