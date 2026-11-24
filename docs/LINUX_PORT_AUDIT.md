@@ -1308,13 +1308,41 @@ files of 449, no file under the package's folders was left that Pacman does not 
 user's 23 GMV files (settings and two sessions) had the same SHA-256 as before the upgrade.
 The program being byte for byte the one P.3 validated, the validation was not repeated.
 
-### P.5 Still outstanding
+### P.5 Used by the owner
 
-- The owner's own test of the installed package (the menu entry and its icon, the taskbar
-  icon, System audio with music the owner plays, the three modes on screen, **Choose…**
-  opening the models folder, a session recorded and replayed): not confirmed. Nothing in P.3
-  was looked at by a person; the window runs report that frames were drawn, not how they
-  looked.
+The upgraded package (`0.2.0.r9.gfe6d6dd-1`) was started through its menu entry
+(`kstart --application granular-music-visualizer`, which runs the entry's `Exec` the way
+the menu does: systemd started it as "Granular Music Visualizer - Music Visualizer", in a
+unit of its own named after the entry) on the owner's primary screen, with the owner's own
+settings and data. The owner then used it and reported that everything worked: the menu
+entry and its icon, the window's and the taskbar's icon, the visuals following the music,
+and Classic, Spectrum Bars and Radiant. Those are the owner's own judgements by eye.
+
+What the run left on the machine, checked afterwards:
+
+- A complete System audio session, 78 s, in `~/.local/share/GranularMusicVisualizer/sessions/`:
+  the default output's monitor through PipeWire 1.6.11, one stream, 3,893 analysis frames
+  and 1,395 events; no block dropped, no discontinuity, no recovery, no logger loss; no audio
+  saved. Music was playing, quietly (median −45 dBFS, 10% of frames below the silence
+  threshold). Capture to publication 37 ms median and 39 ms at the 95th percentile; analysis
+  2.8 ms per 20 ms block at the 95th percentile; the analysis process at 17% of one core and
+  187 MiB.
+- The window closed normally (its settings were saved), with no GMV or `parec` process left;
+  the whole application peaked at 454 MiB.
+- `pacman -Qkk` still 0 altered files; the user's earlier files unchanged.
+
+Two steps of the test left no trace and are not counted as done by the owner. The models
+folder had not been made, so **Choose…** beside the weights was not opened; the installed
+copy's own buttons were then clicked automatically, offscreen with scratch XDG folders: both
+opened the dialog in the user's models folder and made it, writing nothing in the working
+directory. And the window was closed two seconds after capture stopped, too soon for a
+replay; replaying a session with the installed copy is shown by P.3's validation, not by
+the owner.
+
+### P.6 Still outstanding
+
+- **Choose…** for the weights, and replaying a session, done by the owner in the installed
+  package (P.5); both are covered by automated checks of the installed copy.
 - Installing on Arch Linux itself, or on any machine but this one: not done. The recipe uses
   only Arch's own packages, but only CachyOS's builds of them have been tried.
 - `namcap` was not run (it is not installed on the machine, and installing more tools was out

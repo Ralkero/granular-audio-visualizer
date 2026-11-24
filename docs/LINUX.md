@@ -509,6 +509,7 @@ The same machine, with Pacman and `makepkg` 7.1.0. The details are in
 | `scripts/validate_linux.py`, run with the system's Python from an empty folder so that only the installed copy could be imported | **59 of 59 checks passed**: four window runs (Wayland, Wayland again, Xwayland, Wayland forced), each offering System audio, analysing a WAV and a FLAC, recording the sessions in the data folder and replaying them with the same times; settings remembered; Radiant on the graphics card; nothing written in the working directory; the sound server asked, read-only, without an error. Scratch XDG folders, no recording from the sound server |
 | Afterwards | `pacman -Qkk` still 0 altered; nothing left running; the user's own GMV folders unchanged |
 | Upgrade: the recipe moved to commit `fe6d6dd`, built again and installed with `sudo pacman -U` | `0.2.0.r7.g5271e33-1` upgraded to `0.2.0.r9.gfe6d6dd-1`; the program's files identical, only the Linux guide changed; `pacman -Qkk` 0 altered; the user's settings and sessions byte for byte as before |
+| Used by the owner: the upgraded package started through its menu entry, with the owner's own settings | The owner reported the menu entry and its icon, the window's and taskbar's icon, the visuals following the music, and all three modes working (the owner's judgement by eye). It left a complete 78-second System audio session with music playing: 3,893 frames, nothing dropped, no discontinuity, capture to publication 37 ms median; the window closed normally with nothing left running. **Choose…** for weights and a replay were not done in that run; both are checked automatically on the installed copy |
 
 The whole test suite on the phase 1c branch, on this machine: **562 passed, 3 skipped,
 3 failed**, the failures being the three known `tests/test_remote.py` ones
@@ -562,14 +563,15 @@ CachyOS run:
   out of bounds for the validation.
 - System audio on a PulseAudio server (only PipeWire's was tried), at a rate other than
   48 kHz, and for longer than thirty minutes.
-- What System audio looks like with music the user plays and watches, judged by eye (see
-  above).
+- What System audio looks like with music the user plays and watches, judged by eye in any
+  detail. The owner watched it once, for about a minute in the installed package, and
+  reported that the visuals followed the music in all three modes
+  ([The Arch package on CachyOS](#the-arch-package-on-cachyos-phase-1c-2026-11-24)); that is
+  the only look so far.
 - The Arch package on Arch Linux itself, or on any machine but the CachyOS desktop above;
   `namcap` on the recipe and the package.
-- The installed package used by hand: its menu entry and icon, the taskbar icon, System
-  audio with music playing, the three modes on screen, **Choose…** opening the models
-  folder, and a session recorded and replayed: not confirmed yet. The validation above shows
-  the installed copy works; it does not show how it looks.
+- In the installed package, by hand: **Choose…** opening the models folder, and replaying a
+  session (both checked automatically on the installed copy, not yet by the owner).
 
 ### Checking it on Linux (CachyOS)
 
