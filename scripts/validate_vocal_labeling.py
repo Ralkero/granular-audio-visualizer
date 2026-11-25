@@ -178,7 +178,7 @@ def main(argv=None):
         fourth = window.current
         QTest.mouseClick(window.no_vocals_button, Qt.MouseButton.LeftButton)
         checks["no_vocals_recorded"] = store.Labels(work).state().get(fourth, {}).get("skip_reason") == "no_vocals"
-        checks["counts_shown"] = "Labelled 2" in window.counts.text() and "Skipped 2 (no vocals 1, review later 1)" in window.counts.text()
+        checks["counts_shown"] = "Answered 2" in window.counts.text() and "No vocals 1   ·   Review later 1" in window.counts.text()
         checks["status_shown_in_full"] = window.status.width() >= window.status.sizeHint().width() or window.status.wordWrap()
         window.open(fourth)
         QTest.mouseClick(window.previous_button, Qt.MouseButton.LeftButton)
@@ -200,7 +200,7 @@ def main(argv=None):
         checks["resumes_where_left"] = again.current == left_open
         checks["answers_kept"] = state[first]["label"] == "high_screams" and state[second]["label"] == "sing_screams"
         checks["title_after_reopen"] = again.song.text().startswith("\u266a  ") and "not known" not in again.song.text()
-        checks["counts_after_reopen"] = "Labelled 2" in again.counts.text()
+        checks["counts_after_reopen"] = "Answered 2" in again.counts.text()
         again.close()
         pump(app, 0.3)
     finally:

@@ -279,7 +279,7 @@ def test_answers_are_saved_at_once_changed_safely_and_kept_in_history(tmp_path):
     counts = store.progress(["VOCAL-0001", "VOCAL-0002", "VOCAL-0003", "VOCAL-0004"], state)
     assert counts == {
         "total": 4, "labelled": 2, "skipped": 0, "skipped_no_vocals": 0, "skipped_later": 0,
-        "remaining": 2, "earlier": 0,
+        "done": 2, "remaining": 2, "earlier": 0,
     }
 
 
@@ -509,7 +509,7 @@ def test_the_window_opens_on_the_first_excerpt_and_loads_only_its_seconds(labell
     rate = found["recordings"][excerpt["recording"]]["sample_rate"]
     assert window.player.calls[0] == ("load", round(data.EXCERPT_S * rate), rate)
     assert "Not labelled yet" in window.status.text()
-    assert "Still to label 14" in window.counts.text()
+    assert "Still to do 14" in window.counts.text()
     window.close()
 
 
@@ -530,7 +530,7 @@ def test_clicking_an_answer_saves_it_moves_on_and_can_be_changed(labelling, app)
     assert window.current == first  # stays when "go to the next" is off
     state = store.Labels(folder).state()[first]
     assert state["label"] == "sing_screams" and state["changes"] == 1
-    assert "Labelled 1" in window.counts.text()
+    assert "Answered 1" in window.counts.text()
 
 
 def test_skipping_and_notes(labelling):
@@ -542,7 +542,7 @@ def test_skipping_and_notes(labelling):
     state = store.Labels(folder).state()
     assert state[first]["skipped"] and state[first]["note"] == "too quiet to tell"
     assert window.current == second and window.note.text() == ""
-    assert "Skipped 1 (no vocals 0, review later 1)" in window.counts.text() and "Still to label 14" in window.counts.text()
+    assert "Review later 1" in window.counts.text() and "Still to do 14" in window.counts.text()
     window.open(first)
     assert window.note.text() == "too quiet to tell" and "Skipped: review later" in window.status.text()
 
@@ -560,7 +560,7 @@ def test_closing_and_opening_again_resumes_where_the_owner_left_off(labelling):
     assert again.current == found["order"][1]
     state = store.Labels(folder).state()
     assert [state[e]["label"] for e in found["order"][:3]] == ["cleans", "gutturals", "low_screams"]
-    assert "Labelled 3" in again.counts.text()
+    assert "Answered 3" in again.counts.text()
     again.next_unlabelled()
     assert again.current == third
     assert data.load(folder)["order"] == found["order"]  # the order never changes
@@ -833,17 +833,24 @@ def test_no_vocals_and_review_later_are_kept_apart(labelling):
     assert window.current == c
     state = store.Labels(folder).state()
     assert state[a]["skip_reason"] == "no_vocals" and state[b]["skip_reason"] == "later"
-    assert "Skipped 2 (no vocals 1, review later 1)" in window.counts.text()
-    # Excerpts nobody has seen come first, then the ones to review, then the no-vocals ones.
+    assert "No vocals 1   ·   Review later 1" in window.counts.text()
+    # A No vocals mark is a finished decision: once everything else is answered, only the
+    # excerpt put aside for review is still to do, and the No vocals one is never offered.
     for excerpt in found["order"][2:]:
         window.open(excerpt)
         window.choose("cleans")
+    assert "Still to do 1" in window.counts.text()
     window.open(found["order"][-1])
     window.next_unlabelled()
     assert window.current == b
+    window.choose("low_screams")
     window.next_unlabelled()
-    assert window.current == a
-    assert "Skipped: no vocals" in window.status.text()
+    assert window.current == b  # nothing left: it stays, and says so
+    assert "All done" in window.saved.text() and "Still to do 0" in window.counts.text()
+    assert window.bar.value() == window.bar.maximum() == len(found["order"])
+    window.open(a)
+    assert "Done: marked No vocals" in window.status.text()
+    assert "✓ No vocals" in window.listing.item(0).text()
 
 
 def test_the_guide_shows_the_definitions_and_the_owners_reference_vocalists(labelling):
@@ -942,3 +949,48 @@ def test_a_backup_is_still_made_without_the_optional_files(corpus, tmp_path, abs
     missing = {"titles.json", "reference_vocalists.txt"} if absent == "both" else {absent}
     assert not missing & set(contents)
     assert set(contents) <= set(store.BACKED_UP)
+
+
+def test_no_vocals_counts_as_done_for_earlier_answers_and_resuming(tmp_path):
+    """The owner's case: answers given with the first choices, then marked No vocals, must
+    not be reported as still waiting."""
+    old_answer(tmp_path, "VOCAL-0001", "none")
+    old_answer(tmp_path, "VOCAL-0002", "clean")
+    old_answer(tmp_path, "VOCAL-0003", "scream")
+    labels = store.Labels(tmp_path)
+    labels.skip("VOCAL-0001", "no_vocals")
+    labels.label("VOCAL-0002", "cleans")
+    labels.skip("VOCAL-0003", "later")  # put aside: still to do
+    order = ["VOCAL-0001", "VOCAL-0002", "VOCAL-0003", "VOCAL-0004"]
+    counts = store.progress(order, store.Labels(tmp_path).state())
+    assert counts["earlier"] == 1  # only the one put aside, not the No vocals one
+    assert counts["done"] == 2 and counts["remaining"] == 2
+    state = store.Labels(tmp_path).state()
+    assert not store.pending(state["VOCAL-0001"]) and not store.pending(state["VOCAL-0002"])
+    assert store.pending(state["VOCAL-0003"]) and store.pending({})
+    assert store.resume_point(order, state, {}) == "VOCAL-0004"  # never seen comes first
+    labels.label("VOCAL-0004", "gutturals")
+    assert store.resume_point(order, store.Labels(tmp_path).state(), {}) == "VOCAL-0003"
+    labels.label("VOCAL-0003", "high_screams")
+    counts = store.progress(order, store.Labels(tmp_path).state())
+    assert counts == {
+        "total": 4, "labelled": 3, "skipped": 1, "skipped_no_vocals": 1, "skipped_later": 0,
+        "done": 4, "remaining": 0, "earlier": 0,
+    }
+
+
+def test_the_window_does_not_ask_again_about_excerpts_marked_no_vocals(labelling):
+    folder, found, open_window = labelling
+    for excerpt in found["order"][:2]:
+        old_answer(folder, excerpt, "none")
+    labels = store.Labels(folder)
+    for excerpt in found["order"][:2]:
+        labels.skip(excerpt, "no_vocals")
+    for excerpt in found["order"][2:]:
+        labels.label(excerpt, "cleans")
+    window = open_window()
+    assert "answer choices have changed" not in window.saved.text()
+    assert "Earlier answers" not in window.counts.text()
+    assert "Still to do 0" in window.counts.text()
+    window.next_unlabelled()
+    assert "All done" in window.saved.text()

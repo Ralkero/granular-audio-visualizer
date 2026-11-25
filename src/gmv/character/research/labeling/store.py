@@ -120,31 +120,40 @@ class Labels:
         return [e for e in self.events() if e["excerpt"] == excerpt]
 
 
+def pending(state):
+    """Whether an excerpt still needs the owner: no current answer and not marked No vocals
+    (marking No vocals is a finished decision; "review later" is not)."""
+    return not state.get("label") and not (state.get("skipped") and state.get("skip_reason") == "no_vocals")
+
+
 def progress(order, state):
-    """Counts for the window: total; labelled (current answers); skipped, and why;
-    remaining (no current answer, skipped ones included); earlier (an answer of an earlier
-    scheme only, waiting for a current one)."""
+    """Counts for the window: total; labelled (current answers); skipped, and why; done
+    (answered or marked No vocals); remaining (still needing the owner: never answered, or
+    put aside for review); earlier (an answer of an earlier scheme only, still waiting for a
+    current answer or a No vocals mark)."""
     states = [state.get(e, {}) for e in order]
     labelled = sum(1 for s in states if s.get("label"))
     skipped = [s.get("skip_reason") or "later" for s in states if s.get("skipped") and not s.get("label")]
+    remaining = sum(1 for s in states if pending(s))
     return {
         "total": len(order),
         "labelled": labelled,
         "skipped": len(skipped),
         "skipped_no_vocals": skipped.count("no_vocals"),
         "skipped_later": skipped.count("later"),
-        "remaining": len(order) - labelled,
-        "earlier": sum(1 for s in states if s.get("earlier") and not s.get("label")),
+        "done": len(order) - remaining,
+        "remaining": remaining,
+        "earlier": sum(1 for s in states if s.get("earlier") and pending(s)),
     }
 
 
 def resume_point(order, state, session):
-    """The excerpt to open: the one open last time, else the first without an answer that
-    was not skipped, else the first without an answer, else the first."""
+    """The excerpt to open: the one open last time, else the first never answered or
+    skipped, else the first put aside for review, else the first."""
     last = session.get("current")
     if last in order:
         return last
-    for wanted in (lambda s: not s.get("label") and not s.get("skipped"), lambda s: not s.get("label")):
+    for wanted in (lambda s: not s.get("label") and not s.get("skipped"), pending):
         found = next((e for e in order if wanted(state.get(e, {}))), None)
         if found:
             return found

@@ -161,7 +161,7 @@ class LabelWindow(QMainWindow):
 
         self.counts = QLabel("")
         self.bar = QProgressBar()
-        self.bar.setFormat("%v of %m labelled")
+        self.bar.setFormat("%v of %m done")
         main.addWidget(self.counts)
         main.addWidget(self.bar)
 
@@ -341,7 +341,7 @@ class LabelWindow(QMainWindow):
         if current.get("label"):
             return f"Your answer: {CLASSES[current['label']][0]}"
         if current.get("skipped"):
-            text = "Skipped: no vocals" if current.get("skip_reason") == "no_vocals" else "Skipped: review later"
+            text = "Done: marked No vocals" if current.get("skip_reason") == "no_vocals" else "Skipped: review later"
         else:
             text = "Not labelled yet"
         earlier = current.get("earlier")
@@ -359,7 +359,7 @@ class LabelWindow(QMainWindow):
             if current.get("label"):
                 mark = "✓ " + CLASSES[current["label"]][0]
             elif current.get("skipped"):
-                mark = "↷ no vocals" if current.get("skip_reason") == "no_vocals" else "↷ review later"
+                mark = "✓ No vocals" if current.get("skip_reason") == "no_vocals" else "↷ review later"
             elif current.get("earlier"):
                 mark = "• earlier: " + current["earlier"]["name"]
             else:
@@ -372,12 +372,12 @@ class LabelWindow(QMainWindow):
         self.listing.blockSignals(False)
         counts = store.progress(self.order, state)
         self.bar.setRange(0, max(1, counts["total"]))
-        self.bar.setValue(counts["labelled"])
+        self.bar.setValue(counts["done"])
         where = self.order.index(self.current) + 1 if self.current in self.order else 0
         text = (
-            f"Excerpt {where} of {counts['total']}   ·   Labelled {counts['labelled']}   ·   "
-            f"Skipped {counts['skipped']} (no vocals {counts['skipped_no_vocals']}, review later "
-            f"{counts['skipped_later']})   ·   Still to label {counts['remaining']}"
+            f"Excerpt {where} of {counts['total']}   ·   Answered {counts['labelled']}   ·   "
+            f"No vocals {counts['skipped_no_vocals']}   ·   Review later {counts['skipped_later']}   ·   "
+            f"Still to do {counts['remaining']}"
         )
         if counts["earlier"]:
             text += f"   ·   Earlier answers to redo: {counts['earlier']}"
@@ -437,8 +437,9 @@ class LabelWindow(QMainWindow):
                 self.open(self.order[index])
 
     def next_unlabelled(self):
-        """The next excerpt after this one, in order, with no answer: one never skipped if
-        there is any, otherwise a skipped one."""
+        """The next excerpt after this one, in order, that still needs the owner: one never
+        answered or skipped if there is any, otherwise one put aside for review. Excerpts
+        marked No vocals are done and are not offered again."""
         self.next_timer.stop()
         state = self.labels.state()
         if not self.order:
@@ -447,14 +448,16 @@ class LabelWindow(QMainWindow):
         ring = self.order[start:] + self.order[:start]
         for wanted in (
             lambda s: not s.get("label") and not s.get("skipped"),
-            lambda s: not s.get("label") and s.get("skip_reason") != "no_vocals",
-            lambda s: not s.get("label"),
+            store.pending,
         ):
             found = next((e for e in ring if e != self.current and wanted(state.get(e, {}))), None)
             if found:
                 self.open(found)
                 return
-        self.flash("Every excerpt has an answer. Thank you! You can still go back and change any of them.")
+        self.flash(
+            "All done: every excerpt has an answer or is marked No vocals. Thank you! You can "
+            "still go back and change any of them."
+        )
 
     # -- answering ------------------------------------------------------------------------
 

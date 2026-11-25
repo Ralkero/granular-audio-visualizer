@@ -20,7 +20,8 @@ It works from any folder. The external drive that holds your music must be conne
 
 **What you see.** At the top, the excerpt's name (for example `VOCAL-0042`), the **song
 title** of the recording it comes from, whether you have answered it, and how far you are:
-labelled, skipped (no vocals / review later), still to label. On the right, the full
+answered, marked No vocals, put aside for review, and still to do (No vocals counts as
+done). On the right, the full
 definitions of the five answers and your reference vocalists, and the list of all excerpts.
 
 **Listen.** The excerpt plays as soon as it opens (ten seconds of a song; nothing else of
@@ -323,6 +324,49 @@ answer or a "No vocals". Counts only:
 - **A private candidate list** of recordings from development-side artists, for the next
   batch, is kept with the other local evidence and is not in Git. It names recordings to
   listen to, never labels.
+
+## Second batch (owner, 2026-11-25)
+
+The owner added 158 recordings from 10 artists through **Add recordings…** and labelled all
+the new excerpts.
+
+- **Size:** the dataset now has 412 excerpts from 241 recordings. 316 excerpts were added:
+  276 on the development side and 40 on the held-out side, the latter from recordings by a
+  held-out reference artist, which stay held out.
+- **Answers:** 341 excerpts have an answer and 71 are marked No vocals. None is waiting for
+  review or unanswered, and the answers file has no damaged line.
+- **Development side** (343 excerpts: 282 answered, 61 No vocals), counted with the same
+  development-only reading as above:
+
+| Answer | Excerpts | Different artists | Different recordings | Largest share from one artist |
+|---|---:|---:|---:|---:|
+| Cleans | 170 | 17 | 114 | 23% |
+| High Screams | 45 | 7 | 40 | 27% |
+| Low Screams | 52 | 10 | 42 | 27% |
+| Gutturals | 10 | 1 | 7 | 100% |
+| Sing-Screams | 5 | 3 | 5 | 40% |
+
+- **Held out** (69 excerpts): 59 answered, 10 No vocals. They are not read by answer.
+- **What this means:** High and Low Screams now meet the "about 20 excerpts from at least 6
+  vocalists" bar set above. Gutturals still come from a single artist, and Sing-Screams
+  has 5 examples, so neither can yet be learned or checked as a technique rather than a
+  voice.
+- **Leakage watch:** one development recording features the vocalist of a held-out
+  reference artist. Its two excerpts stay in the dataset, but must be left out of any
+  development training, feature selection or tuning. The private note names them.
+
+**Counting fix (same day).** The window had counted excerpts marked **No vocals** as still
+to label. It had also kept reporting earlier answers "to redo" when they had been redone
+with **No vocals**, and **Next without an answer** went back to them. So after this batch
+it said some excerpts had no answer when every one had. A No vocals mark is now a finished
+decision:
+
+- the counts read Answered, No vocals, Review later and **Still to do**, and the bar shows
+  excerpts done;
+- **Next without an answer** offers only excerpts never answered or put aside for review;
+- the earlier-answers reminder only counts excerpts still to do.
+
+Nothing in the saved answers changed: this was the window's arithmetic.
 
 ## Validation
 
