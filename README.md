@@ -142,6 +142,15 @@ gmv review --workdir review-local\pilot-v1 report
 
 See [capture test matrix and legacy single-file import format](docs/CAPTURE_VALIDATION.md), [schema 1.1 / replay / stale-event policy](docs/SCHEMA.md), and [isolated Demucs benchmark](experiments/separation/README.md). Demucs is an offline research experiment: overlap throughput, latency, synthetic quality and unresolved weight licensing did not justify live integration. The control center distinguishes observed/candidate/predicted/delayed events, reports separate losses and helper resources, and shows pending hardware checks. Raw recording stays off.
 
+## Sonic Character diagnostics (analysis only)
+
+`gmv character analyze` measures what kind of sound a recording is (forceful or gentle, dark or bright, how busy and how steady its rhythm is, smooth or rough, sparse or crowded, even or dynamic) from audio files or recorded sessions that you name, and writes a report, JSON and one chart per recording into the ignored `local-evidence/` folder. It only reads the files; nothing is searched for, copied or uploaded. The visualizer does not use these values yet. See [docs/SONIC_CHARACTER.md](docs/SONIC_CHARACTER.md).
+
+```
+gmv character analyze "track one.flac" "track two.mp3"
+gmv character analyze --list my-tracks.txt --processes 4 --gain-db -10
+```
+
 ## Licence
 
 Copyright (C) 2026 Ralkero.
