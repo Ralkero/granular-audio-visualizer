@@ -48,10 +48,17 @@ def add_parser(commands):
     from .research import cli as research_cli
 
     research_cli.add_parser(sub)
+    from .research.labeling import cli as labeling_cli
+
+    labeling_cli.add_parsers(sub)
     return parser
 
 
 def run(args):
+    if getattr(args, "character_command", None) in ("label", "prepare-labels"):
+        from .research.labeling import cli as labeling_cli
+
+        return labeling_cli.run(args)
     if getattr(args, "character_command", None) == "research":
         from .research import cli as research_cli
 
