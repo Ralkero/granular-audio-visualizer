@@ -55,7 +55,7 @@ def add_parser(commands):
 
 
 def run(args):
-    if getattr(args, "character_command", None) in ("label", "prepare-labels"):
+    if getattr(args, "character_command", None) in ("label", "prepare-labels", "label-titles"):
         from .research.labeling import cli as labeling_cli
 
         return labeling_cli.run(args)

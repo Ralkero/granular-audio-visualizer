@@ -18,9 +18,10 @@ uv run --directory ~/granular-audio-visualizer/.claude/worktrees/research-vocal-
 
 It works from any folder. The external drive that holds your music must be connected.
 
-**What you see.** At the top, the excerpt's name (for example `VOCAL-0042`), whether you have
-answered it, and how far you are: labelled, skipped, still to label. On the right, what the
-five answers mean, and the list of all excerpts.
+**What you see.** At the top, the excerpt's name (for example `VOCAL-0042`), the **song
+title** of the recording it comes from, whether you have answered it, and how far you are:
+labelled, skipped (no vocals / review later), still to label. On the right, the full
+definitions of the five answers and your reference vocalists, and the list of all excerpts.
 
 **Listen.** The excerpt plays as soon as it opens (ten seconds of a song; nothing else of
 the song is played).
@@ -30,22 +31,27 @@ the song is played).
 - **Repeat** plays it over and over until you pause.
 - The bar shows where you are; drag it to jump.
 
-**Answer.** Click one of the five large buttons:
+**Answer.** Click the one technique that **dominates** the excerpt:
 
-| Answer | Means |
+| Answer | In short (full definitions in the window) |
 |---|---|
-| **Clean singing** | Melodic, pitched singing with a relatively clean vocal tone |
-| **Screaming** | Harsh delivery: screams, growls, shrieks and similar aggressive techniques |
-| **Shouting** | Forceful, yelled or speech-like delivery that is not mainly clean singing and not a sustained scream |
-| **Mixed / ambiguous** | Several techniques in the excerpt, overlapping voices, or you cannot confidently pick one |
-| **No vocals** | Instrumental: no audible voice |
+| **Cleans** | Conventional clean singing: a recognisable melodic performance without sustained harsh distortion. Loud or emotional singing is still Cleans if the technique stays clean |
+| **High Screams** | Harsh delivery in a noticeably high register: sharp, piercing, shrill screams and shrieks |
+| **Low Screams** | Harsh delivery in a lower or lower-middle register: thick, gritty screams or growls that are not distinctly guttural |
+| **Gutturals** | Extremely low, throat-heavy vocals with a deep, wet, bubbling or cavernous texture |
+| **Sing-Screams** | Harsh or distorted singing that keeps a clearly recognisable melodic line |
 
-Label what you hear, whatever the style of the song. Your answer is saved the moment you
-click ("Saved ✓" appears in green), and the next excerpt opens.
+Label what you hear: the artist, the style and the song title never decide the answer.
+Your answer is saved the moment you click ("Saved ✓" appears in green), and the next
+excerpt opens.
 
-**Not sure?** Click **Skip / come back later**. Skipped excerpts stay in the list and are
-counted apart; **Next without an answer** brings you back to them once everything else is
-done. You can also type a short **note** (optional); it is saved by itself.
+**No voice in the excerpt?** Click **No vocals (skip)**. Instrumental passages are not
+forced into a vocal answer; they are recorded as skipped for that reason.
+
+**Several techniques with none dominating, or not sure?** Click **Skip / review later**.
+Skipped excerpts stay in the list and are counted apart; **Next without an answer** brings
+you back to them once everything else is done (excerpts to review before no-vocals ones).
+You can also type a short **note** (optional); it is saved by itself.
 
 **Change an answer.** Click **← Previous** (or click the excerpt in the list on the right)
 and click a different answer. The new answer replaces the old one; the old one is kept in
@@ -54,8 +60,16 @@ the history.
 **Stop and resume.** Close the window whenever you like. Nothing is lost. Run the same
 command again and it opens where you stopped.
 
-**Optional keys:** 1 to 5 answer, Space play/pause, R from the start, S skip, ← →
-previous/next. The buttons do the same.
+**Optional keys:** 1 to 5 answer, Space play/pause, R from the start, S review later,
+N no vocals, ← → previous/next. The buttons do the same.
+
+**Answers you gave with the first set of choices.** The answer choices changed on
+2026-11-24 (from clean singing / screaming / shouting / mixed / no vocals to the five
+above). Excerpts you had already answered keep that answer on record and show it ("earlier
+answer, with the old choices: …", and "• earlier: …" in the list), but they count as still
+to label until you give a new answer: an old answer is never translated into a new one.
+The window says how many are waiting ("Earlier answers to redo"). Click them in the list to
+redo them. Nothing was deleted.
 
 **If an excerpt cannot be played** (the window says so in red), its drive is probably not
 connected. Skip it; it will be there when the drive is back.
@@ -71,13 +85,27 @@ answers into a folder you choose.
 `~/granular-audio-visualizer/.claude/worktrees/research-vocal-delivery-labeling/local-evidence/sonic-character/vocal-labeling/`.
 Git ignores that folder; nothing in it is uploaded or published.
 
-## Blind labelling
+## What the window shows about an excerpt
 
-The window shows an excerpt's anonymous name and nothing else about it: no title, artist,
-album, file name or folder, not how the excerpt was chosen, and not whether it belongs to
-the part kept for the final test. An automated test opens every excerpt and checks that
-none of these appears in any text, tooltip, list entry or title of the window, including
-when a recording is missing.
+The excerpt's anonymous name and, at the owner's request, the **song title** of its
+recording, so there is no guessing which song is playing. Nothing else: no artist, album,
+file name or folder, not how the excerpt was chosen, and not whether it belongs to the part
+kept for the final test. An automated test opens every excerpt and checks that none of
+these appears in any text, tooltip, list entry or title of the window, including when a
+recording is missing.
+
+**Where titles come from** (`titles.json`, beside the dataset; `gmv character label-titles`):
+the owner's music inventory (the table `gmv evidence` built from the files' own tags),
+matched by the recording's checksum; for a recording without metadata, a title the owner
+gave; otherwise the title tag inside the file. Never a file name. In the first dataset, 82
+recordings have their inventory title and one reference track, whose file carries no title
+tag, has the title the owner gave it. Every inventory title was checked against a file with
+the same checksum at the same path. Adding the titles did not change `dataset.json` (it is
+byte-for-byte the same).
+
+**Reference vocalists.** The owner's examples of vocalists and the techniques they use are
+shown under the definitions, from `reference_vocalists.txt` beside the answers (kept out of
+Git with the rest). They are reference points, not answers.
 
 ## How the excerpts were chosen
 
@@ -122,7 +150,9 @@ In `local-evidence/sonic-character/vocal-labeling/` (ignored by Git):
 | File | Holds |
 |---|---|
 | `dataset.json` | Every recording (path, artist, checksum, length, rate, channels, whether it is a reference track), every artist's side and why, every excerpt (identifier, recording, start and end in seconds, method, level), the listening order, the seed and the split rule |
-| `labels.jsonl` | Every click, one line each, with its time: answers, skips, notes. Never rewritten, so a changed answer keeps the old one in the history, and a crash can at worst lose the line being written (it is then reported and left out) |
+| `labels.jsonl` | Every click, one line each, with its time: answers (with the number of the answer scheme they belong to), skips (with their reason: no vocals or review later), notes. Never rewritten, so a changed answer keeps the old one in the history, and a crash can at worst lose the line being written (it is then reported and left out). Answers saved before schemes were numbered belong to scheme 1 |
+| `titles.json` | Each recording's song title and where it came from |
+| `reference_vocalists.txt` | The owner's reference vocalists, shown in the window's guide |
 | `session.json` | Which excerpt was open, and the two options |
 | `labelling.lock` | Present while the window is open, so two windows cannot write at once |
 
@@ -228,12 +258,33 @@ per-class accuracy precisely, especially for whichever answers turn out to be ra
   owner's volume is for the owner to notice in the first seconds of labelling. Playback on
   Windows was not tried.
 
+### After the change of answers and the song titles (same day)
+
+- **Automated tests:** 39 in `tests/test_vocal_labeling.py` (10 added): earlier answers kept,
+  shown and never translated, and replaced by a new one; skips with their reason, no vocals
+  apart from review later, and the order they come back in; titles from the inventory by
+  checksum, from the owner, from the file tag, never from a file name; title checks
+  catching a wrong title, an unknown checksum and a file elsewhere; the titles command
+  leaving `dataset.json` byte-for-byte unchanged; the title in the window, and "Song title
+  not known" without one; the guide's definitions and the owner's reference list; nothing
+  but the title shown about a recording; the export carrying the scheme and earlier answers.
+- **Real machine,** the same script on a temporary copy (with the titles): 33 of 33 checks
+  under Wayland, now also covering the song title shown for the excerpt and after reopening,
+  the new answers, a changed answer, No vocals and Review later recorded apart, and a
+  skipped excerpt still listed.
+- **Full suite:** 676 passed, 3 skipped, 4 failed: the three known `tests/test_remote.py`
+  failures and the known intermittent replay test. `ruff check` clean.
+- **The owner's own folder:** `dataset.json` and `labels.jsonl` are byte-for-byte what they
+  were; the 7 answers given with the first choices are kept and wait to be redone.
+
 ## Developer notes
 
 ```
 gmv character prepare-labels --manifest corpus-data/owned/manifest.json \
   --paths corpus-data/corpus-local/paths.json --map 'E:\=/run/media/<user>/<drive>/' \
   --reference '<path>=<artist group>' ... --activity-model <weights> --target 96 --processes 8
+gmv character label-titles --inventory <music inventory CSV> [--title '<path>=<title>'] \
+  [--map 'E:\=/run/media/<user>/<drive>/']
 gmv character label [--folder DIR]
 ```
 

@@ -1,5 +1,6 @@
-"""``gmv character label`` (the labelling window) and ``gmv character prepare-labels``
-(choosing the excerpts; done once, before any label)."""
+"""``gmv character label`` (the labelling window), ``gmv character prepare-labels``
+(choosing the excerpts; done once, before any label) and ``gmv character label-titles``
+(the song titles shown in the window, kept beside the dataset)."""
 
 from pathlib import Path
 
@@ -43,7 +44,20 @@ def add_parsers(sub):
     prepare.add_argument("--target", type=int, default=96, help="Excerpts to prepare (default: %(default)s)")
     prepare.add_argument("--processes", type=int, default=1, help="Recordings analysed at once")
     prepare.add_argument("--folder", help="Where to write (default: %s)" % FOLDER)
-    return label, prepare
+    named = sub.add_parser(
+        "label-titles",
+        help="Give the labelling window each recording's song title (the dataset is not changed)",
+        description="Titles come from the music inventory, matched by checksum, then from --title, "
+        "then from the file's own title tag. Never from a file name.",
+    )
+    named.add_argument("--inventory", help="Music inventory CSV (Enriched_Music_Inventory.csv)")
+    named.add_argument(
+        "--title", action="append", default=[], metavar="PATH=TITLE",
+        help="The title of a recording that carries no metadata, as the owner gave it",
+    )
+    named.add_argument("--map", action="append", default=[], metavar="FROM=TO", help="As for prepare-labels, for checking paths")
+    named.add_argument("--folder", help="Where the excerpts and answers are kept (default: %s)" % FOLDER)
+    return label, prepare, named
 
 
 def run(args):
@@ -53,6 +67,9 @@ def run(args):
 
         return main(folder)
     from . import dataset as data
+
+    if args.character_command == "label-titles":
+        return titles_command(args, folder)
 
     def pair(text, what):
         if "=" not in text:
@@ -99,3 +116,30 @@ def run(args):
     for side in ("development", "evaluation"):
         print(f"  {side}: {summary[side]['excerpts']} excerpts, {summary[side]['artists']} artists")
     print(f"  methods: {summary['methods']}")
+
+
+def titles_command(args, folder):
+    from . import dataset as data
+    from . import titles
+
+    def pair(text):
+        if "=" not in text:
+            raise SystemExit(f"Needs the form A=B: {text}")
+        return tuple(text.split("=", 1))
+
+    try:
+        found = data.load(folder)
+    except data.DatasetError as exc:
+        raise SystemExit(str(exc)) from exc
+    before = (folder / "dataset.json").read_bytes()
+    named = dict(pair(t) for t in args.title)
+    result = titles.build(found, args.inventory, named)
+    problems = titles.verify(found, result, args.inventory, [pair(m) for m in args.map])
+    if problems:
+        raise SystemExit("Titles not written: " + "; ".join(problems[:10]))
+    titles.write(folder, result)
+    assert (folder / "dataset.json").read_bytes() == before  # the dataset is never touched
+    sources = {}
+    for entry in result.values():
+        sources[entry["from"] or "none"] = sources.get(entry["from"] or "none", 0) + 1
+    print(f"Titles for {len(result)} recordings written to {folder / titles.TITLES}: {sources}")

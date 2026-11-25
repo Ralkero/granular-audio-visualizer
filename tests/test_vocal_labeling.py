@@ -182,7 +182,7 @@ def test_reference_tracks_and_their_artist_are_always_held_out(corpus, tmp_path)
 def test_adding_recordings_never_moves_an_artist_or_an_existing_excerpt(corpus, tmp_path):
     folder = tmp_path / "labels"
     found = prepared_dataset(corpus, folder)
-    store.Labels(folder).label(found["order"][0], "clean")
+    store.Labels(folder).label(found["order"][0], "cleans")
     before = json.loads(json.dumps(found))
     root, music, _reference = corpus
     newcomer = music / "new song.wav"
@@ -253,50 +253,57 @@ def test_missing_unreadable_and_too_short_recordings_are_reported_not_used(corpu
 
 def test_answers_are_saved_at_once_changed_safely_and_kept_in_history(tmp_path):
     labels = store.Labels(tmp_path)
-    labels.label("VOCAL-0001", "clean")
+    labels.label("VOCAL-0001", "cleans")
     assert (tmp_path / store.LABELS).read_text().count("\n") == 1  # on disk already
-    labels.label("VOCAL-0001", "scream")
+    labels.label("VOCAL-0001", "high_screams")
     labels.note("VOCAL-0001", "growl at the end")
     labels.skip("VOCAL-0002")
     reopened = store.Labels(tmp_path)
     state = reopened.state()
-    assert state["VOCAL-0001"] == {"label": "scream", "skipped": False, "note": "growl at the end", "changes": 1}
+    assert state["VOCAL-0001"] == {
+        "label": "high_screams", "skipped": False, "skip_reason": None, "note": "growl at the end",
+        "changes": 1, "earlier": None,
+    }
     assert state["VOCAL-0002"]["skipped"] and state["VOCAL-0002"]["label"] is None
-    assert [e["value"] for e in reopened.history("VOCAL-0001") if e["event"] == "label"] == ["clean", "scream"]
+    assert [e["value"] for e in reopened.history("VOCAL-0001") if e["event"] == "label"] == ["cleans", "high_screams"]
+    assert all(e["scheme"] == 2 for e in reopened.history("VOCAL-0001") if e["event"] == "label")
     with pytest.raises(ValueError):
-        reopened.label("VOCAL-0003", "singing")  # only the five answers
+        reopened.label("VOCAL-0003", "clean")  # an answer of the old scheme is not offered
     # A skipped excerpt that gets an answer is no longer skipped; skipping a labelled one
     # does not erase its answer.
-    reopened.label("VOCAL-0002", "none")
+    reopened.label("VOCAL-0002", "gutturals")
     reopened.skip("VOCAL-0001")
     state = reopened.state()
-    assert state["VOCAL-0002"] == {"label": "none", "skipped": False, "note": "", "changes": 0}
-    assert state["VOCAL-0001"]["label"] == "scream" and not state["VOCAL-0001"]["skipped"]
+    assert state["VOCAL-0002"]["label"] == "gutturals" and not state["VOCAL-0002"]["skipped"]
+    assert state["VOCAL-0001"]["label"] == "high_screams" and not state["VOCAL-0001"]["skipped"]
     counts = store.progress(["VOCAL-0001", "VOCAL-0002", "VOCAL-0003", "VOCAL-0004"], state)
-    assert counts == {"total": 4, "labelled": 2, "skipped": 0, "remaining": 2}
+    assert counts == {
+        "total": 4, "labelled": 2, "skipped": 0, "skipped_no_vocals": 0, "skipped_later": 0,
+        "remaining": 2, "earlier": 0,
+    }
 
 
 def test_a_damaged_line_is_left_out_and_every_other_answer_kept(tmp_path):
     labels = store.Labels(tmp_path)
-    labels.label("VOCAL-0001", "shout")
-    labels.label("VOCAL-0002", "mixed")
+    labels.label("VOCAL-0001", "low_screams")
+    labels.label("VOCAL-0002", "sing_screams")
     with (tmp_path / store.LABELS).open("a") as file:
         file.write('{"time": "2026-11-24T00:00:00", "excerpt": "VOCAL-0003", "eve')  # cut off
     reopened = store.Labels(tmp_path)
     assert reopened.damaged == 1
-    assert {k: v["label"] for k, v in reopened.state().items()} == {"VOCAL-0001": "shout", "VOCAL-0002": "mixed"}
-    reopened.label("VOCAL-0003", "clean")  # a new answer still lands on a line of its own
+    assert {k: v["label"] for k, v in reopened.state().items()} == {"VOCAL-0001": "low_screams", "VOCAL-0002": "sing_screams"}
+    reopened.label("VOCAL-0003", "cleans")  # a new answer still lands on a line of its own
     final = store.Labels(tmp_path)
-    assert final.state()["VOCAL-0003"]["label"] == "clean" and final.damaged == 1
+    assert final.state()["VOCAL-0003"]["label"] == "cleans" and final.damaged == 1
 
 
 def test_resuming_opens_the_excerpt_left_open_else_the_first_without_an_answer():
     order = ["VOCAL-0003", "VOCAL-0001", "VOCAL-0002"]
-    state = {"VOCAL-0003": {"label": "clean"}, "VOCAL-0001": {"skipped": True}}
+    state = {"VOCAL-0003": {"label": "cleans"}, "VOCAL-0001": {"skipped": True}}
     assert store.resume_point(order, state, {"current": "VOCAL-0001"}) == "VOCAL-0001"
     assert store.resume_point(order, state, {}) == "VOCAL-0002"
     assert store.resume_point(order, state, {"current": "VOCAL-9999"}) == "VOCAL-0002"
-    state["VOCAL-0002"] = {"label": "none"}
+    state["VOCAL-0002"] = {"label": "gutturals"}
     assert store.resume_point(order, state, {}) == "VOCAL-0001"  # only a skipped one is left
     assert store.resume_point([], {}, {}) is None
 
@@ -315,7 +322,7 @@ def test_a_backup_holds_the_dataset_and_the_answers(corpus, tmp_path):
 
     folder = tmp_path / "labels"
     found = prepared_dataset(corpus, folder)
-    store.Labels(folder).label(found["order"][0], "clean")
+    store.Labels(folder).label(found["order"][0], "cleans")
     archive = store.backup(folder, tmp_path)
     with zipfile.ZipFile(archive) as zipped:
         assert set(zipped.namelist()) == {"dataset.json", store.LABELS}
@@ -510,19 +517,19 @@ def test_clicking_an_answer_saves_it_moves_on_and_can_be_changed(labelling, app)
     folder, found, open_window = labelling
     window = open_window()
     first, second = found["order"][:2]
-    window.answer_buttons["scream"].click()
-    assert store.Labels(folder).state()[first]["label"] == "scream"
+    window.answer_buttons["high_screams"].click()
+    assert store.Labels(folder).state()[first]["label"] == "high_screams"
     assert "Saved" in window.saved.text()
     window.next_timer.timeout.emit()  # the short pause before moving on
     assert window.current == second
     window.previous_button.click()
-    assert window.current == first and window.answer_buttons["scream"].isChecked()
-    assert "Screaming" in window.status.text()
+    assert window.current == first and window.answer_buttons["high_screams"].isChecked()
+    assert "High Screams" in window.status.text()
     window.advance.setChecked(False)
-    window.answer_buttons["mixed"].click()
+    window.answer_buttons["sing_screams"].click()
     assert window.current == first  # stays when "go to the next" is off
     state = store.Labels(folder).state()[first]
-    assert state["label"] == "mixed" and state["changes"] == 1
+    assert state["label"] == "sing_screams" and state["changes"] == 1
     assert "Labelled 1" in window.counts.text()
 
 
@@ -535,15 +542,15 @@ def test_skipping_and_notes(labelling):
     state = store.Labels(folder).state()
     assert state[first]["skipped"] and state[first]["note"] == "too quiet to tell"
     assert window.current == second and window.note.text() == ""
-    assert "Skipped 1" in window.counts.text() and "Still to label 14" in window.counts.text()
+    assert "Skipped 1 (no vocals 0, review later 1)" in window.counts.text() and "Still to label 14" in window.counts.text()
     window.open(first)
-    assert window.note.text() == "too quiet to tell" and "Skipped" in window.status.text()
+    assert window.note.text() == "too quiet to tell" and "Skipped: review later" in window.status.text()
 
 
 def test_closing_and_opening_again_resumes_where_the_owner_left_off(labelling):
     folder, found, open_window = labelling
     window = open_window()
-    for answer in ("clean", "none", "shout"):
+    for answer in ("cleans", "gutturals", "low_screams"):
         window.choose(answer)
         window.next_unlabelled()
     third = found["order"][3]
@@ -552,7 +559,7 @@ def test_closing_and_opening_again_resumes_where_the_owner_left_off(labelling):
     again = open_window()
     assert again.current == found["order"][1]
     state = store.Labels(folder).state()
-    assert [state[e]["label"] for e in found["order"][:3]] == ["clean", "none", "shout"]
+    assert [state[e]["label"] for e in found["order"][:3]] == ["cleans", "gutturals", "low_screams"]
     assert "Labelled 3" in again.counts.text()
     again.next_unlabelled()
     assert again.current == third
@@ -576,8 +583,8 @@ def test_an_excerpt_whose_recording_is_missing_cannot_be_labelled(labelling):
     window = open_window()
     assert window.current == first and not window.available
     assert "cannot be played right now" in window.audio_problem.text()
-    assert not window.answer_buttons["clean"].isEnabled()
-    window.choose("clean")
+    assert not window.answer_buttons["cleans"].isEnabled()
+    window.choose("cleans")
     assert first not in store.Labels(folder).state()
     window.skip()
     assert store.Labels(folder).state()[first]["skipped"]
@@ -594,7 +601,7 @@ def test_keys_and_listening_controls(labelling, app):
     assert QTest.qWaitForWindowActive(window)
     window.advance.setChecked(False)
     QTest.keyClick(window, Qt.Key.Key_2)
-    assert store.Labels(folder).state()[window.current]["label"] == "scream"
+    assert store.Labels(folder).state()[window.current]["label"] == "high_screams"
     window.play_button.click()
     assert window.player.playing
     window.restart_button.click()
@@ -622,10 +629,10 @@ def visible_text(window):
 def test_nothing_about_the_recording_or_the_split_is_shown(labelling):
     folder, found, open_window = labelling
     window = open_window()
-    secrets = {"development", "evaluation", "held out", "reference", "REC-", "hash", *data.METHODS}
+    secrets = {"development", "evaluation", "held out", "REC-", "hash", *data.METHODS}
     for recording in found["recordings"].values():
         secrets |= {recording["artist"], data.artist_name(recording["artist"]), os.path.basename(recording["path"])}
-        secrets |= {os.path.splitext(os.path.basename(recording["path"]))[0], os.path.dirname(recording["path"])}
+        secrets |= {os.path.dirname(recording["path"]), str(recording["size"]), recording["sha256"][:12]}
     for excerpt_id in found["order"]:
         window.open(excerpt_id)
         shown = visible_text(window).lower()
@@ -648,10 +655,14 @@ def test_no_prepared_excerpts_gives_a_plain_message(tmp_path, app):
 
 
 def test_the_answers_offered_are_the_five_classes():
-    assert list(CLASSES) == ["clean", "scream", "shout", "mixed", "none"]
+    from gmv.character.research.labeling import GUIDE, SCHEME, SCHEMES
+
+    assert list(CLASSES) == ["cleans", "high_screams", "low_screams", "gutturals", "sing_screams"]
     assert [name for name, _ in CLASSES.values()] == [
-        "Clean singing", "Screaming", "Shouting", "Mixed / ambiguous", "No vocals",
+        "Cleans", "High Screams", "Low Screams", "Gutturals", "Sing-Screams",
     ]
+    assert SCHEME == 2 and CLASSES is SCHEMES[2] and set(GUIDE) == set(CLASSES)
+    assert list(SCHEMES[1]) == ["clean", "scream", "shout", "mixed", "none"]  # kept to read old answers
 
 
 def test_the_label_command_finds_the_folder_in_the_repository(monkeypatch, tmp_path):
@@ -661,3 +672,216 @@ def test_the_label_command_finds_the_folder_in_the_repository(monkeypatch, tmp_p
     monkeypatch.chdir(tmp_path)  # the working directory does not matter
     assert cli.default_folder() == paths.REPOSITORY / "local-evidence" / "sonic-character" / "vocal-labeling"
     assert "local-evidence/" in (paths.REPOSITORY / ".gitignore").read_text()
+
+
+# -- the second answer scheme: earlier answers, skip reasons, song titles -----------------
+
+
+def old_answer(folder, excerpt, value):
+    """An answer as the first version saved it: no scheme number."""
+    folder.mkdir(parents=True, exist_ok=True)
+    with (folder / store.LABELS).open("a", encoding="utf-8") as file:
+        file.write(json.dumps({"time": "2026-11-24T04:15:00+00:00", "excerpt": excerpt, "event": "label", "value": value}) + "\n")
+
+
+def test_answers_of_the_first_scheme_are_kept_shown_and_never_translated(tmp_path):
+    old_answer(tmp_path, "VOCAL-0001", "clean")
+    old_answer(tmp_path, "VOCAL-0002", "none")
+    original = (tmp_path / store.LABELS).read_bytes()
+    labels = store.Labels(tmp_path)
+    state = labels.state()
+    assert state["VOCAL-0001"]["label"] is None  # not read as "cleans"
+    assert state["VOCAL-0001"]["earlier"] == {"scheme": 1, "value": "clean", "name": "Clean singing"}
+    assert state["VOCAL-0002"]["earlier"]["name"] == "No vocals" and not state["VOCAL-0002"]["skipped"]
+    order = ["VOCAL-0001", "VOCAL-0002", "VOCAL-0003"]
+    counts = store.progress(order, state)
+    assert counts["labelled"] == 0 and counts["remaining"] == 3 and counts["earlier"] == 2
+    labels.label("VOCAL-0001", "sing_screams")
+    state = store.Labels(tmp_path).state()
+    assert state["VOCAL-0001"]["label"] == "sing_screams" and state["VOCAL-0001"]["changes"] == 0
+    assert state["VOCAL-0001"]["earlier"]["value"] == "clean"  # still on record
+    assert store.progress(order, state)["earlier"] == 1
+    assert (tmp_path / store.LABELS).read_bytes().startswith(original)  # nothing rewritten
+    rows = {r["excerpt"]: r for r in store.export({"excerpts": [], "recordings": {}, "artists": {}}, state)}
+    assert rows == {}  # export is driven by the dataset's excerpts (tested with the dataset below)
+
+
+def test_skipping_says_why_and_no_vocals_is_not_an_answer(tmp_path):
+    labels = store.Labels(tmp_path)
+    labels.skip("VOCAL-0001", "no_vocals")
+    labels.skip("VOCAL-0002")
+    labels.skip("VOCAL-0003", "later")
+    with pytest.raises(ValueError):
+        labels.skip("VOCAL-0004", "boring")
+    state = store.Labels(tmp_path).state()
+    assert state["VOCAL-0001"]["skip_reason"] == "no_vocals" and state["VOCAL-0001"]["label"] is None
+    assert state["VOCAL-0002"]["skip_reason"] == "later"
+    counts = store.progress(["VOCAL-0001", "VOCAL-0002", "VOCAL-0003"], state)
+    assert counts["skipped_no_vocals"] == 1 and counts["skipped_later"] == 2 and counts["labelled"] == 0
+    # A skip saved by the first version (no reason) counts as "review later".
+    with (tmp_path / store.LABELS).open("a") as file:
+        file.write(json.dumps({"time": "t", "excerpt": "VOCAL-0005", "event": "skip"}) + "\n")
+    assert store.Labels(tmp_path).state()["VOCAL-0005"]["skip_reason"] == "later"
+
+
+INVENTORY_HEAD = "recording_id,artist,title,file_path,sha256\n"
+
+
+def inventory(path, rows):
+    path.write_text(INVENTORY_HEAD + "".join(f"{a},{b},{c},{d},{e}\n" for a, b, c, d, e in rows), encoding="utf-8")
+    return path
+
+
+def test_titles_come_from_the_inventory_by_checksum_then_the_owner_then_the_file_tag(corpus, tmp_path):
+    from gmv.character.research.labeling import titles
+
+    folder = tmp_path / "labels"
+    found = prepared_dataset(corpus, folder)
+    recordings = sorted(found["recordings"].items())
+    first, second = recordings[0], recordings[1]
+    tagged = recordings[2]
+    with sf.SoundFile(tagged[1]["path"], "r+") as file:
+        file.title = "Tagged Title"
+    found["recordings"][tagged[0]]["sha256"] = data.sha256(tagged[1]["path"])
+    table = inventory(tmp_path / "inventory.csv", [
+        ("r-1", "Someone", "Inventory Title", "X:\\" + os.path.basename(first[1]["path"]), first[1]["sha256"]),
+        ("r-2", "Someone", "Wrong File", "X:\\elsewhere.wav", "f" * 64),
+    ])
+    result = titles.build(found, table, named={second[1]["path"]: "Named Title"})
+    assert result[first[0]] == {"title": "Inventory Title", "from": "music inventory"}
+    assert result[second[0]] == {"title": "Named Title", "from": "named by the owner"}
+    assert result[tagged[0]] == {"title": "Tagged Title", "from": "file tag"}
+    untitled = [k for k, v in result.items() if k not in (first[0], second[0], tagged[0])]
+    assert all(result[k] == {"title": None, "from": None} for k in untitled)  # never a file name
+    assert set(result) == set(found["recordings"])
+    root, music, _ = corpus
+    assert titles.verify(found, result, table, [("X:\\", str(music) + "/")]) == []
+    wrong = json.loads(json.dumps(result))
+    wrong[first[0]]["title"] = "Something Else"
+    assert any("another title" in p for p in titles.verify(found, wrong, table))
+    moved = inventory(tmp_path / "moved.csv", [("r-1", "S", "Inventory Title", "X:\\other.wav", first[1]["sha256"])])
+    assert any("elsewhere" in p for p in titles.verify(found, result, moved, [("X:\\", str(music) + "/")]))
+    assert any("no title entry" in p for p in titles.verify(found, {}, table))
+
+
+def test_the_titles_command_leaves_the_dataset_untouched(corpus, tmp_path, capsys):
+    from gmv.character.research.labeling import titles
+    from gmv.cli import main as gmv_main
+
+    folder = tmp_path / "labels"
+    found = prepared_dataset(corpus, folder)
+    store.Labels(folder).label(found["order"][0], "cleans")
+    before = (folder / "dataset.json").read_bytes()
+    first = sorted(found["recordings"].items())[0][1]
+    table = inventory(tmp_path / "inventory.csv", [("r-1", "S", "Inventory Title", "", first["sha256"])])
+    gmv_main(["character", "label-titles", "--folder", str(folder), "--inventory", str(table)])
+    assert (folder / "dataset.json").read_bytes() == before
+    assert "Titles for" in capsys.readouterr().out
+    written = titles.load(folder)
+    assert sum(1 for v in written.values() if v["title"] == "Inventory Title") == 1
+    assert store.Labels(folder).state()[found["order"][0]]["label"] == "cleans"
+
+
+def with_titles(folder, found):
+    from gmv.character.research.labeling import titles
+
+    names = {k: {"title": f"Song {n} Title", "from": "music inventory"} for n, k in enumerate(sorted(found["recordings"]))}
+    titles.write(folder, names)
+    return names
+
+
+def test_the_window_shows_each_excerpts_song_title(labelling):
+    folder, found, open_window = labelling
+    names = with_titles(folder, found)
+    window = open_window()
+    for excerpt in found["order"][:5]:
+        window.open(excerpt)
+        recording = next(e for e in found["excerpts"] if e["id"] == excerpt)["recording"]
+        assert window.song.text() == "♪  " + names[recording]["title"]
+        assert window.identifier.text() == excerpt  # the anonymous name stays
+    (folder / "titles.json").unlink()
+    window.close()
+    again = open_window()
+    assert again.song.text() == "♪  Song title not known"
+
+
+def test_earlier_answers_appear_in_the_window_and_a_new_one_replaces_them(labelling):
+    folder, found, open_window = labelling
+    first = found["order"][0]
+    old_answer(folder, first, "scream")
+    window = open_window()
+    assert window.current == first
+    assert "earlier answer, with the old choices: Screaming" in window.status.text()
+    assert "answer choices have changed" in window.saved.text()
+    assert "Earlier answers to redo: 1" in window.counts.text()
+    assert "• earlier: Screaming" in window.listing.item(0).text()
+    assert not any(b.isChecked() for b in window.answer_buttons.values())  # nothing pre-chosen
+    window.advance.setChecked(False)
+    window.answer_buttons["low_screams"].click()
+    event = store.Labels(folder).events()[-1]
+    assert event["value"] == "low_screams" and event["scheme"] == 2
+    assert "Low Screams" in window.status.text() and "Earlier answers" not in window.counts.text()
+
+
+def test_no_vocals_and_review_later_are_kept_apart(labelling):
+    folder, found, open_window = labelling
+    window = open_window()
+    a, b, c = found["order"][:3]
+    window.no_vocals_button.click()
+    assert window.current == b
+    window.skip_button.click()
+    assert window.current == c
+    state = store.Labels(folder).state()
+    assert state[a]["skip_reason"] == "no_vocals" and state[b]["skip_reason"] == "later"
+    assert "Skipped 2 (no vocals 1, review later 1)" in window.counts.text()
+    # Excerpts nobody has seen come first, then the ones to review, then the no-vocals ones.
+    for excerpt in found["order"][2:]:
+        window.open(excerpt)
+        window.choose("cleans")
+    window.open(found["order"][-1])
+    window.next_unlabelled()
+    assert window.current == b
+    window.next_unlabelled()
+    assert window.current == a
+    assert "Skipped: no vocals" in window.status.text()
+
+
+def test_the_guide_shows_the_definitions_and_the_owners_reference_vocalists(labelling):
+    from gmv.character.research.labeling import GUIDE
+
+    folder, found, open_window = labelling
+    window = open_window()
+    guide = window.guide.toPlainText()
+    for key, (name, _) in CLASSES.items():
+        assert name in guide and GUIDE[key][0][:40] in guide
+    assert "dominates" in guide and "Reference vocalists" not in guide
+    (folder / "reference_vocalists.txt").write_text("Example Band: example singer, clean and harsh\n")
+    window.close()
+    again = open_window()
+    assert "Example Band: example singer" in again.guide.toPlainText()
+
+
+def test_titles_show_but_nothing_else_about_the_recording_does(labelling):
+    folder, found, open_window = labelling
+    with_titles(folder, found)
+    window = open_window()
+    secrets = {"development", "evaluation", "REC-", *data.METHODS}
+    for recording in found["recordings"].values():
+        secrets |= {recording["artist"], data.artist_name(recording["artist"]), os.path.basename(recording["path"])}
+        secrets |= {os.path.dirname(recording["path"]), recording["sha256"][:12]}
+    for excerpt in found["order"]:
+        window.open(excerpt)
+        shown = visible_text(window).lower()
+        assert not [s for s in secrets if s.lower() in shown]
+        assert "song" in window.song.text().lower()
+
+
+def test_the_export_carries_the_scheme_and_any_earlier_answer(labelling):
+    folder, found, _open_window = labelling
+    first, second = found["order"][:2]
+    old_answer(folder, first, "shout")
+    labels = store.Labels(folder)
+    labels.label(second, "gutturals")
+    rows = {r["excerpt"]: r for r in store.export(found, labels.state())}
+    assert rows[first]["label"] is None and rows[first]["earlier_label"] == "shout" and rows[first]["earlier_scheme"] == 1
+    assert rows[second]["label"] == "gutturals" and rows[second]["scheme"] == 2

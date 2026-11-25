@@ -1,9 +1,9 @@
 """The labelling window: listen to a ten-second excerpt and click what the voice does.
 
-Blind by design: the window shows an excerpt's anonymous identifier and nothing else about
-it. No title, artist, file, folder, how it was chosen, or which part of the experiment it
-belongs to appears anywhere in the window, including tooltips, list entries, messages and
-the window title.
+The window shows an excerpt's anonymous identifier and, at the owner's request, the song
+title of its recording (from ``titles.json``). Nothing else about it appears: no artist,
+file, folder, how it was chosen, or which part of the experiment it belongs to, in any
+text, tooltip, list entry, message or the window title.
 
 Every click is saved at once (``store.Labels``); closing the window loses nothing, and
 opening it again returns to the excerpt that was open.
@@ -11,6 +11,7 @@ opening it again returns to the excerpt that was open.
 
 import os
 import sys
+from html import escape
 from pathlib import Path
 
 from PySide6.QtCore import QLockFile, Qt, QTimer
@@ -33,13 +34,14 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSlider,
+    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
 
-from . import CLASSES
+from . import CLASSES, GUIDE, RULE, SKIPS
 from . import dataset as data
-from . import store
+from . import store, titles
 
 TITLE = "GMV: label the vocal delivery"
 NEXT_AFTER_MS = 700
@@ -51,11 +53,11 @@ UNAVAILABLE = (
     "Skip it and come back to it later."
 )
 HELP = (
-    "Listen to the excerpt, then click the answer that describes the voice you hear. "
-    "Label what is actually audible, whatever the style of the song: a heavy song can have "
-    "clean singing, and a gentle one can have shouting. If you are not sure, choose "
-    "“Mixed / ambiguous” or skip it and come back later."
+    "Listen to the excerpt, then click the one answer that describes the vocal technique "
+    "you hear most. Label what is actually audible: the artist, the style or the song "
+    "title never decides the answer."
 )
+REFERENCES = "reference_vocalists.txt"  # the owner's own examples, kept beside the answers
 
 
 def clock(seconds):
@@ -74,6 +76,7 @@ class LabelWindow(QMainWindow):
         self.current = None
         self.available = False
         self.labels = store.Labels(self.folder)
+        self.titles = titles.load(self.folder)
         if player is None:
             from .playback import default_player
 
@@ -113,6 +116,13 @@ class LabelWindow(QMainWindow):
                 "(probably a write cut off by a crash); everything else is intact.",
                 warning=True,
             )
+        earlier = store.progress(self.order, self.labels.state())["earlier"]
+        if earlier and not self.labels.damaged:
+            self.flash(
+                f"The answer choices have changed. {earlier} excerpt(s) you answered with the "
+                "earlier choices show that answer and need a new one. Nothing was deleted.",
+                warning=True,
+            )
         self.refresh_list()
         session = store.read_session(self.folder)
         self.autoplay.setChecked(session.get("autoplay", autoplay))
@@ -135,12 +145,18 @@ class LabelWindow(QMainWindow):
         big.setPointSize(22)
         big.setBold(True)
         self.identifier.setFont(big)
+        self.song = QLabel("")
+        song_font = QFont()
+        song_font.setPointSize(18)
+        self.song.setFont(song_font)
+        self.song.setWordWrap(True)
         self.status = QLabel("")
         status_font = QFont()
         status_font.setPointSize(13)
         self.status.setFont(status_font)
         self.status.setWordWrap(True)
         main.addWidget(self.identifier)
+        main.addWidget(self.song)
         main.addWidget(self.status)
 
         self.counts = QLabel("")
@@ -174,7 +190,7 @@ class LabelWindow(QMainWindow):
         grid.addWidget(self.audio_problem, 2, 0, 1, 3)
         main.addWidget(listen)
 
-        answers = QGroupBox("What does the voice do?")
+        answers = QGroupBox("Which vocal technique dominates the excerpt?")
         column = QVBoxLayout(answers)
         self.answer_buttons = {}
         for index, (key, (name, meaning)) in enumerate(CLASSES.items(), 1):
@@ -188,6 +204,9 @@ class LabelWindow(QMainWindow):
             button.clicked.connect(lambda _checked, k=key: self.choose(k))
             column.addWidget(button)
             self.answer_buttons[key] = button
+        rule = QLabel(RULE)
+        rule.setWordWrap(True)
+        column.addWidget(rule)
         main.addWidget(answers)
 
         self.saved = QLabel("")
@@ -197,13 +216,19 @@ class LabelWindow(QMainWindow):
         moves = QHBoxLayout()
         self.previous_button = QPushButton("←  Previous")
         self.previous_button.clicked.connect(lambda: self.step(-1))
-        self.skip_button = QPushButton("Skip / come back later")
-        self.skip_button.clicked.connect(self.skip)
+        self.skip_button = QPushButton(SKIPS["later"])
+        self.skip_button.setToolTip("Several techniques with none dominating, or not sure: come back to it later")
+        self.skip_button.clicked.connect(lambda: self.skip("later"))
+        self.no_vocals_button = QPushButton(SKIPS["no_vocals"])
+        self.no_vocals_button.setToolTip("No voice in the excerpt: leave it without a vocal answer")
+        self.no_vocals_button.clicked.connect(lambda: self.skip("no_vocals"))
         self.next_button = QPushButton("Next  →")
         self.next_button.clicked.connect(lambda: self.step(1))
         self.unlabelled_button = QPushButton("Next without an answer  ⏭")
         self.unlabelled_button.clicked.connect(self.next_unlabelled)
-        for button in (self.previous_button, self.skip_button, self.next_button, self.unlabelled_button):
+        for button in (
+            self.previous_button, self.no_vocals_button, self.skip_button, self.next_button, self.unlabelled_button,
+        ):
             button.setMinimumHeight(40)
             moves.addWidget(button)
         main.addLayout(moves)
@@ -229,26 +254,16 @@ class LabelWindow(QMainWindow):
 
         meanings = QGroupBox("What the answers mean")
         meaning_layout = QVBoxLayout(meanings)
-        intro = QLabel(HELP)
-        intro.setWordWrap(True)
-        meaning_layout.addWidget(intro)
-        for index, (name, meaning) in enumerate(CLASSES.values(), 1):
-            line = QLabel(f"<b>{index}. {name}</b>: {meaning}")
-            line.setWordWrap(True)
-            line.setTextFormat(Qt.TextFormat.RichText)
-            meaning_layout.addWidget(line)
-        keys = QLabel(
-            "Keys (optional): 1–5 answer, Space play/pause, R from the start, "
-            "S skip, ← → previous/next."
-        )
-        keys.setWordWrap(True)
-        meaning_layout.addWidget(keys)
-        side.addWidget(meanings)
+        self.guide = QTextBrowser()
+        self.guide.setOpenLinks(False)
+        self.guide.setHtml(self._guide_html())
+        meaning_layout.addWidget(self.guide)
+        side.addWidget(meanings, 3)
 
         side.addWidget(QLabel("All excerpts (click one to open it):"))
         self.listing = QListWidget()
         self.listing.itemClicked.connect(lambda item: self.open(item.data(Qt.ItemDataRole.UserRole)))
-        side.addWidget(self.listing, 1)
+        side.addWidget(self.listing, 2)
         tools = QHBoxLayout()
         self.add_button = QPushButton("Add recordings…")
         self.add_button.setToolTip("Choose more of your own audio files to take excerpts from")
@@ -269,7 +284,8 @@ class LabelWindow(QMainWindow):
         shortcuts = {
             "Space": self.toggle_play,
             "R": self.replay,
-            "S": self.skip,
+            "S": lambda: self.skip("later"),
+            "N": lambda: self.skip("no_vocals"),
             "Left": lambda: self.step(-1),
             "Right": lambda: self.step(1),
         }
@@ -282,7 +298,7 @@ class LabelWindow(QMainWindow):
         self.problem_label.setText(self.problem)
         self.problem_label.show()
         for widget in (
-            self.play_button, self.restart_button, self.previous_button, self.skip_button,
+            self.play_button, self.restart_button, self.previous_button, self.skip_button, self.no_vocals_button,
             self.next_button, self.unlabelled_button, self.note, self.add_button, *self.answer_buttons.values(),
         ):
             widget.setEnabled(False)
@@ -290,13 +306,48 @@ class LabelWindow(QMainWindow):
 
     # -- what is shown --------------------------------------------------------------------
 
+    def _guide_html(self):
+        parts = [f"<p>{escape(HELP)}</p>", f"<p><b>{escape(RULE)}</b></p>"]
+        for index, (key, (name, _summary)) in enumerate(CLASSES.items(), 1):
+            definition, points, note = GUIDE[key]
+            items = "".join(f"<li>{escape(point)}</li>" for point in points)
+            parts.append(
+                f"<h3>{index}. {escape(name)}</h3><p>{escape(definition)}</p>"
+                f"<ul>{items}</ul><p><i>{escape(note)}</i></p>"
+            )
+        references = self.folder / REFERENCES
+        if references.is_file():
+            lines = [line.strip() for line in references.read_text(encoding="utf-8").splitlines() if line.strip()]
+            if lines:
+                items = "".join(f"<li>{escape(line)}</li>" for line in lines)
+                parts.append(
+                    "<h3>Reference vocalists (your examples)</h3>"
+                    "<p>Real-world reference points for the answers. They are not answers: a "
+                    "vocalist can use several techniques, even within one song.</p>"
+                    f"<ul>{items}</ul>"
+                )
+        parts.append(
+            "<p>Keys (optional): 1–5 answer, Space play/pause, R from the start, "
+            "S review later, N no vocals, ← → previous/next.</p>"
+        )
+        return "".join(parts)
+
+    def title_of(self, excerpt):
+        entry = self.titles.get(self.excerpts[excerpt]["recording"]) or {}
+        return entry.get("title")
+
     def describe(self, excerpt, state):
         current = state.get(excerpt, {})
         if current.get("label"):
             return f"Your answer: {CLASSES[current['label']][0]}"
         if current.get("skipped"):
-            return "Skipped: come back to it later"
-        return "Not labelled yet"
+            text = "Skipped: no vocals" if current.get("skip_reason") == "no_vocals" else "Skipped: review later"
+        else:
+            text = "Not labelled yet"
+        earlier = current.get("earlier")
+        if earlier:
+            text += f"   (earlier answer, with the old choices: {earlier['name']})"
+        return text
 
     def refresh_list(self):
         state = self.labels.state()
@@ -308,7 +359,9 @@ class LabelWindow(QMainWindow):
             if current.get("label"):
                 mark = "✓ " + CLASSES[current["label"]][0]
             elif current.get("skipped"):
-                mark = "↷ skipped"
+                mark = "↷ no vocals" if current.get("skip_reason") == "no_vocals" else "↷ review later"
+            elif current.get("earlier"):
+                mark = "• earlier: " + current["earlier"]["name"]
             else:
                 mark = ""
             item = QListWidgetItem(f"{position:3d}.  {excerpt}   {mark}")
@@ -321,10 +374,14 @@ class LabelWindow(QMainWindow):
         self.bar.setRange(0, max(1, counts["total"]))
         self.bar.setValue(counts["labelled"])
         where = self.order.index(self.current) + 1 if self.current in self.order else 0
-        self.counts.setText(
+        text = (
             f"Excerpt {where} of {counts['total']}   ·   Labelled {counts['labelled']}   ·   "
-            f"Skipped {counts['skipped']}   ·   Still to label {counts['remaining']}"
+            f"Skipped {counts['skipped']} (no vocals {counts['skipped_no_vocals']}, review later "
+            f"{counts['skipped_later']})   ·   Still to label {counts['remaining']}"
         )
+        if counts["earlier"]:
+            text += f"   ·   Earlier answers to redo: {counts['earlier']}"
+        self.counts.setText(text)
         if self.current:
             self.status.setText(self.describe(self.current, state))
             label = state.get(self.current, {}).get("label")
@@ -348,6 +405,8 @@ class LabelWindow(QMainWindow):
         self.current = excerpt
         self.note.setText(self.labels.state().get(excerpt, {}).get("note", ""))
         self.identifier.setText(excerpt)
+        title = self.title_of(excerpt)
+        self.song.setText(f"♪  {title}" if title else "♪  Song title not known")
         self.audio_problem.setText("")
         self.available = False
         entry = self.excerpts[excerpt]
@@ -386,7 +445,11 @@ class LabelWindow(QMainWindow):
             return
         start = self.order.index(self.current) + 1 if self.current in self.order else 0
         ring = self.order[start:] + self.order[:start]
-        for wanted in (lambda s: not s.get("label") and not s.get("skipped"), lambda s: not s.get("label")):
+        for wanted in (
+            lambda s: not s.get("label") and not s.get("skipped"),
+            lambda s: not s.get("label") and s.get("skip_reason") != "no_vocals",
+            lambda s: not s.get("label"),
+        ):
             found = next((e for e in ring if e != self.current and wanted(state.get(e, {}))), None)
             if found:
                 self.open(found)
@@ -405,13 +468,17 @@ class LabelWindow(QMainWindow):
         if self.advance.isChecked():
             self.next_timer.start()
 
-    def skip(self):
+    def skip(self, reason="later"):
         if self.current is None:
             return
         self.save_note()
-        if not self.labels.state().get(self.current, {}).get("label"):
-            self.labels.skip(self.current)
-            self.flash(f"Skipped {self.current}. It stays in the list to come back to.")
+        current = self.labels.state().get(self.current, {})
+        if not current.get("label") and not (current.get("skipped") and current.get("skip_reason") == reason):
+            self.labels.skip(self.current, reason)
+            if reason == "no_vocals":
+                self.flash(f"Saved ✓  {self.current}: no vocals (left without a vocal answer).")
+            else:
+                self.flash(f"Skipped {self.current}. It stays in the list to come back to.")
         self.next_unlabelled()
 
     def save_note(self):
@@ -480,6 +547,8 @@ class LabelWindow(QMainWindow):
             QApplication.restoreOverrideCursor()
         self.excerpts = {e["id"]: e for e in self.dataset["excerpts"]}
         self.order = list(self.dataset["order"])
+        if added:
+            self.titles = titles.add_from_tags(self.folder, self.dataset)
         self.refresh_list()
         text = f"{len(added)} new excerpts were added and mixed into the list."
         if problems:

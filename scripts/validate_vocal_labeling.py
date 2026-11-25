@@ -76,6 +76,9 @@ def main(argv=None):
     work = Path(tempfile.mkdtemp(prefix="gmv-vocal-check-"))
     try:
         shutil.copy(Path(args.folder) / "dataset.json", work / "dataset.json")
+        for extra in ("titles.json", "reference_vocalists.txt"):
+            if (Path(args.folder) / extra).is_file():
+                shutil.copy(Path(args.folder) / extra, work / extra)
         app = QApplication.instance() or QApplication(sys.argv[:1])
         facts["platform"] = app.platformName()
         facts["default_sink"] = default_sink()
@@ -88,6 +91,12 @@ def main(argv=None):
         pump(app, 0.5)
         first = window.current
         facts["first_excerpt"] = first
+        from gmv.character.research.labeling import titles as titles_module
+
+        known = titles_module.load(work)
+        expected = (known.get(window.excerpts[first]["recording"]) or {}).get("title")
+        checks["song_title_shown"] = bool(expected) and window.song.text() == "\u266a  " + expected
+        checks["identifier_still_shown"] = window.identifier.text() == first
         facts["excerpt_rate"] = window.player.rate
         facts["excerpt_channels"] = int(window.player.audio.shape[1])
         facts["excerpt_seconds"] = round(window.player.duration_s, 3)
@@ -138,25 +147,25 @@ def main(argv=None):
         pump(app, 0.5)
 
         # Answer by clicking: saved at once, then the next excerpt opens.
-        QTest.mouseClick(window.answer_buttons["scream"], Qt.MouseButton.LeftButton)
-        checks["answer_saved_on_click"] = store.Labels(work).state().get(first, {}).get("label") == "scream"
+        QTest.mouseClick(window.answer_buttons["high_screams"], Qt.MouseButton.LeftButton)
+        checks["answer_saved_on_click"] = store.Labels(work).state().get(first, {}).get("label") == "high_screams"
         checks["saved_message_shown"] = "Saved" in window.saved.text()
         checks["moves_to_next"] = pump(app, 2.0, lambda: window.current != first)
         second = window.current
         # Change an answer by clicking another one.
         window.advance.setChecked(False)
-        QTest.mouseClick(window.answer_buttons["none"], Qt.MouseButton.LeftButton)
-        QTest.mouseClick(window.answer_buttons["mixed"], Qt.MouseButton.LeftButton)
+        QTest.mouseClick(window.answer_buttons["gutturals"], Qt.MouseButton.LeftButton)
+        QTest.mouseClick(window.answer_buttons["sing_screams"], Qt.MouseButton.LeftButton)
         state = store.Labels(work).state().get(second, {})
-        checks["answer_changed"] = state.get("label") == "mixed" and state.get("changes") == 1
+        checks["answer_changed"] = state.get("label") == "sing_screams" and state.get("changes") == 1
         # Answer by key. Keys reach the window only while it is the active window; Wayland
         # does not let a program make itself active, so this is reported, not required.
         window.activateWindow()
         pump(app, 0.3)
         facts["window_active_for_keys"] = window.isActiveWindow()
         QTest.keyClick(window, Qt.Key.Key_3)
-        facts["answer_by_key"] = store.Labels(work).state().get(second, {}).get("label") == "shout"
-        QTest.mouseClick(window.answer_buttons["mixed"], Qt.MouseButton.LeftButton)
+        facts["answer_by_key"] = store.Labels(work).state().get(second, {}).get("label") == "low_screams"
+        QTest.mouseClick(window.answer_buttons["sing_screams"], Qt.MouseButton.LeftButton)
         window.note.setFocus()
         QTest.keyClicks(window.note, "test note")
         window.save_note()
@@ -165,11 +174,16 @@ def main(argv=None):
         QTest.mouseClick(window.skip_button, Qt.MouseButton.LeftButton)
         third = window.current
         QTest.mouseClick(window.skip_button, Qt.MouseButton.LeftButton)
-        checks["skip_recorded"] = store.Labels(work).state().get(third, {}).get("skipped") is True
-        checks["counts_shown"] = "Labelled 2" in window.counts.text() and "Skipped 1" in window.counts.text()
+        checks["skip_recorded"] = store.Labels(work).state().get(third, {}).get("skip_reason") == "later"
+        fourth = window.current
+        QTest.mouseClick(window.no_vocals_button, Qt.MouseButton.LeftButton)
+        checks["no_vocals_recorded"] = store.Labels(work).state().get(fourth, {}).get("skip_reason") == "no_vocals"
+        checks["counts_shown"] = "Labelled 2" in window.counts.text() and "Skipped 2 (no vocals 1, review later 1)" in window.counts.text()
         checks["status_shown_in_full"] = window.status.width() >= window.status.sizeHint().width() or window.status.wordWrap()
+        window.open(fourth)
         QTest.mouseClick(window.previous_button, Qt.MouseButton.LeftButton)
         checks["previous_goes_back"] = window.current == third
+        checks["skipped_still_listed"] = "review later" in window.listing.item(window.order.index(third)).text()
         if args.screenshot:
             window.grab().save(args.screenshot)
         left_open = window.current
@@ -184,7 +198,8 @@ def main(argv=None):
         QTest.qWaitForWindowExposed(again, 5000)
         state = store.Labels(work).state()
         checks["resumes_where_left"] = again.current == left_open
-        checks["answers_kept"] = state[first]["label"] == "scream" and state[second]["label"] == "mixed"
+        checks["answers_kept"] = state[first]["label"] == "high_screams" and state[second]["label"] == "sing_screams"
+        checks["title_after_reopen"] = again.song.text().startswith("\u266a  ") and "not known" not in again.song.text()
         checks["counts_after_reopen"] = "Labelled 2" in again.counts.text()
         again.close()
         pump(app, 0.3)
