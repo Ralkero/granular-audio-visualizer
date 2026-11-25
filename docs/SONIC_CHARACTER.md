@@ -542,6 +542,10 @@ geometry driven by the profile, genre presets or classification, model weights, 
 access, any change to capture, feature extraction, onset or beat detection, instrument
 attribution, `MusicalIntensity`, the message or session schema, or the packaging.
 
+Phase A2 has since investigated what the profile misses (the voice, harmony, rhythmic
+feel) with offline experiments: [SONIC_CHARACTER_RESEARCH.md](SONIC_CHARACTER_RESEARCH.md).
+Its findings refine the list below, in particular item 0 and item 4.
+
 For Phase B:
 
 0. **Decide first whether the profile is enough.** It did not separate the two reference

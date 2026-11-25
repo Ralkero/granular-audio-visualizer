@@ -151,6 +151,8 @@ gmv character analyze "track one.flac" "track two.mp3"
 gmv character analyze --list my-tracks.txt --processes 4 --gain-db -10
 ```
 
+`gmv character research` holds further offline experiments (harmony, the lead line and voice, rhythmic feel) and their evaluation; see [docs/SONIC_CHARACTER_RESEARCH.md](docs/SONIC_CHARACTER_RESEARCH.md). They are research: the profile above does not include them.
+
 ## Licence
 
 Copyright (C) 2026 Ralkero.
