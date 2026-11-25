@@ -4,7 +4,8 @@ unchanged Phase A profile.
 Families do not share one window. The lead line is read every 6 s (a phrase or two), the
 harmony and the rhythm every 12 s (several bars: a pulse cannot be established in less).
 Blocks overlap by half. A recording's value is the mean of its blocks weighted by their
-confidence; a value no block could state stays unknown.
+confidence; a value no block could state stays unknown. Confidences are heuristic scores
+of signal support, not calibrated probabilities, so the weighting is a pragmatic choice.
 """
 
 import numpy as np

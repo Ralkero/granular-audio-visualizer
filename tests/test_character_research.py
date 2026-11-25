@@ -13,7 +13,7 @@ import pytest
 import soundfile as sf
 
 from gmv.character import diagnose
-from gmv.character.research import evaluate, lead, rhythm, stems, tonal
+from gmv.character.research import evaluate, lead, report, rhythm, stems, tonal
 from gmv.character.research.frontend import RATE as FRONT_RATE
 from gmv.character.research.frontend import Analysis, result
 from gmv.character.research.profile import MEDIANS, NAMES, blocks, measure_audio, summarise
@@ -436,6 +436,7 @@ def test_the_research_command_writes_reports_and_keeps_to_ids(tmp_path, capsys):
     assert "Analysed 2 of 2" in capsys.readouterr().out
     report = (out / "research.md").read_text(encoding="utf-8")
     assert "unknown" in report and "inferred" in report and "## private title alpha" in report
+    assert "heuristic" in report and "not a calibrated probability" in report
     one = json.loads((out / "private_title_alpha.research.json").read_text(encoding="utf-8"))
     assert one["research_version"] and set(one["families"]) == {"tonal", "lead", "rhythm"}
     assert (out / "private_title_alpha.research.svg").read_text(encoding="utf-8").startswith("<svg")
@@ -451,6 +452,7 @@ def test_the_research_command_writes_reports_and_keeps_to_ids(tmp_path, capsys):
     found = json.loads((corpus / "corpus.json").read_text(encoding="utf-8"))
     assert found["split"]["recording_split"] == {"a-1": "calibration", "b-1": "evaluation", "c-1": "evaluation"}
     assert found["level"]["-10"]["recordings"] == 2 and found["pairs"][0]["a"] == "b-1"
+    assert "not a calibrated probability" in (corpus / "corpus.md").read_text(encoding="utf-8")
     text = (corpus / "corpus.md").read_text(encoding="utf-8") + (corpus / "corpus.json").read_text(encoding="utf-8")
     assert "private title" not in text  # reports name recordings by id only
     assert "private title" not in "".join(p.read_text(encoding="utf-8") for p in (corpus / "recordings").iterdir())
@@ -467,3 +469,152 @@ def test_the_phase_a_command_still_works_beside_it(tmp_path, capsys):
     gmv_main(["character", "analyze", str(path), "--out", str(tmp_path / "a")])
     assert "Analysed 1 of 1" in capsys.readouterr().out
     assert (tmp_path / "a" / "report.md").is_file()
+
+
+# -- drum removal: paired differences and pairing ---------------------------------------
+
+
+def versions(pairs, key="tonal.key_clarity"):
+    """Track results holding two versions of one measurement: (track, with, without)."""
+    out = []
+    for track, first, second in pairs:
+        found = {"track": track}
+        if first is not ...:
+            found[f"{key}.mix"] = first
+        if second is not ...:
+            found[f"{key}.no_drums"] = second
+        out.append(found)
+    return out
+
+
+def test_paired_differences_are_taken_per_recording_with_their_sign_and_scale():
+    tracks = versions([("b", 1.0, 1.5), ("a", 2.0, 1.0), ("c", 0.0, 0.0), ("d", 1.0, 3.0)])
+    found = stems.paired(tracks, "tonal.key_clarity", "mix", "no_drums", scale=0.5)
+    assert found["direction"] == "no_drums minus mix"
+    assert found["pairs"] == 4 and found["missing"] == 0 and found["invalid"] == 0
+    assert [row["track"] for row in found["recordings"]] == ["a", "b", "c", "d"]
+    assert [row["difference"] for row in found["recordings"]] == [-1.0, 0.5, 0.0, 2.0]
+    assert found["median_abs"] == pytest.approx(0.75)
+    assert found["p90_abs"] == pytest.approx(1.7)
+    assert found["max_abs"] == 2.0
+    assert found["mean_signed"] == pytest.approx(0.375)
+    assert found["positive_share"] == 0.5 and found["negative_share"] == 0.25  # one unchanged
+    assert found["calibration_sd"] == 0.5
+    assert found["median_abs_sd"] == pytest.approx(1.5) and found["max_abs_sd"] == pytest.approx(4.0)
+    assert found["mean_signed_sd"] == pytest.approx(0.75) and found["p90_abs_sd"] == pytest.approx(3.4)
+    assert found["across_recordings_sd"] == pytest.approx(np.std([2.0, 1.0, 0.0, 1.0]))
+    assert found["rank_correlation"] is None  # fewer than eight pairs: not stated
+
+
+def test_missing_and_invalid_values_are_counted_and_left_out():
+    tracks = versions(
+        [
+            ("ok-1", 0.5, 0.6),
+            ("ok-2", 0.4, 0.4),
+            ("none", None, 0.5),
+            ("absent", 0.5, ...),
+            ("nan", float("nan"), 0.5),
+            ("inf", 0.5, float("inf")),
+            ("text", "high", 0.5),
+        ]
+    )
+    found = stems.paired(tracks, "tonal.key_clarity", "mix", "no_drums")
+    assert found["pairs"] == 2 and found["missing"] == 2 and found["invalid"] == 3
+    assert found["missing_recordings"] == ["absent", "none"]
+    assert found["invalid_recordings"] == ["inf", "nan", "text"]
+    assert found["max_abs"] == pytest.approx(0.1) and found["mean_signed"] == pytest.approx(0.05)
+    # No usable scale: the differences in calibration standard deviations are not stated.
+    for scale in (None, 0.0, float("nan"), -1.0):
+        got = stems.paired(tracks, "tonal.key_clarity", "mix", "no_drums", scale=scale)
+        assert got["calibration_sd"] is None and got["median_abs_sd"] is None
+    nothing = stems.paired(versions([("x", None, None), ("y", float("nan"), 1.0)]), "tonal.key_clarity", "mix", "no_drums", 0.1)
+    assert nothing["pairs"] == 0 and nothing["median_abs"] is None and nothing["mean_signed_sd"] is None
+    assert nothing["missing"] == 1 and nothing["invalid"] == 1
+    json.dumps(nothing, allow_nan=False)
+
+
+def test_a_rank_correlation_of_one_does_not_mean_the_values_agree():
+    """The reason the paired figures were added: a constant shift keeps the order."""
+    tracks = versions([(f"t{i}", 0.1 * i, 0.1 * i + 0.3) for i in range(12)])
+    found = stems.paired(tracks, "tonal.key_clarity", "mix", "no_drums", scale=0.1)
+    assert found["rank_correlation"] == pytest.approx(1.0)
+    assert found["median_abs"] == pytest.approx(0.3) and found["mean_signed"] == pytest.approx(0.3)
+    assert found["median_abs_sd"] == pytest.approx(3.0)
+
+
+def test_paired_differences_do_not_depend_on_the_order_of_the_recordings():
+    rng = np.random.default_rng(12)
+    tracks = versions([(f"t{i:02d}", float(rng.normal()), float(rng.normal())) for i in range(30)])
+    first = stems.paired(tracks, "tonal.key_clarity", "mix", "no_drums", scale=0.2)
+    shuffled = list(tracks)
+    rng.shuffle(shuffled)
+    again = stems.paired(shuffled, "tonal.key_clarity", "mix", "no_drums", scale=0.2)
+    assert json.dumps(first, sort_keys=True) == json.dumps(again, sort_keys=True)
+
+
+def test_drum_removal_reports_harmonic_share_apart_and_uses_each_measurements_scale():
+    tracks = []
+    for i in range(10):
+        found = {"track": f"t{i}"}
+        for name in tonal.DEFINITIONS:
+            found[f"tonal.{name}.mix"] = 0.5 + 0.01 * i
+            found[f"tonal.{name}.no_drums"] = 0.5 + 0.01 * i + (0.2 if name == "harmonic_share" else 0.01)
+        tracks.append(found)
+    scales = {f"tonal.{name}": {"sd": 0.1} for name in tonal.DEFINITIONS}
+    scales["tonal.key_clarity"] = {"sd": 0.05}
+    removal = stems.drum_removal(tracks, scales)
+    assert "harmonic_share" not in removal["pitch_class"]
+    assert set(removal["pitch_class"]) == set(tonal.DEFINITIONS) - {"harmonic_share"}
+    assert removal["harmonic_share"]["mean_signed_sd"] == pytest.approx(2.0)
+    assert removal["pitch_class"]["key_clarity"]["median_abs_sd"] == pytest.approx(0.2)
+    assert removal["pitch_class"]["tonal_stability"]["median_abs_sd"] == pytest.approx(0.1)
+    split = removal["by_tonal_content"]
+    assert split["split_at_harmonic_share"] == pytest.approx(0.545)  # median of 0.50 .. 0.59
+    assert split["less_tonal"]["key_clarity"]["pairs"] == 5 and split["more_tonal"]["key_clarity"]["pairs"] == 5
+    assert split["less_tonal"]["key_clarity"]["median_abs_sd"] == pytest.approx(0.2)
+    assert "harmonic_share" not in split["less_tonal"]
+    assert stems.drum_removal(tracks[:3])["by_tonal_content"] is None  # too few to split
+    assert stems.drum_removal(tracks)["scale"] is None
+    assert stems.drum_removal(tracks)["pitch_class"]["key_clarity"]["median_abs_sd"] is None
+    summary = stems.summarise_musdb(
+        [{**t, "split": "test", "pairing": {"stem_sum_db": -70.0 - i}} for i, t in enumerate(tracks)], scales
+    )
+    assert summary["pairing"]["checked"] == 10 and summary["pairing"]["worst_stem_sum_db"] == -70.0
+    text = report.stems({"musdb": {"summary": summary, "excerpt_s": [30, 120]}})
+    assert "Harmonic share, apart" in text and "not whether they give the same values" in text
+    assert "| key_clarity | 10 | 0 / 0 |" in text and "By tonal content" in text
+
+
+def song_folder(folder, rate=8000, seconds=60.0, frames=None, sums=True, leave_out=()):
+    """A MUSDB-like folder: four stems and their mixture, small and quick to read."""
+    folder.mkdir(parents=True)
+    rng = np.random.default_rng(3)
+    count = round(seconds * rate)
+    parts = {name: 0.1 * rng.standard_normal((count, 2)).astype(np.float32) for name in stems.STEMS}
+    mix = sum(parts.values()) if sums else 0.1 * rng.standard_normal((count, 2)).astype(np.float32)
+    for name, audio in {"mixture": mix, **parts}.items():
+        if name in leave_out:
+            continue
+        length = (frames or {}).get(name, count)
+        sf.write(folder / f"{name}.wav", audio[:length], rate, subtype="FLOAT")
+    return folder
+
+
+def test_a_mixture_is_only_compared_with_its_own_stems(tmp_path):
+    good = song_folder(tmp_path / "good")
+    assert stems.check_files(good) is None
+    assert stems.check_files(song_folder(tmp_path / "gap", leave_out=("bass",))) == "no bass.wav"
+    short = song_folder(tmp_path / "short", frames={"drums": 8000 * 59})
+    assert "differ in rate, length or channels" in stems.check_files(short)
+    found = stems.musdb_track((short, None))
+    assert found["skipped"].startswith("mixture and stems differ")
+    other = song_folder(tmp_path / "other", sums=False)
+    found = stems.musdb_track((other, None))
+    assert found["skipped"].startswith("the stems do not add up to the mixture")
+    # The check itself: exact sums are far under the tolerance, anything else is not.
+    parts = [np.full((100, 2), v, dtype=np.float32) for v in (0.1, 0.2, 0.3, 0.4)]
+    assert stems.stem_sum_db(sum(parts), parts) < stems.SUM_WITHIN_DB
+    assert stems.stem_sum_db(sum(parts[:3]), parts) > stems.SUM_WITHIN_DB
+    assert stems.stem_sum_db(np.zeros((100, 2)), parts) is None
+    assert stems.stem_sum_db(sum(parts), [parts[0][:50], *parts[1:]]) is None
+

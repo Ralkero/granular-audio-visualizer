@@ -27,6 +27,10 @@ def add_parser(sub):
     stems.add_argument("--musdb", help="MUSDB18-HQ folder (with test/ and train/)")
     stems.add_argument("--mdb-drums", help="MDB Drums folder (with audio/ and annotations/)")
     stems.add_argument("--limit", type=int, help="At most this many MUSDB songs")
+    stems.add_argument(
+        "--scales",
+        help="corpus.json of a corpus run: states differences in its calibration standard deviations",
+    )
     robust = commands.add_parser(
         "robustness",
         help="Re-analyse recordings after changes that leave the music as it was (level, mono, tone, band limit, saturation, sample rate)",
@@ -98,7 +102,11 @@ def run(args):
 
         if not (args.musdb or args.mdb_drums):
             raise SystemExit("Name a dataset: --musdb and/or --mdb-drums")
-        found = stems.run(args.musdb, args.mdb_drums, model, args.processes, args.limit)
+        scales = None
+        if args.scales:
+            scales = json.loads(Path(args.scales).read_text(encoding="utf-8"))["scales"]
+        found = stems.run(args.musdb, args.mdb_drums, model, args.processes, args.limit, scales=scales)
+        found["scales_from"] = Path(args.scales).name if args.scales else None
         write(out / "stems.json", found)
         (out / "stems.md").write_text(report.stems(found), encoding="utf-8")
         print(f"Report: {(out / 'stems.md').resolve()}")

@@ -27,6 +27,11 @@ from .profile import MEDIANS, blocks, summarise
 
 EXCERPT = (30.0, 120.0)  # seconds of each song that are analysed
 ACTIVE_DB = -45.0  # a stem frame this far or less under the stem's loudest counts as sounding
+STEMS = ("vocals", "drums", "bass", "other")
+# The four stems of a MUSDB18-HQ song add up to its mixture: measured 67 to 71 dB under the
+# mixture's level on the songs checked, which is rounding. A pair that does not come within
+# this is not the mixture and its own stems, and is not compared.
+SUM_WITHIN_DB = -40.0
 
 
 def read(path, start, end):
@@ -52,6 +57,36 @@ def auc(scores, truth):
     return float((ranks[truth].sum() - positive * (positive + 1) / 2) / (positive * (~truth).sum()))
 
 
+def check_files(folder):
+    """None when the mixture and its four stems can belong together as files (all present,
+    one sample rate, one length, one channel count); otherwise the reason they cannot."""
+    found = {}
+    for name in ("mixture", *STEMS):
+        path = Path(folder) / f"{name}.wav"
+        if not path.is_file():
+            return f"no {name}.wav"
+        info = sf.info(str(path))
+        found[name] = (info.samplerate, info.frames, info.channels)
+    if len(set(found.values())) != 1:
+        return "mixture and stems differ in rate, length or channels: " + ", ".join(
+            f"{name} {rate} Hz {frames} frames {channels} ch"
+            for name, (rate, frames, channels) in found.items()
+        )
+    return None
+
+
+def stem_sum_db(mix, stems):
+    """How far the sum of ``stems`` is from ``mix``, in dB under the level of ``mix`` (more
+    negative is closer); None for a silent mix or arrays of different shapes."""
+    if any(stem.shape != mix.shape for stem in stems):
+        return None
+    level = float(np.mean(np.square(mix, dtype=np.float64)))
+    if level <= 0:
+        return None
+    error = float(np.mean(np.square(mix - sum(stems), dtype=np.float64)))
+    return 10.0 * float(np.log10(max(error, 1e-30) / level))
+
+
 def family(module, analysis, length):
     cache = {}
     found = [module.measure(analysis, *span, cache=cache) for span in blocks(analysis.duration_s, length)]
@@ -66,14 +101,30 @@ def musdb_track(job):
     folder, activity_model = job
     folder = Path(folder)
     try:
+        mismatch = check_files(folder)
+        if mismatch:
+            return {"track": folder.name, "skipped": mismatch}
         mix, rate = read(folder / "mixture.wav", *EXCERPT)
         if len(mix) < 20 * rate:
             return {"track": folder.name, "skipped": "shorter than the excerpt"}
-        vocals, _ = read(folder / "vocals.wav", *EXCERPT)
-        drums, _ = read(folder / "drums.wav", *EXCERPT)
+        stems = {name: read(folder / f"{name}.wav", *EXCERPT)[0] for name in STEMS}
     except Exception as exc:
         return {"track": folder.name, "skipped": f"{type(exc).__name__}: {exc}"}
-    out = {"track": folder.name, "split": folder.parent.name}
+    # Every comparison below is between versions of this one excerpt. Check that the stems
+    # really are this mixture's: same excerpt, and they add up to it.
+    residual = stem_sum_db(mix, [stems[name] for name in STEMS])
+    if residual is None or residual > SUM_WITHIN_DB:
+        return {
+            "track": folder.name,
+            "skipped": "the stems do not add up to the mixture"
+            + ("" if residual is None else f" ({residual:.1f} dB)"),
+        }
+    vocals, drums = stems["vocals"], stems["drums"]
+    out = {
+        "track": folder.name,
+        "split": folder.parent.name,
+        "pairing": {"sample_rate": int(rate), "excerpt_frames": int(len(mix)), "stem_sum_db": round(residual, 1)},
+    }
     # -- the voice ---------------------------------------------------------------------
     _, mix_rows, mix_frames = gmvpass.run(mix, rate, activity_model)
     _, stem_rows, stem_frames = gmvpass.run(vocals, rate)
@@ -110,6 +161,7 @@ def musdb_track(job):
         if in_mix.model and (in_mix.vocal[:count] & music).sum() * in_mix.hop >= 5.0:
             out["mix_vocal_pitched_share_model"] = float(pitched_mix[in_mix.vocal[:count] & music].mean())
     # -- harmony: the mix against itself without the drums ------------------------------
+    # "Without the drums" is the same excerpt of the same mixture less its own drum stem.
     whole, without, only = Analysis(mix, rate), Analysis(mix - drums, rate), Analysis(drums, rate)
     for name, value in family(tonal, whole, 12.0).items():
         out[f"tonal.{name}.mix"] = value
@@ -153,8 +205,134 @@ def spearman(a, b):
     return float(np.corrcoef(x, y)[0, 1]), len(pairs)
 
 
-def summarise_musdb(tracks):
-    """Aggregate figures over the songs that were analysed."""
+def paired(tracks, key, first, second, scale=None):
+    """Paired differences of one measurement between two versions of each recording.
+
+    ``tracks`` are per-recording results holding ``f"{key}.{first}"`` and
+    ``f"{key}.{second}"``; the difference is *second minus first*, recording by recording,
+    never across recordings. A recording where either value is absent or None is counted as
+    missing, one where either is not a finite number as invalid; neither is used. ``scale``
+    is a standard deviation to express the differences in (the calibration recordings'
+    spread of the measurement); without a usable one those figures are None.
+
+    The rank correlation is kept as supplementary information: it says whether the two
+    versions put the recordings in the same order, not whether they give the same values.
+    A measurement shifted by a constant, or scaled, keeps a rank correlation of 1."""
+    rows, missing, invalid = [], [], []
+    for track in sorted(tracks, key=lambda t: str(t.get("track"))):
+        a, b = track.get(f"{key}.{first}"), track.get(f"{key}.{second}")
+        if a is None or b is None:
+            missing.append(track.get("track"))
+            continue
+        try:
+            a, b = float(a), float(b)
+        except (TypeError, ValueError):
+            invalid.append(track.get("track"))
+            continue
+        if not (np.isfinite(a) and np.isfinite(b)):
+            invalid.append(track.get("track"))
+            continue
+        rows.append({"track": track.get("track"), first: a, second: b, "difference": b - a})
+    out = {
+        "direction": f"{second} minus {first}",
+        "pairs": len(rows),
+        "missing": len(missing),
+        "invalid": len(invalid),
+        "median_abs": None,
+        "p90_abs": None,
+        "max_abs": None,
+        "mean_signed": None,
+        "positive_share": None,
+        "negative_share": None,
+        "across_recordings_sd": None,
+        "calibration_sd": None,
+        "median_abs_sd": None,
+        "p90_abs_sd": None,
+        "max_abs_sd": None,
+        "mean_signed_sd": None,
+        "rank_correlation": None,
+        "recordings": rows,
+        "missing_recordings": missing,
+        "invalid_recordings": invalid,
+    }
+    if not rows:
+        return out
+    difference = np.array([row["difference"] for row in rows])
+    size = np.abs(difference)
+    out.update(
+        median_abs=float(np.median(size)),
+        p90_abs=float(np.percentile(size, 90)),
+        max_abs=float(size.max()),
+        mean_signed=float(difference.mean()),
+        positive_share=float((difference > 0).mean()),
+        negative_share=float((difference < 0).mean()),
+        across_recordings_sd=float(np.std([row[first] for row in rows])) if len(rows) > 1 else None,
+    )
+    if scale is not None and np.isfinite(scale) and scale > 0:
+        out.update(
+            calibration_sd=float(scale),
+            median_abs_sd=out["median_abs"] / scale,
+            p90_abs_sd=out["p90_abs"] / scale,
+            max_abs_sd=out["max_abs"] / scale,
+            mean_signed_sd=out["mean_signed"] / scale,
+        )
+    out["rank_correlation"] = spearman([row[first] for row in rows], [row[second] for row in rows])[0]
+    return out
+
+
+def drum_removal(tracks, scales=None):
+    """The tonal measurements of each mixture against the same mixture without its drums.
+
+    ``harmonic_share`` is reported apart: removing the drums removes percussive energy, so
+    it is expected to change and its change is not a failure of robustness. The others
+    describe pitch classes, which drums should not alter."""
+    scales = scales or {}
+
+    def one(name):
+        scale = (scales.get(f"tonal.{name}") or {}).get("sd")
+        return paired(tracks, f"tonal.{name}", "mix", "no_drums", scale)
+
+    out = {
+        "direction": "value without drums minus value with drums, per recording",
+        "scale": "calibration standard deviations" if scales else None,
+        "pitch_class": {name: one(name) for name in tonal.DEFINITIONS if name != "harmonic_share"},
+        "harmonic_share": one("harmonic_share"),
+        "by_tonal_content": None,
+    }
+    # Is the change larger where there is less tonal content? The recordings are split at
+    # the median harmonic share of the mixtures; one without a usable share is in neither.
+    shares = {}
+    for track in tracks:
+        value = track.get("tonal.harmonic_share.mix")
+        if isinstance(value, (int, float)) and np.isfinite(value):
+            shares[track.get("track")] = float(value)
+    if len(shares) >= 4:
+        middle = float(np.median(list(shares.values())))
+        halves = {
+            "less_tonal": [t for t in tracks if t.get("track") in shares and shares[t.get("track")] < middle],
+            "more_tonal": [t for t in tracks if t.get("track") in shares and shares[t.get("track")] >= middle],
+        }
+        keep = ("pairs", "median_abs", "p90_abs", "median_abs_sd", "p90_abs_sd")
+        out["by_tonal_content"] = {
+            "split_at_harmonic_share": middle,
+            **{
+                half: {
+                    name: {key: one_of[key] for key in keep}
+                    for name in out["pitch_class"]
+                    for one_of in (
+                        paired(rows, f"tonal.{name}", "mix", "no_drums", (scales.get(f"tonal.{name}") or {}).get("sd")),
+                    )
+                }
+                for half, rows in halves.items()
+            },
+        }
+    return out
+
+
+def summarise_musdb(tracks, scales=None):
+    """Aggregate figures over the songs that were analysed. ``scales`` (measurement ->
+    {"sd": ...}, from a corpus run) lets differences be stated in calibration standard
+    deviations."""
     tracks = [t for t in tracks if "skipped" not in t]
     column = lambda key, rows=tracks: [row.get(key) for row in rows]  # noqa: E731
 
@@ -163,7 +341,13 @@ def summarise_musdb(tracks):
         return {"median": float(np.median(values)), "low_quartile": float(np.percentile(values, 25)),
                 "high_quartile": float(np.percentile(values, 75)), "songs": len(values)} if values else None
 
-    out = {"songs": len(tracks), "voice": {}, "delivery": {}, "tonal": {}, "rhythm": {}}
+    out = {"songs": len(tracks), "voice": {}, "delivery": {}, "rhythm": {}}
+    residuals = [t["pairing"]["stem_sum_db"] for t in tracks if t.get("pairing")]
+    out["pairing"] = {
+        "checked": len(residuals),
+        "worst_stem_sum_db": max(residuals) if residuals else None,
+        "rule": f"same files' rate, length and channels; stems sum to the mixture within {SUM_WITHIN_DB:g} dB",
+    }
     for key in ("vocal_time_share", "presence_auc_centre_level", "presence_auc_pitch_clarity",
                 "mix_pitch_while_voice", "pitch_within_semitone", "pitch_octave_error"):
         out["voice"][key] = middle(key)
@@ -177,9 +361,7 @@ def summarise_musdb(tracks):
     rho, count = spearman(column("stem_pitched_share", held_out), column("mix_vocal_pitched_share_model", held_out))
     out["delivery"]["mix_vocal_pitched_share_model_test_split"] = {"rank_correlation_with_stem": rho, "songs": count}
     out["delivery"]["stem_pitched_share"] = middle("stem_pitched_share")
-    for name in tonal.DEFINITIONS:
-        rho, count = spearman(column(f"tonal.{name}.mix"), column(f"tonal.{name}.no_drums"))
-        out["tonal"][name] = {"rank_correlation_mix_vs_no_drums": rho, "songs": count}
+    out["drum_removal"] = drum_removal(tracks, scales)
     for name in rhythm.DEFINITIONS:
         rho, count = spearman(column(f"rhythm.{name}.mix"), column(f"rhythm.{name}.drums"))
         out["rhythm"][name] = {"rank_correlation_mix_vs_drums": rho, "songs": count}
@@ -203,7 +385,7 @@ def summarise_mdb(tracks):
     }
 
 
-def run(musdb=None, mdb=None, activity_model=None, processes=1, limit=None, progress=print):
+def run(musdb=None, mdb=None, activity_model=None, processes=1, limit=None, progress=print, scales=None):
     """Run the checks on the datasets given. Returns per-track figures and summaries."""
     from concurrent.futures import ProcessPoolExecutor
     from multiprocessing import get_context
@@ -230,7 +412,7 @@ def run(musdb=None, mdb=None, activity_model=None, processes=1, limit=None, prog
             for number, found in enumerate(pool.map(musdb_track, [(f, activity_model) for f in folders]), 1):
                 progress(f"[MUSDB {number}/{len(folders)}] " + ("skipped: " + found["skipped"] if "skipped" in found else "done"))
                 tracks.append(found)
-            out["musdb"] = {"tracks": tracks, "summary": summarise_musdb(tracks),
+            out["musdb"] = {"tracks": tracks, "summary": summarise_musdb(tracks, scales),
                             "excerpt_s": list(EXCERPT), "activity_model": bool(activity_model)}
         if mdb:
             audio = sorted((Path(mdb) / "audio" / "full_mix").glob("*.wav"))

@@ -92,7 +92,8 @@ class Analysis:
 
 
 def result(value, confidence):
-    """A measurement: None when unknown, with a confidence held to 0..1."""
+    """A measurement: None when unknown, with a confidence held to 0..1. The confidence is
+    a heuristic score of signal support, not a calibrated probability of being right."""
     if value is None or not np.isfinite(value):
         return (None, 0.0)
     return (float(value), float(min(1.0, max(0.0, confidence))))

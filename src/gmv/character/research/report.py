@@ -5,6 +5,13 @@ from ..diagnose import COLOURS, cell, escape
 from ..profile import DIMENSION_NAMES
 from .profile import BLOCK_S, FAMILIES
 
+CONFIDENCE = (
+    "Confidence is a heuristic score of how much signal support a value rests on (how much "
+    "music, how much tonal or struck content, how clear the pulse, whether the inputs it "
+    "needs were there). It is not a calibrated probability that the value, or any musical "
+    "reading of it, is correct: 0.8 does not mean right four times in five."
+)
+
 CHARTED = (  # measurements drawn in a recording's chart, with the range mapped to 0..1
     ("tonal", "harmonic_share", 0.0, 1.0),
     ("tonal", "harmonic_movement", 0.0, 1.5),
@@ -50,7 +57,7 @@ def recordings(results, title="Sonic Character research: experimental measuremen
         "Experimental, offline, not used by the visualizer. `unknown` means the measurement "
         "could not be made here; it does not mean zero. `inferred` values interpret the "
         "signal (a key, a chord change, a voice) and can be wrong where the interpretation "
-        "does not apply. See docs/SONIC_CHARACTER_RESEARCH.md.",
+        "does not apply. " + CONFIDENCE + " See docs/SONIC_CHARACTER_RESEARCH.md.",
         "",
         "| Recording | " + " | ".join(DIMENSION_NAMES) + " | harmonic share | harmonic movement | pitched share | pulse clarity | tempo (BPM, level ambiguous) | events per beat |",
         "|---|" + "---:|" * (len(DIMENSION_NAMES) + 6),
@@ -122,7 +129,8 @@ def corpus(evaluation):
         "",
         f"Calibration: {split['calibration_recordings']} recordings of {len(split['calibration_groups'])} groups. "
         f"Evaluation: {split['evaluation_recordings']} recordings of {len(split['evaluation_groups'])} other groups. "
-        "Scales come from calibration only; every figure below is on evaluation.",
+        "Scales come from calibration only; every figure below is on evaluation. "
+        "The confidence column is the mean heuristic confidence of each measurement: " + CONFIDENCE,
         "",
         "## Each measurement",
         "",
@@ -198,8 +206,46 @@ def stems(found):
         for key, got in summary["delivery"].items():
             if got and "rank_correlation_with_stem" in got:
                 lines.append(f"| {key} | {cell(got['rank_correlation_with_stem'])} | {got['songs']} |")
-        lines += ["", "| Harmony: mix against the mix without drums | rank correlation |", "|---|---:|"]
-        lines += [f"| {key} | {cell(got['rank_correlation_mix_vs_no_drums'])} |" for key, got in summary["tonal"].items()]
+        pairing = summary.get("pairing")
+        if pairing:
+            lines += ["", f"Pairing: {pairing['checked']} songs checked ({pairing['rule']}); worst stems-to-mixture "
+                      f"difference {cell(pairing['worst_stem_sum_db'], 1)} dB. Every comparison is between versions of the same excerpt."]
+        removal = summary.get("drum_removal")
+        if removal:
+            unit = "calibration s.d." if removal["scale"] else "s.d. (no scales given)"
+            lines += ["", "### Harmony: each mixture against the same mixture without its drums", "",
+                      f"Paired per recording; difference = {removal['direction']}. Values in the measurement's own unit, "
+                      f"then in {unit}. The rank correlation is supplementary: it says whether the two versions put the "
+                      "recordings in the same order, not whether they give the same values (a constant shift or a "
+                      "rescaling keeps it at 1).", ""]
+            header = [
+                "| Measurement | pairs | missing / invalid | median abs | 90th pct abs | max abs | mean signed | rises / falls | "
+                f"across songs s.d. | median abs ({unit}) | 90th pct ({unit}) | max ({unit}) | mean signed ({unit}) | rank correlation |",
+                "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+            ]
+            lines += header
+
+            def row(name, got):
+                return (f"| {name} | {got['pairs']} | {got['missing']} / {got['invalid']} | {cell(got['median_abs'], 3)} | "
+                        f"{cell(got['p90_abs'], 3)} | {cell(got['max_abs'], 3)} | {cell(got['mean_signed'], 3)} | "
+                        f"{share(got['positive_share'])} / {share(got['negative_share'])} | "
+                        f"{cell(got['across_recordings_sd'], 3)} | {cell(got['median_abs_sd'])} | {cell(got['p90_abs_sd'])} | "
+                        f"{cell(got['max_abs_sd'])} | {cell(got['mean_signed_sd'])} | {cell(got['rank_correlation'])} |")
+
+            lines += [row(name, got) for name, got in removal["pitch_class"].items()]
+            lines += ["", "Harmonic share, apart: removing the drums removes percussive energy, so this one is expected "
+                      "to change; its change is not a failure of the pitch-class measurements.", "",
+                      *header, row("harmonic_share", removal["harmonic_share"])]
+            split = removal.get("by_tonal_content")
+            if split:
+                lines += ["", f"By tonal content: the songs split at the median harmonic share of the mixtures "
+                          f"({cell(split['split_at_harmonic_share'])}). Absolute differences, in {unit}.", "",
+                          "| Measurement | less tonal: pairs | median | 90th pct | more tonal: pairs | median | 90th pct |",
+                          "|---|---:|---:|---:|---:|---:|---:|"]
+                for name in removal["pitch_class"]:
+                    low, high = split["less_tonal"][name], split["more_tonal"][name]
+                    lines.append(f"| {name} | {low['pairs']} | {cell(low['median_abs_sd'])} | {cell(low['p90_abs_sd'])} | "
+                                 f"{high['pairs']} | {cell(high['median_abs_sd'])} | {cell(high['p90_abs_sd'])} |")
         lines += ["", "| Rhythm: mix against the drums alone | rank correlation |", "|---|---:|"]
         for key, got in summary["rhythm"].items():
             lines.append(f"| {key} | {cell(got['rank_correlation_mix_vs_drums'])} |" if isinstance(got, dict) else f"| {key} | {share(got)} |")

@@ -15,6 +15,11 @@ nothing in the application imports them. Findings: docs/SONIC_CHARACTER_RESEARCH
 Every value is a ``(value, confidence)`` pair. ``None`` means "could not be measured
 here", which is never the same as zero: no reliable pitch is not "no melody", and no
 reliable pulse is not "an irregular rhythm".
+
+Confidence is a heuristic score, 0..1, of how much signal support a value rests on (how
+much music, how much tonal or struck content, how clear the pulse, whether the inputs it
+needs were there). It is not a calibrated probability that the value, or any musical
+reading of it, is correct.
 """
 
 RESEARCH_VERSION = "a2.1"

@@ -5,12 +5,23 @@ profile is unchanged, and no renderer, shader, setting, schema or analysis pass 
 touched. The experimental code lives in `src/gmv/character/research/` and is reached only
 through `gmv character research`.
 
+**Revised 2026-11-24** (correction to the first version of this report): the drum-removal
+check now compares each song's two values directly instead of only their rank order, and
+finds a consistent bias the first version missed (section 6); a pairing check now excludes
+one MUSDB song whose stems are not its mixture's, which moved a few MUSDB figures in the
+second decimal; and every confidence is stated to be a heuristic score of signal support,
+not a calibrated probability (section 3).
+
 Short version:
 
 - **Harmony can be measured, and it is new information.** How fast the harmony moves and
-  how clearly the music sits in a key are robust (unchanged by level, tone, saturation and
-  band-limiting; nearly unchanged by removing the drums), stable over a recording, and
-  mostly not predictable from the Phase A profile. They are the strongest result.
+  how clearly the music sits in a key are unchanged by level and little changed by tone,
+  saturation and band-limiting, stable over a recording, and mostly not predictable from
+  the Phase A profile. They are the strongest result. **Drums do bias them**, though
+  (corrected in a later revision of this report; section 6): taking the drums out of a
+  song raises its measured harmonic movement in every one of 138 songs, typically by a
+  fifth of the spread between recordings and for one song in ten by more than half of it.
+  Key clarity is the least affected.
 - **Rhythmic feel can be measured in part.** How concentrated the rhythm is on its pulse,
   and how busy the low end is, hold up. Anything that depends on *which* metrical level is
   "the beat" does not: the pulse found is right about four times in five and otherwise
@@ -49,12 +60,12 @@ three questions, with what testing against isolated stems showed (section 6).
 | Existing capability | What it actually does | Tested here | Verdict |
 |---|---|---|---|
 | Vocal analyzer (`gmv.instruments.vocals`): `level` | Level of the stereo centre between 300 Hz and 3.4 kHz against its own recent peak | Follows when the vocal stem really sounds inside a song (median AUC 0.84 over 135 songs) | Useful as "something is in the centre in the voice's range". Not proof of a voice: snare, bass and centred guitars are there too |
-| Vocal analyzer: `pitch_midi`, `pitch_confidence` | The pitch whose harmonic series best explains the centre's peaks, A2 to A5 | When it reports a pitch a voice is sounding 84% of the time (median); it is within a semitone of the voice's real pitch 63% of the time | A rough pitch. Jitters from frame to frame: in the corpus it never holds a note for 0.3 s in a dense mix, so contour statistics built on it are noise (section 4) |
-| Vocal analyzer: phrase boundaries | Starts and ends of centre sound, gated by the activity model | Stated for too few passages to judge (confidence 0.02) | Not usable as it is |
-| Activity model (`gmv.activity`, weights not shipped): vocals | A small network's per-frame judgement that a voice sounds | On the 50 MUSDB test songs: finds 80% of vocal frames, fires on 18% of the others (medians). Cannot be built for 22 kHz files | Usable for presence, with a real false-alarm rate. Needs a weights file the installed application does not carry |
+| Vocal analyzer: `pitch_midi`, `pitch_confidence` | The pitch whose harmonic series best explains the centre's peaks, A2 to A5, and an uncalibrated score of how much of the peaks it explains (named "confidence" in the code; not a probability) | When it reports a pitch a voice is sounding 84% of the time (median); it is within a semitone of the voice's real pitch 63% of the time | A rough pitch. Jitters from frame to frame: in the corpus it never holds a note for 0.3 s in a dense mix, so contour statistics built on it are noise (section 4) |
+| Vocal analyzer: phrase boundaries | Starts and ends of centre sound, gated by the activity model | Stated for too few passages to judge (mean heuristic confidence 0.02) | Not usable as it is |
+| Activity model (`gmv.activity`, weights not shipped): vocals | A small network's per-frame judgement that a voice sounds | On the MUSDB test songs: finds 82% of vocal frames, fires on 19% of the others (medians). Cannot be built for 22 kHz files | Usable for presence, with a real false-alarm rate. Needs a weights file the installed application does not carry |
 | Pitch tracker (`gmv.pitch`) | Up to four note candidates per frame in the guitar register; known octave and fifth confusions, distorted chords unreliable | Not used: its own documentation rules it out as polyphonic harmony or melody analysis | Chroma (below) answers the harmonic questions without naming notes |
 | Harmonic/percussive balance (`gmv.advanced`) | Median-filter split of the spectrogram, every two seconds, off by default | The same method at a finer hop is the basis of the research front end | Sound method; reused |
-| Tempo (`FeatureFrame.tempo_bpm`, `tempo_confidence`) | Strongest autocorrelation of 12 s of flux, 60–200 BPM | Phase A already found octave errors | Superseded here by a pulse estimate that reports its own ambiguity |
+| Tempo (`FeatureFrame.tempo_bpm`, `tempo_confidence`) | Strongest autocorrelation of 12 s of flux, 60–200 BPM; the "confidence" field is that autocorrelation, not a probability | Phase A already found octave errors | Superseded here by a pulse estimate that reports its own ambiguity |
 | Beat tracker (`gmv.beat`, opt-in) | Causal beat phase and tempo; development result F1 0.69 on MDB Drums | Not re-evaluated; the research needs only the pulse period and how sure it is | Remains the candidate for live beat phase |
 | Onset events | Whole-mix attacks | Used by Phase A | The rhythm prototypes use a percussive onset signal instead, which keeps accents |
 | Instrument activity (drums, bass, guitar analyzers) | Energy in a region, not instrument-specific on their own (docs/INSTRUMENT_LAYERS.md) | Not used | The low-band onset signal here measures the same region without claiming a kick |
@@ -67,6 +78,19 @@ All are computed offline from one spectrogram of the recording (22.05 kHz, 93 ms
 median filtering. Each returns a value **and a confidence**, or **unknown**. Unknown is
 never zero: no reliable pitch is not "no melody", no clear pulse is not "an irregular
 rhythm", no model is not "no voice".
+
+**What a confidence is, and is not.** Every confidence in this report, in the JSON and in
+the generated reports is a *heuristic score of signal support*: a number from 0 to 1 built
+from how much music a value rests on, how much tonal or struck content there was, how
+clear the pulse was, and whether the inputs it needs were available (the formulas are
+given with each family below). **It is not a calibrated probability** that the value is
+right or that a musical interpretation of it (a key, a voice, a tempo) is correct. A
+confidence of 0.8 does not mean "right four times in five"; two measurements with the same
+confidence are not equally trustworthy; and nothing here was fitted to make confidences
+match error rates. Low confidence means little evidence was available, not that the value
+is known to be wrong; high confidence means the evidence was plentiful, not that the
+measurement means what its name suggests. How far each measurement can be trusted is what
+sections 6, 7 and 11 test, by other means.
 
 *Measured* values state what is in the signal. *Inferred* values interpret it (a key, a
 chord change, a voice, a tempo) and are wrong wherever the interpretation does not apply.
@@ -88,8 +112,9 @@ averaged over 0.5 s.
 | `major_lean` | inferred | −1..1 | best major fit minus best minor fit; confidence falls to zero when no key fits | −0.3 – 0.3 |
 | `chord_change_rate` | inferred | 1/s | peaks of harmonic movement per second; half confidence by construction | 0.2 – 2 |
 
-Confidence: `1 − exp(−seconds/8)`, times `min(1, harmonic_share/0.3)` for everything read
-from pitch classes (with little tonal content there is little to read).
+Confidence (a heuristic signal-support score, not a probability): `1 − exp(−seconds/8)`,
+times `min(1, harmonic_share/0.3)` for everything read from pitch classes (with little
+tonal content there is little to read).
 
 No chord or key is named anywhere. `key_clarity` says how key-like the pitch content is,
 not which key it is.
@@ -131,7 +156,8 @@ signal is then folded onto one beat in 24 steps.
 | `bar_repetition` | measured | 0..1 | autocorrelation at four pulses |
 | `accent_alternation` | measured | −1..1 | whether strong and weak pulses alternate, scaled by how much pulses differ at all |
 
-Confidence: `1 − exp(−seconds/8)`, times how much of the percussive part is newly struck
+Confidence (a heuristic signal-support score, not a probability): `1 − exp(−seconds/8)`,
+times how much of the percussive part is newly struck
 (a held pad has no pulse to find: unknown), times `min(1, pulse_clarity/0.25)`. Below a
 pulse clarity of 0.25 every beat-relative value is unknown.
 
@@ -140,7 +166,8 @@ pulse clarity of 0.25 every beat-relative value is unknown.
 Families do not share a window: 6 s for the lead line, 12 s for harmony and rhythm, blocks
 overlapping by half. A recording's value is the mean of its blocks weighted by confidence
 (the median for a tempo); its confidence is the mean over all blocks, so blocks that could
-say nothing count against it. Section 8 looks at which scale each measurement belongs to.
+say nothing count against it. Weighting by a heuristic score is a pragmatic choice: it
+lets blocks with more evidence count for more, without claiming they are more often right. Section 8 looks at which scale each measurement belongs to.
 
 ## 4. What was rejected or deferred, and why
 
@@ -154,7 +181,8 @@ say nothing count against it. Section 8 looks at which scale each measurement be
   no defensible basis without isolating the voice.
 - **Clean against screamed delivery**: investigated, not achieved (section 7).
 - **Chord and key naming, major or minor**: deliberately not done. `major_lean` is reported
-  for study only; its confidence is low (0.51) and it separates nothing.
+  for study only; its heuristic confidence is low (0.51, little key-like evidence) and it
+  separates nothing.
 - **Phrase length**: the existing boundaries are stated too rarely to evaluate.
 - **Swing**: `triplet_share` measures thirds against quarters. Swing as unequal eighths is
   not separately measured; nothing in the corpus let it be checked.
@@ -211,10 +239,11 @@ to contain screamed vocals". It is a statement about genre tags, not about any r
 and since those genres also differ in production it cannot isolate the voice.
 
 **Research datasets**, for checks against known signals (section 6): MUSDB18-HQ (150
-songs with separate vocal, drum, bass and other stems; 139 used, 11 shorter than the
-excerpt; seconds 30 to 120 of each) and MDB Drums (23 mixes with annotated beats). The
-activity model was trained on MUSDB's training songs, so its figures are given on the 50
-test songs only.
+songs with separate vocal, drum, bass and other stems; seconds 30 to 120 of each; 138
+used: 11 are shorter than the excerpt, and 1 was excluded because its stems do not add up
+to its mixture (section 6)) and MDB Drums (23 mixes with annotated beats). The
+activity model was trained on MUSDB's training songs, so its figures are given on the
+test songs only (48 or 49 of them, depending on the figure).
 
 ## 6. Checks against isolated stems and annotated beats
 
@@ -222,42 +251,102 @@ A measurement made on a full mix claims to describe one part of it. Where the pa
 on its own, the claim was tested. The stems are references for what is in the signal, not
 for how anything is perceived.
 
-**Harmony: the mix against the same mix without its drums** (rank correlation over 139
-songs). If drums disturbed these measurements the two would disagree.
+**Pairing.** Every comparison is between versions of one excerpt of one song: the
+mixture, the same mixture less its own drum stem, or a stem alone. Before a song is used
+the files are checked (mixture and all four stems present, with one sample rate, length
+and channel count) and the four stems must add up to the mixture to within 40 dB of its
+level. On 138 songs they do so to within 61 to 73 dB (rounding). **One song failed: its
+stems add up to its mixture only to within 7 dB**, so they are not that mixture's parts. It
+had been included in the first version of this report. It is now excluded, and every MUSDB
+figure in this section is on the 138 that pass. For the other songs, the values are
+identical to the first run, and a second run reproduced every per-song value exactly.
+
+**Harmony: each mixture against the same mixture without its drums.** If the pitch-class
+measurements describe the harmony, removing the drums should leave them where they were.
+Each song's two values are compared directly: difference = value without drums minus
+value with drums. Sizes are given in each measurement's own unit and in calibration
+standard deviations (the spread of that measurement across the owner's 104 calibration
+recordings, section 5; MUSDB values are 90 s excerpts, so this is a yardstick, not an
+exact match of populations). For scale, a difference of 1 calibration standard deviation
+is the gap between two fairly ordinary recordings. All 138 pairs were valid for every
+measurement: none missing, none invalid.
+
+| Measurement | median abs | 90th pct abs | max abs | mean signed | rises / falls | median abs (cal. s.d.) | 90th pct (cal. s.d.) | max (cal. s.d.) | mean signed (cal. s.d.) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `key_clarity` | 0.007 | 0.038 | 0.248 | +0.010 | 76% / 24% | 0.07 | 0.37 | 2.41 | +0.09 |
+| `major_lean` | 0.006 | 0.029 | 0.387 | −0.003 | 45% / 55% | 0.05 | 0.25 | 3.33 | −0.02 |
+| `pitch_class_focus` | 0.004 | 0.012 | 0.054 | +0.006 | 96% / 4% | 0.12 | 0.43 | 1.88 | +0.21 |
+| `harmonic_movement` | 0.018 | 0.057 | 0.150 | +0.026 | **100% / 0%** | 0.20 | 0.61 | 1.62 | +0.28 |
+| `tonal_stability` | 0.007 | 0.022 | 0.051 | −0.010 | **0% / 100%** | 0.22 | 0.66 | 1.55 | −0.30 |
+| `pitch_classes_at_once` | 0.220 | 0.688 | 1.754 | −0.301 | 1% / 99% | 0.22 | 0.68 | 1.74 | −0.30 |
+| `chord_change_rate` (inferred) | 0.036 | 0.111 | 0.506 | −0.023 | 33% / 67% | 0.24 | 0.73 | 3.36 | −0.15 |
+
+Units: `harmonic_movement` in tonal-centroid distance per second, `pitch_classes_at_once`
+in pitch classes, `chord_change_rate` per second, the rest 0..1 or −1..1 (section 3).
+
+What this shows:
+
+- **For a typical song the change is small**: a median of 0.05 to 0.24 calibration standard
+  deviations.
+- **It is systematic for four measurements.** Without drums, harmonic movement is higher
+  in every song, tonal stability lower in every song, pitch classes at once lower in 137 of
+  138, pitch-class focus higher in 132. So drums do not add noise to these measurements;
+  they push them one way. A struck, broadband sound spreads energy over all pitch classes
+  in every frame: with drums, the harmony looks more spread out, more stable and slower to
+  move than it is. The bias is about 0.2 to 0.3 calibration standard deviations on average.
+- **For a minority it is large.** One song in ten changes by 0.4 to 0.7 standard
+  deviations, and the largest changes are 1.5 to 3.4. The median change is about twice as
+  large in the less tonal half of the songs (harmonic share under 0.70) as in the more
+  tonal half for harmonic movement, tonal stability, key clarity and chord-change rate
+  (0.25 against 0.13 standard deviations for harmonic movement); the 90th percentiles do
+  not follow that pattern consistently.
+- **Key clarity is the least affected**: median 0.07 and 90th percentile 0.37 standard
+  deviations, with a weak bias (it rises without drums in 105 of 138 songs, by 0.09
+  standard deviations on average). `major_lean` changes as little but is not a usable
+  measurement anyway (section 4).
+
+The first version of this report said these measurements "describe the harmony whether or
+not drums play" and called them "nearly unchanged by removing the drums", resting on rank
+correlations of 0.91 to 0.97. **That overstated it.** A rank correlation says whether two
+versions put the songs in the same *order*. It does not say whether they give the same
+*values*: a measurement shifted by the same amount in every song keeps a rank correlation
+of 1. Here they keep the order (rank correlations 0.91 to 0.97, unchanged by the
+correction and kept in `stems.json` as supplementary information) but not the values: drums
+shift them, consistently, and sometimes a lot. The rank correlations establish that
+comparing two songs *with the same amount of drums* is mostly sound; they do not establish
+that a drum-heavy song and a drumless one can be compared directly.
+
+**Harmonic share, apart.** It measures the share of energy that is steady rather than
+struck, and removing the drums removes struck energy, so it is expected to rise: it does,
+in 136 of 138 songs, by 0.09 on average (0.89 calibration standard deviations; median
+absolute 0.076, 90th percentile 0.190, largest 0.378; rank correlation 0.76). That is the
+measurement doing its job, not a robustness failure, and it says nothing about the
+pitch-class measurements.
+
+**Rhythm: the mix against the drum stem alone** (rank correlation over the 138 songs).
+These say whether the mix and its drums put the songs in the same order; they are not
+paired numerical agreement, and the paired comparison of this correction was made for the
+tonal measurements only. The tempo line below is a paired check.
 
 | | |
 |---|---:|
-| `tonal_stability` | 0.97 |
-| `harmonic_movement` | 0.95 |
-| `key_clarity` | 0.95 |
-| `major_lean` | 0.94 |
-| `pitch_class_focus`, `pitch_classes_at_once` | 0.92 |
-| `chord_change_rate` | 0.91 |
-| `harmonic_share` | 0.76 |
-
-The pitch-class measurements describe the harmony whether or not drums play.
-`harmonic_share` is lower by design: removing the drums changes the share itself.
-
-**Rhythm: the mix against the drum stem alone.**
-
-| | |
-|---|---:|
-| `pulse_clarity` | 0.74 |
-| `offbeat_weight`, `low_events_per_beat` | 0.73 |
-| `events_per_beat`, `bar_repetition` | 0.72 |
+| `pulse_clarity`, `offbeat_weight` | 0.74 |
+| `low_events_per_beat` | 0.73 |
+| `events_per_beat`, `bar_repetition` | 0.71 |
 | `on_beat_share` | 0.67 |
-| `triplet_share` | 0.64 |
-| `tempo_bpm` | 0.61 |
+| `triplet_share` | 0.65 |
+| `tempo_bpm` | 0.60 |
 | `accent_alternation` | 0.59 |
-| `tempo_ambiguity` | 0.56 |
+| `tempo_ambiguity` | 0.55 |
 
-The mix and its drums agree on the tempo within 6% for 83% of songs and disagree by a
-factor of two for 9%. Against annotated beats (MDB Drums): the pulse is the annotated beat
-in 18 of 23 mixes, half of it in 2, a third or two thirds of it in 3. Median
-`tempo_ambiguity` there is 0.98: the measurement that says "the level is undecided" is
-high, as it should be. So the rhythm of the mix is mostly the rhythm of the drums, the
-pulse is right about four times in five, and when it is wrong it is wrong by a metrical
-factor.
+Song by song, the mix and its drums agree on the tempo within 6% for 83% of songs and
+disagree by a factor of two for 9%. Against annotated beats (MDB Drums): the pulse is the
+annotated beat in 18 of 23 mixes, half of it in 2, a third or two thirds of it in 3.
+Median `tempo_ambiguity` there is 0.98: the measurement that says "the level is undecided"
+is high, as it should be. So the mix and its drums rank songs' rhythm in broadly the same
+order, the pulse is right about four times in five, and when it is wrong it is wrong by a
+metrical factor. How far the other rhythm values differ in size between the mix and the
+drums was not measured.
 
 **The voice: the mix against the vocal stem.**
 
@@ -265,30 +354,36 @@ factor.
 |---|---:|---|
 | Share of the excerpt in which a voice sounds | 0.79 | 0.68 – 0.91 |
 | `centre_line_level` follows when the voice sounds (AUC inside a song) | 0.84 | 0.78 – 0.89 |
-| `pitch_confidence` follows when the voice sounds (AUC) | 0.58 | 0.52 – 0.64 |
+| the analyzer's pitch score (`pitch_confidence`) follows when the voice sounds (AUC) | 0.58 | 0.52 – 0.64 |
 | When the mix has a centre pitch, a voice is sounding | 0.84 | 0.73 – 0.92 |
 | Centre pitch within a semitone of the voice's own pitch | 0.63 | 0.52 – 0.74 |
 | ...an octave off | 0.03 | 0.02 – 0.05 |
-| Activity model finds vocal frames (50 test songs) | 0.80 | 0.67 – 0.92 |
-| Activity model fires where there is no voice (50 test songs) | 0.18 | 0.06 – 0.37 |
+| Activity model finds vocal frames (48 test songs) | 0.82 | 0.69 – 0.92 |
+| Activity model fires where there is no voice (49 test songs) | 0.19 | 0.07 – 0.37 |
 
 **Delivery.** The reference is the share of the vocal stem that has a pitch at all (the
 same analyzer run on the stem alone; median 0.80, from 0.50 to 0.91 over the songs): high
 for sung notes, lower for breathy, spoken or unpitched delivery. Rank correlation of the
-mix-based estimates with it:
+mix-based estimates with it (137 songs with enough voice):
 
 | Estimate from the mix | rank correlation |
 |---|---:|
-| `pitched_share`, whole excerpt | 0.61 |
-| pitched share while the stem says a voice sounds (an oracle; not available in practice) | 0.64 |
-| `vocal_pitched_share` (gated by the activity model; 49 test songs) | 0.69 |
+| `pitched_share`, whole excerpt | 0.60 |
+| pitched share while the stem says a voice sounds (an oracle; not available in practice) | 0.63 |
+| `vocal_pitched_share` (gated by the activity model; 48 test songs) | 0.68 |
+
+These are rank correlations on purpose: the question is whether the mix-based estimate
+orders songs as the stem does, since its scale differs from the stem's by construction.
+They do not say the two give the same values.
 
 So on these mixes, mostly sung pop and rock, how much of the voice is pitched can be read
 from the mix moderately well. Section 7 shows where that stops.
 
 ## 7. Results on the owner's corpus (evaluation groups only)
 
-Columns: how often the value could be stated; mean confidence; how much of it the seven
+Columns: how often the value could be stated; mean confidence (the heuristic
+signal-support score of section 3, averaged over recordings; not a probability of being
+right); how much of it the seven
 Phase A dimensions already predict (R², regression fitted on calibration groups; near 0 is
 new information, negative means the calibration fit does not carry over at all); the share
 of its block-to-block variation that lies between recordings (a property of the recording
@@ -382,7 +477,7 @@ predict.
   so Phase A's force alone "detects vocals" (0.89): the label is confounded with
   production. What matters is the part beyond Phase A, where `centre_line_level` (0.82)
   holds up and the model's `vocal_presence` (0.59) mostly does not. Together with the stem
-  check (finds 80% of vocal frames, fires on 18% of others), presence is estimable but
+  check (finds 82% of vocal frames, fires on 19% of others), presence is estimable but
   noisy.
 - **Delivery.** `vocal_pitched_share` is lower for the harsh-genre recordings (AUC 0.25,
   that is 0.75 the other way), in the expected direction, and `pitch_clarity` separates the
@@ -518,7 +613,7 @@ Where they differ most:
 |---|---:|---:|---:|
 | `tonal.harmonic_movement` | 0.12 | 0.25 | 82% of pairs |
 | `tonal.key_clarity` | 0.51 | 0.66 | 73% of pairs |
-| `tonal.chord_change_rate` (inferred, low confidence) | 1.29 | 0.84 | 95% of pairs |
+| `tonal.chord_change_rate` (inferred, low heuristic confidence) | 1.29 | 0.84 | 95% of pairs |
 | `rhythm.low_events_per_beat` | 3.06 | 1.68 | 85% of pairs |
 | `lead.vocal_presence` (model) | 0.78 | 0.51 | 46% of pairs |
 | `lead.vocal_pitched_share` | 0.58 | 0.59 | 7% of pairs |
@@ -530,6 +625,13 @@ movement, and B fits a key better); **A's low end is struck almost twice as ofte
 the model hears a voice through nearly all of A but only half of B, with clear gaps. Those
 are real, interpretable musical differences that Phase A does not contain. The delivery of
 the voice, the one a listener would name first, is not among them.
+
+**A caveat from the drum-removal check (section 6).** Drums lower measured harmonic
+movement in every song tested, typically by 0.02, for one song in ten by more than 0.06, at
+most by 0.15. The gap between A and B is 0.14. A, the more drum-dominated production, may
+therefore read lower partly because of its drums; this analysis cannot say how much
+without the two tracks' drums separated. The key-clarity gap (0.15) is less exposed: drums
+change key clarity by 0.007 typically and by more than 0.04 for one song in ten.
 
 One derived figure, **found after looking at this pair and therefore not a test**:
 low-band onsets per *second* (`low_events_per_beat` × tempo / 60, which cancels the
@@ -557,7 +659,10 @@ is not heard at all, so a very quiet capture loses its quietest passages.
 
 **Changes that leave the music as it was.** 19 evaluation recordings (first 90 s of each),
 analysed again after each change. Median move in calibration standard deviations (0.1 is
-negligible; 1 is the difference between two ordinary recordings):
+negligible; 1 is the difference between two ordinary recordings). These standard
+deviations come from the corpus run made before the 12 calibration recordings at 22 kHz
+could be analysed with the activity model in place; the current scales differ from them
+by at most 10% for any measurement, which does not change any conclusion here.
 
 | | mono | duller −3 dB/oct | brighter +3 dB/oct | band-limited 7 kHz | saturated | half sample rate |
 |---|---:|---:|---:|---:|---:|---:|
@@ -580,7 +685,9 @@ negligible; 1 is the difference between two ordinary recordings):
 
 - The Phase A profile moves with the production, as it is meant to: it measures the sound.
 - **The pitch-class measurements do not**: harmonic movement, key clarity, stability and
-  focus move by 0.35 at most under every change. They describe the music, not the mix.
+  focus move by 0.35 at most (median over recordings) under every change. They are much
+  less tied to the production than Phase A is. They are not tied to nothing: taking the
+  drums out, which changes the music itself, moves them consistently (section 6).
 - `harmonic_share` and `chord_change_rate` are production-dependent and should not be used
   as musical measurements.
 - **The lead-line measurements depend on a stereo image.** In mono there is no centre to
@@ -623,13 +730,17 @@ extrapolated from these figures.
 
 **Worked**
 
-- Harmonic movement and key clarity: new, robust, stable, interpretable.
+- Harmonic movement and key clarity: new, stable, interpretable, independent of level and
+  little moved by changes of production. Not free of drums: drums push harmonic movement
+  down in every song tested, typically by a fifth of a calibration standard deviation;
+  key clarity is much less affected (section 6).
 - On-beat share: a stable description of how concentrated a rhythm is on its pulse.
 - Low-band onset activity: separates heavy, kick-driven music from the rest, largely
   independently of Phase A (as a per-second figure it still needs a proper definition).
 - Vocal presence, with the existing model: usable, noisy.
 - Reporting uncertainty: unknown is kept apart from zero throughout, and the pulse states
-  its own ambiguity.
+  its own ambiguity. The confidences themselves are only heuristic evidence scores; they
+  have not been calibrated against error rates (section 3).
 
 **Failed**
 
@@ -655,7 +766,7 @@ extrapolated from these figures.
 ```
 gmv character research analyze PATH...                 the experimental measurements beside Phase A
 gmv character research corpus --table FILE [--gain-db -10 -20] [--pair ID ID]
-gmv character research stems --musdb DIR --mdb-drums DIR
+gmv character research stems --musdb DIR --mdb-drums DIR [--scales corpus.json]
 gmv character research robustness --table FILE --scales corpus.json
 ```
 
@@ -664,20 +775,27 @@ All take `--activity-model FILE` (for `vocal_*`), `--processes N` and `--out DIR
 as before.
 
 - `analyze` writes `research.md` (Phase A and the experimental values per recording, with
-  kind, confidence, how many blocks could state each, and warnings), one JSON per recording
+  kind, heuristic confidence, how many blocks could state each, and warnings), one JSON per recording
   (every value, block by block) and one SVG chart of six measurements over time.
 - `corpus` takes a table (`id`, `path`, `group`, optional `split`, optional `label:<name>`
   columns) and writes `corpus.md` and `corpus.json`: the split, every figure in sections 7
   to 10, and the level check. Reports and stored results use the ids only; file names
   appear nowhere in them.
-- `stems` and `robustness` write the tables of sections 6 and 11.
+- `stems` and `robustness` write the tables of sections 6 and 11. With `--scales` (the
+  `corpus.json` of a corpus run), `stems` also states the drum-removal differences in that
+  run's calibration standard deviations. `stems.json` keeps every song's paired values,
+  the songs left out and why.
 
 ## 15. Recommendation
 
 **Sonic Identity** (slow, per recording), candidates on this evidence:
 
 - the Phase A texture profile, unchanged;
-- **`harmonic_movement`** and **`key_clarity`**, on the medium and long windows;
+- **`harmonic_movement`** and **`key_clarity`**, on the medium and long windows. Key
+  clarity is the safer of the two. Harmonic movement reads systematically lower when drums
+  are loud (section 6), so before it is compared across very different productions it
+  needs either a correction for percussive content or a measurement made on the harmonic
+  part with the drums further suppressed; that is a precondition, not a detail;
 - **`on_beat_share`**;
 - a properly defined **low-band onset rate per second**, once tested on material not used
   to find it.
@@ -697,7 +815,9 @@ as before.
 duplicate Phase A.
 
 **Is there enough to begin Phase B?** For a visual response to broad sonic texture and to
-harmonic character, yes: those are measured, robust and understood. For the goal that
+harmonic character, yes: those are measured and understood, with one known bias (drums
+lower the measured harmonic movement) that has to be handled before harmonic movement is
+compared across very different productions. For the goal that
 started this, a visibly different response to the two reference tracks because one is
 aggressive and the other mellow, **no**. What separates them most for a listener is the
 voice, and GMV cannot measure it. The measured differences that do exist (harmony moving
