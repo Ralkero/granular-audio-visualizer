@@ -165,15 +165,21 @@ def write_session(folder, values):
     temporary.replace(path)
 
 
+# What a backup holds, when present: everything needed to rebuild the labelling window as
+# it was (the excerpt list, every answer, where it was left, the song titles and the owner's
+# reference vocalists). By name only: nothing else in the folder is copied, so no audio is.
+BACKED_UP = ("dataset.json", LABELS, SESSION, "titles.json", "reference_vocalists.txt")
+
+
 def backup(folder, target):
-    """A zip of everything the labelling keeps (dataset, answers, session). Returns its
-    path. The audio is not included: it stays where it is."""
+    """A zip of the files in ``BACKED_UP`` that exist in ``folder``; a missing one is left
+    out, not an error. Returns its path. The audio is not included: it stays where it is."""
     folder = Path(folder)
     target = Path(target)
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     path = target / f"vocal-labels-backup_{stamp}.zip" if target.is_dir() else target
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
-        for name in ("dataset.json", LABELS, SESSION):
+        for name in BACKED_UP:
             if (folder / name).is_file():
                 archive.write(folder / name, name)
     return path

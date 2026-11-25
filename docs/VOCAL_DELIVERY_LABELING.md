@@ -78,8 +78,11 @@ connected. Skip it; it will be there when the drive is back.
 files and say who the artist is. Ten-second excerpts are taken from them and mixed into the
 list. Your files are only read, never copied or changed.
 
-**Back up your answers:** **Save a backup copy…** writes a zip of the excerpt list and your
-answers into a folder you choose.
+**Back up your answers:** **Save a backup copy…** writes a zip into a folder you choose.
+It holds everything needed to bring the window back exactly as it was: the excerpt list,
+every answer with its history, where you left off, the song titles and your reference
+vocalists (the last two only if they exist). It never holds audio: your music stays where
+it is.
 
 **Where your answers are kept:** only on this computer, in
 `~/granular-audio-visualizer/.claude/worktrees/research-vocal-delivery-labeling/local-evidence/sonic-character/vocal-labeling/`.
@@ -154,7 +157,12 @@ In `local-evidence/sonic-character/vocal-labeling/` (ignored by Git):
 | `titles.json` | Each recording's song title and where it came from |
 | `reference_vocalists.txt` | The owner's reference vocalists, shown in the window's guide |
 | `session.json` | Which excerpt was open, and the two options |
-| `labelling.lock` | Present while the window is open, so two windows cannot write at once |
+| `labelling.lock` | Present while the window is open, so two windows cannot write at once (never backed up) |
+
+A backup (**Save a backup copy…**) is a zip of exactly these files when they exist:
+`dataset.json`, `labels.jsonl`, `session.json`, `titles.json` and
+`reference_vocalists.txt`. They are taken by name, so nothing else in the folder (no
+audio, no lock) is ever copied; a missing optional file is simply left out.
 
 Once anything has been labelled, `prepare-labels` refuses to run again in that folder: the
 split and the excerpts are fixed. The only change allowed afterwards is adding recordings,
@@ -289,6 +297,32 @@ GMV's existing analysis cannot reliably tell from a full mix whether a voice is 
   answers or the music suggests a voice, to waste fewer of them on instrumental passages.
 - **The held-out side** (22 answered) can only show whether something works on unseen
   artists. It cannot measure per-class accuracy for the rare classes.
+
+## Development audit (2026-11-25)
+
+Checked again from the files themselves, reading only development answers. The answers
+file was read line by line, and a held-out line was never decoded beyond whether it was an
+answer or a "No vocals". Counts only:
+
+| Answer | Excerpts | Different artists | Different recordings | Largest share from one artist |
+|---|---:|---:|---:|---:|
+| Cleans | 26 | 15 | 22 | 12% |
+| Low Screams | 5 | 4 | 4 | 40% |
+| High Screams | 3 | 2 | 3 | 67% |
+| Gutturals | 2 | 1 | 2 | 100% |
+| Sing-Screams | 0 | 0 | 0 | – |
+
+- **Voice and silence.** 36 development excerpts have a voice and 31 are "No vocals".
+  Almost all the silent ones come from soundtrack and instrumental artists (23 of their 24
+  excerpts) rather than bands (8 of 43).
+- **No artist dominates overall:** at most 3 excerpts per artist and 2 per recording, and
+  no artist above 8% of the voice answers. But every harsh answer comes from six artists,
+  and both Gutturals from one.
+- **Before a classifier is worth trying,** each answer should have about 20 development
+  excerpts from at least 6 different vocalists; only Cleans does today.
+- **A private candidate list** of recordings from development-side artists, for the next
+  batch, is kept with the other local evidence and is not in Git. It names recordings to
+  listen to, never labels.
 
 ## Validation
 

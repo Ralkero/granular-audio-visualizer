@@ -885,3 +885,60 @@ def test_the_export_carries_the_scheme_and_any_earlier_answer(labelling):
     rows = {r["excerpt"]: r for r in store.export(found, labels.state())}
     assert rows[first]["label"] is None and rows[first]["earlier_label"] == "shout" and rows[first]["earlier_scheme"] == 1
     assert rows[second]["label"] == "gutturals" and rows[second]["scheme"] == 2
+
+
+# -- backups --------------------------------------------------------------------------------
+
+
+def backed_up(archive):
+    import zipfile
+
+    with zipfile.ZipFile(archive) as zipped:
+        assert zipped.testzip() is None
+        return {name: zipped.read(name) for name in zipped.namelist()}
+
+
+def test_a_backup_holds_the_answers_titles_and_reference_guide(corpus, tmp_path):
+    from gmv.character.research.labeling import titles
+
+    folder = tmp_path / "labels"
+    found = prepared_dataset(corpus, folder)
+    labels = store.Labels(folder)
+    labels.label(found["order"][0], "cleans")
+    labels.skip(found["order"][1], "no_vocals")
+    store.write_session(folder, {"current": found["order"][1]})
+    titles.write(folder, {k: {"title": "A Title", "from": "music inventory"} for k in found["recordings"]})
+    (folder / "reference_vocalists.txt").write_text("Example Band: example singer\n", encoding="utf-8")
+    # Things that must never go into a backup: audio, and anything not on the list.
+    sf.write(folder / "stray excerpt.wav", tone(1), RATE)
+    (folder / "stray.mp3").write_bytes(b"ID3 not really audio")
+    (folder / "labelling.lock").write_text("123")
+    contents = backed_up(store.backup(folder, tmp_path))
+    assert set(contents) == set(store.BACKED_UP)
+    for name in store.BACKED_UP:
+        assert contents[name] == (folder / name).read_bytes(), name  # exact copies
+    assert json.loads(contents["dataset.json"])["order"] == found["order"]
+    assert [json.loads(line)["event"] for line in contents[store.LABELS].decode().splitlines()] == ["label", "skip"]
+    assert not any(name.lower().endswith(data.AUDIO_SUFFIXES) for name in contents)
+
+
+@pytest.mark.parametrize("absent", ["titles.json", "reference_vocalists.txt", "both"])
+def test_a_backup_is_still_made_without_the_optional_files(corpus, tmp_path, absent):
+    from gmv.character.research.labeling import titles
+
+    folder = tmp_path / "labels"
+    found = prepared_dataset(corpus, folder)
+    store.Labels(folder).label(found["order"][0], "gutturals")
+    if absent != "titles.json":
+        titles.write(folder, {})
+    if absent != "reference_vocalists.txt":
+        (folder / "reference_vocalists.txt").write_text("x\n", encoding="utf-8")
+    if absent == "both":
+        for name in ("titles.json", "reference_vocalists.txt"):
+            (folder / name).unlink(missing_ok=True)
+    archive = store.backup(folder, tmp_path / "copy.zip")
+    contents = backed_up(archive)
+    assert {"dataset.json", store.LABELS} <= set(contents)
+    missing = {"titles.json", "reference_vocalists.txt"} if absent == "both" else {absent}
+    assert not missing & set(contents)
+    assert set(contents) <= set(store.BACKED_UP)
