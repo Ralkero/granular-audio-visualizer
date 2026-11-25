@@ -45,10 +45,17 @@ def add_parser(commands):
         default=1,
         help="Recordings analysed at the same time (default: one)",
     )
+    from .research import cli as research_cli
+
+    research_cli.add_parser(sub)
     return parser
 
 
 def run(args):
+    if getattr(args, "character_command", None) == "research":
+        from .research import cli as research_cli
+
+        return research_cli.run(args)
     from .diagnose import run as analyse
 
     paths = [Path(p) for p in args.paths]
