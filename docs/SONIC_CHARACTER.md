@@ -265,12 +265,12 @@ The collection is mostly metal, metalcore and rock, with pop-punk, classic rock,
 quiet songs and ambient or orchestral game soundtracks. Nearly all the files are MP3.
 
 **The two reference tracks of the brief.** Reference track A (the dense metalcore track)
-was found in the music folder the registered corpus points to and was analysed. Reference
-track B (the mellow, atmospheric one) is not in the registered corpus and not in that
-folder; no other place was searched, so **it has not been analysed** and nothing here is
-claimed about it. The tool takes its path as soon as the owner supplies one. The
-comparison the brief asks for (dense and heavy against mellow and atmospheric) is made
-below with the quiet and ambient recordings that were in the samples.
+was found in the music folder the registered corpus points to. Reference track B (described
+in the brief as mellow and atmospheric) was not reachable at first; the owner then supplied
+its path and it was analysed with the definitions already fixed. Neither track was used to
+set an anchor after B was seen. The result is under
+[The two reference tracks](#the-two-reference-tracks), and it is the most important
+limitation found in this phase.
 
 ### Sonic Character separates recordings; intensity does not
 
@@ -326,13 +326,31 @@ Found automatically by the report (`comparison` in `summary.json`), then checked
 Over all 1,101 pairs of sections inside the same recording, the difference in intensity
 and the difference in character correlate at 0.39: related, far from the same thing.
 
-### Reference track A
+### The two reference tracks
 
-171 s, 170 s of music. Whole recording: force 0.88, brightness 0.74, pace 0.42, regularity
-0.40, roughness 0.70, density 0.91, dynamics 0.30, every confidence 1.00. Mean intensity
-0.54 (0.28 to 0.64 between its 5th and 95th percentile).
+**The profile does not tell these two recordings apart as the brief expected.** Taken as
+whole recordings they measure as two similar things: dense, forceful, loud-mastered modern
+productions with a heavy low end.
 
-| Section | force | brightness | pace | regularity | roughness | density | dynamics | intensity |
+| | force | brightness | pace | regularity | roughness | density | dynamics | intensity (mean) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| A (dense metalcore), 171 s | 0.88 | 0.74 | 0.42 | 0.40 | 0.70 | 0.91 | 0.30 | 0.54 |
+| B (described as mellow, atmospheric), 257 s | 0.81 | 0.63 | 0.40 | 0.42 | 0.64 | 0.81 | 0.49 | 0.80 |
+
+Every confidence is 1.00 for both. The profiles differ by 0.08 on average per dimension;
+two recordings from opposite ends of the samples differ by 0.6 to 0.8. Among the 67
+recordings of the samples, B's force is above 64% of them and its density above 40%: it
+sits with the rock and metal recordings, far from the ambient and quiet ones.
+
+What the measurements do see: B is somewhat darker (centroid 617 Hz against 739 Hz), a
+little more tonal (in-band contrast 13.3 dB against 12.0), slightly less filled (0.86 of
+the spectrum against 0.91) and more dynamic (level range 11.8 dB against 8.1). All in the
+direction one would expect, none of them large. `MusicalIntensity` goes the other way: B
+averages 0.80 and A 0.54.
+
+Where they do differ clearly is in how they evolve:
+
+| A, section | force | brightness | pace | regularity | roughness | density | dynamics | intensity |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | 0–24 s | 0.85 | 0.92 | 0.77 | 0.42 | 0.88 | 0.79 | 0.23 | 0.56 |
 | 24–85 s | 0.92 | 0.80 | 0.55 | 0.59 | 0.80 | 0.97 | 0.01 | 0.60 |
@@ -340,10 +358,39 @@ and the difference in character correlate at 0.39: related, far from the same th
 | 104–155 s | 0.86 | 0.80 | 0.37 | 0.27 | 0.70 | 0.93 | 0.16 | 0.55 |
 | 155–171 s (the ending) | 0.00 | 0.12 | 0.00 | 0.39 | 0.12 | 0.48 | 0.70 | 0.27 |
 
-Through its four main sections force stays between 0.76 and 0.92 and density between 0.79
-and 0.97 while pace and regularity move a great deal: a recognisable character with
-passages inside it. Its low pace (0.42, 2.7 onsets a second) is the masking described in
-the limitations, not a slow rhythm.
+| B, section | force | brightness | pace | regularity | roughness | density | dynamics | intensity |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0–27 s (the opening) | 0.78 | 0.00 | 0.39 | 0.11 | 0.60 | 0.12 | 1.00 | 0.79 |
+| 27–127 s | 0.82 | 0.82 | 0.49 | 0.48 | 0.73 | 0.94 | 0.05 | 0.88 |
+| 127–140 s | 0.22 | 0.88 | 0.00 | 0.29 | 0.30 | 0.60 | 0.49 | 0.54 |
+| 140–177 s | 0.85 | 0.84 | 0.42 | 0.55 | 0.76 | 0.96 | 0.00 | 0.88 |
+| 177–200 s | 0.76 | 0.52 | 0.52 | 0.59 | 0.45 | 0.67 | 0.11 | 0.78 |
+| 200–212 s | 0.81 | 0.94 | 0.32 | 0.21 | 0.64 | 0.70 | 0.39 | 0.77 |
+| 212–227 s | 0.94 | 0.69 | 0.60 | 0.60 | 0.88 | 0.87 | 0.03 | 0.90 |
+| 227–244 s | 0.58 | 0.62 | 0.00 | 0.30 | 0.54 | 0.91 | 0.32 | 0.76 |
+| 244–257 s (the ending) | 0.00 | 0.39 | 0.17 | 0.27 | 0.24 | 0.30 | 1.00 | 0.19 |
+
+A holds one character through its four main sections (force 0.76 to 0.92, density 0.79 to
+0.97). B opens dark and sparse (brightness 0.00, density 0.12), drops out twice, and moves
+between dense and open passages: nine sections against five, and far wider swings. Its
+long main passages (27–127 s, 140–177 s) measure almost exactly like A's.
+
+What this means:
+
+- Whatever makes B feel mellow to a listener beside A, it is mostly **not in these
+  measurements**. Likely candidates are things GMV does not measure at all: how the voice
+  is used (sung against screamed), harmony and melody, the feel of the tempo, the kind of
+  distortion. Two recordings mixed and mastered in the same modern, dense, bass-heavy way
+  look alike to a spectrum-and-level analysis whatever is played and sung on them.
+- The profile does separate broad kinds of sound (ambient from metal, sparse from dense,
+  dark from bright), as the samples show. It does not yet separate two dense modern
+  productions by their musical personality, which is the case the phase was started for.
+- The evolution over time (the section tables) carries more of the difference than the
+  overall values do.
+- Nothing was retuned to pull the two apart. Doing so on two recordings would have
+  produced a difference without knowing whether it meant anything.
+
+Analysed 20 dB quieter, neither track moved by more than 0.015 on any dimension.
 
 ### Which dimensions are redundant
 
@@ -421,6 +468,11 @@ evolution, value for value, as analysing the file directly (8,559 frames).
 
 ## Limitations and confounders
 
+- **Two dense modern productions with different musical personalities measure alike.**
+  This is the case the phase was started for, and the two reference tracks show it
+  ([above](#the-two-reference-tracks)): 0.08 apart on average. Vocal style, harmony,
+  melody and the feel of the tempo are not measured by anything GMV has. Closing this gap
+  needs new measurements, not new anchors.
 - **Brightness, roughness, density and force go together across recordings.** Between
   recordings they are close to one axis (correlations of 0.6 to 0.9):
   in this music, what is dense is also bright, noise-like and forceful. They are computed
@@ -492,6 +544,10 @@ attribution, `MusicalIntensity`, the message or session schema, or the packaging
 
 For Phase B:
 
+0. **Decide first whether the profile is enough.** It did not separate the two reference
+   tracks. Before any visual is tied to it, either accept that it describes broad kinds of
+   sound and how a recording evolves, or look for measurements of what it misses (the
+   voice, harmony, the feel of the tempo) and test them on pairs like this one.
 1. **Run it live.** Add a `SonicCharacter` to `VisualState` beside `MusicalIntensity`
    (`consume` already receives every frame and onset event), behind the same segment
    handling, and measure the frame cost in the running application.
