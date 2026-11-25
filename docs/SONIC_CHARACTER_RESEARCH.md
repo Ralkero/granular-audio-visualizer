@@ -10,7 +10,10 @@ check now compares each song's two values directly instead of only their rank or
 finds a consistent bias the first version missed (section 6); a pairing check now excludes
 one MUSDB song whose stems are not its mixture's, which moved a few MUSDB figures in the
 second decimal; and every confidence is stated to be a heuristic score of signal support,
-not a calibrated probability (section 3).
+not a calibrated probability (section 3). A second correction gave tied values their
+average rank in every Spearman rank correlation (the first implementation broke ties by
+position); re-run on the same inputs, two rank correlations moved in the fifth decimal and
+no figure in this report changed.
 
 Short version:
 

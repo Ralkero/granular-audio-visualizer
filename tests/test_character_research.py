@@ -618,3 +618,73 @@ def test_a_mixture_is_only_compared_with_its_own_stems(tmp_path):
     assert stems.stem_sum_db(np.zeros((100, 2)), parts) is None
     assert stems.stem_sum_db(sum(parts), [parts[0][:50], *parts[1:]]) is None
 
+
+
+# -- Spearman rank correlation ----------------------------------------------------------
+
+
+def test_tied_values_share_their_average_rank():
+    assert stems.average_ranks([10, 20, 20, 30]).tolist() == [1.0, 2.5, 2.5, 4.0]
+    assert stems.average_ranks([3, 1, 2, 2, 2]).tolist() == [5.0, 1.0, 3.0, 3.0, 3.0]
+    assert stems.average_ranks([7.0] * 4).tolist() == [2.5] * 4
+    # With ties, ordinal ranks (each tie broken by position) give a different answer.
+    a = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3]
+    b = [4, 3, 2, 1, 8, 7, 6, 5, 10, 9]
+    rho, count = stems.spearman(a, b)
+    x, y = stems.average_ranks(a), stems.average_ranks(b)
+    assert count == 10 and rho == pytest.approx(np.corrcoef(x, y)[0, 1])
+    ordinal = np.corrcoef(np.argsort(np.argsort(a)), np.argsort(np.argsort(b)))[0, 1]
+    assert abs(rho - ordinal) > 0.05
+
+
+def test_spearman_matches_the_textbook_definition_with_repeated_values():
+    from scipy.stats import spearmanr
+
+    rng = np.random.default_rng(21)
+    for _ in range(200):
+        size = int(rng.integers(8, 30))
+        a = rng.integers(0, 4, size).astype(float)  # few distinct values: many ties
+        b = rng.integers(0, 5, size).astype(float)
+        rho, count = stems.spearman(list(a), list(b))
+        assert count == size
+        if a.std() == 0 or b.std() == 0:
+            assert rho is None
+        else:
+            assert rho == pytest.approx(spearmanr(a, b).statistic, abs=1e-12)
+
+
+def test_a_perfectly_negative_relationship_with_ties_is_minus_one():
+    a = [1, 1, 2, 2, 3, 3, 4, 4, 5]
+    b = [9, 9, 7, 7, 5, 5, 2, 2, 0]
+    assert stems.spearman(a, b) == (-1.0, 9)
+    assert stems.spearman(b, a) == (-1.0, 9)
+    assert stems.spearman(a, [-v for v in a]) == (-1.0, 9)
+
+
+def test_a_column_without_variation_has_no_rank_correlation():
+    varied = list(range(10))
+    assert stems.spearman([0.5] * 10, varied) == (None, 10)
+    assert stems.spearman(varied, [3] * 10) == (None, 10)
+    # Constant among the pairs that are used, though not among all values given.
+    assert stems.spearman([1.0] * 9 + [None], [*range(9), 99]) == (None, 9)
+
+
+def test_missing_and_invalid_observations_drop_their_pair():
+    a = [0, 1, 2, 3, 4, 5, 6, 7, None, float("nan"), 8, "x", float("inf"), 9]
+    b = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, None, 3, 4, -float("inf")]
+    assert stems.spearman(a, b) == (pytest.approx(1.0), 8)
+    assert stems.spearman([1, 2, 3, None] * 2, [1, 2, 3, 4] * 2) == (None, 6)  # fewer than 8
+    assert stems.spearman([1, 2, 3, 4, 5, 6, 7], [1, 2, 3, 4, 5, 6, 7], least=7)[0] == pytest.approx(1.0)
+    assert stems.spearman([], []) == (None, 0)
+    with pytest.raises(ValueError):
+        stems.spearman([1, 2], [1])  # columns of different lengths are a mistake, not missing data
+
+
+def test_spearman_is_deterministic_and_does_not_depend_on_the_order_of_pairs():
+    rng = np.random.default_rng(5)
+    a = rng.integers(0, 6, 40).astype(float).tolist()
+    b = (np.array(a) + rng.integers(0, 3, 40)).tolist()
+    first = stems.spearman(a, b)
+    assert stems.spearman(a, b) == first
+    order = rng.permutation(40)
+    assert stems.spearman([a[i] for i in order], [b[i] for i in order])[0] == pytest.approx(first[0], abs=1e-12)

@@ -197,12 +197,40 @@ def mdb_track(job):
     return out
 
 
-def spearman(a, b):
-    pairs = [(x, y) for x, y in zip(a, b, strict=True) if x is not None and y is not None and np.isfinite([x, y]).all()]
-    if len(pairs) < 8:
+def average_ranks(values):
+    """Ranks 1..n of ``values``, tied values sharing the mean of the ranks they span
+    (so 10, 20, 20, 30 rank 1, 2.5, 2.5, 4). The same values give the same ranks whatever
+    their order."""
+    values = np.asarray(values, dtype=float)
+    _, inverse, counts = np.unique(values, return_inverse=True, return_counts=True)
+    last = np.cumsum(counts)  # the highest rank each distinct value spans
+    return ((last - counts + 1 + last) / 2.0)[inverse]
+
+
+def spearman(a, b, least=8):
+    """Spearman's rank correlation of paired values, with tied values given their average
+    rank: the Pearson correlation of the two columns' average ranks.
+
+    A pair is used only when both values are numbers and finite; a missing (None),
+    non-numeric or non-finite value drops its pair. Returns (correlation, pairs used); the
+    correlation is None with fewer than ``least`` pairs, or when either column has no
+    variation among the pairs used (every value equal), where it is undefined."""
+    pairs = []
+    for x, y in zip(a, b, strict=True):
+        try:
+            x, y = float(x), float(y)
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(x) and np.isfinite(y):
+            pairs.append((x, y))
+    if len(pairs) < least:
         return None, len(pairs)
-    x, y = (np.argsort(np.argsort(column)).astype(float) for column in zip(*pairs, strict=True))
-    return float(np.corrcoef(x, y)[0, 1]), len(pairs)
+    x, y = (average_ranks(column) for column in zip(*pairs, strict=True))
+    x, y = x - x.mean(), y - y.mean()
+    scale = float(np.sqrt((x @ x) * (y @ y)))
+    if scale == 0.0:
+        return None, len(pairs)
+    return float(min(1.0, max(-1.0, (x @ y) / scale))), len(pairs)
 
 
 def paired(tracks, key, first, second, scale=None):
