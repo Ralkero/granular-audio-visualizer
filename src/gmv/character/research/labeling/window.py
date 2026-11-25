@@ -50,7 +50,12 @@ SAVED_FOR_MS = 4000
 UNAVAILABLE = (
     "This excerpt cannot be played right now: its recording is not available (for "
     "example, the external drive is not connected, or the file was moved or changed). "
-    "Skip it and come back to it later."
+    "The answers and No vocals need the excerpt to be heard, so they are switched off. "
+    "Use Skip / review later and come back to it."
+)
+NOT_HEARD = (
+    "No vocals was not saved: this excerpt cannot be played right now, and No vocals needs "
+    "it to be heard. Use Skip / review later and come back to it."
 )
 HELP = (
     "Listen to the excerpt, then click the one answer that describes the vocal technique "
@@ -420,7 +425,9 @@ class LabelWindow(QMainWindow):
             self.available = True
         except Exception:
             self.audio_problem.setText(UNAVAILABLE)
-        for button in (*self.answer_buttons.values(), self.play_button, self.restart_button):
+        # Every decision about what is heard needs the excerpt to be heard: the five answers
+        # and No vocals. Skip / review later stays available.
+        for button in (*self.answer_buttons.values(), self.no_vocals_button, self.play_button, self.restart_button):
             button.setEnabled(self.available)
         store.write_session(
             self.folder,
@@ -472,11 +479,22 @@ class LabelWindow(QMainWindow):
             self.next_timer.start()
 
     def skip(self, reason="later"):
+        """Leave the current excerpt without an answer, for a reason: "no_vocals" (heard, and
+        there is no voice) or "later" (come back to it). While the recording cannot be played,
+        No vocals is refused here as well as on its button and key, since nobody can have
+        heard the excerpt, and review later does not replace a No vocals decision already
+        made, so a disconnected drive never undoes what was heard."""
         if self.current is None:
+            return
+        if reason == "no_vocals" and not self.available:
+            self.flash(NOT_HEARD)
             return
         self.save_note()
         current = self.labels.state().get(self.current, {})
-        if not current.get("label") and not (current.get("skipped") and current.get("skip_reason") == reason):
+        decided = current.get("skipped") and current.get("skip_reason") == "no_vocals"
+        if not self.available and decided:
+            self.flash(f"{self.current} stays marked No vocals: it cannot be played right now to check it again.")
+        elif not current.get("label") and not (current.get("skipped") and current.get("skip_reason") == reason):
             self.labels.skip(self.current, reason)
             if reason == "no_vocals":
                 self.flash(f"Saved ✓  {self.current}: no vocals (left without a vocal answer).")

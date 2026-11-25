@@ -73,7 +73,10 @@ The window says how many are waiting ("Earlier answers to redo"). Click them in 
 redo them. Nothing was deleted.
 
 **If an excerpt cannot be played** (the window says so in red), its drive is probably not
-connected. Skip it; it will be there when the drive is back.
+connected. The five answers and **No vocals** are switched off, by button and by key,
+because both need the excerpt to be heard. Use **Skip / review later**; the excerpt will be
+there when the drive is back. An answer or No vocals mark you gave earlier stays as it was:
+review later does not replace it while the excerpt cannot be played.
 
 **Add more music** (optional): **Add recordings…** lets you choose more of your own audio
 files and say who the artist is. Ten-second excerpts are taken from them and mixed into the
@@ -367,6 +370,16 @@ decision:
 - the earlier-answers reminder only counts excerpts still to do.
 
 Nothing in the saved answers changed: this was the window's arithmetic.
+
+**No vocals needs the excerpt to be heard (same day).** When a recording could not be
+played, the five answers were switched off but **No vocals** and its N key still worked, so
+an excerpt could be marked No vocals without being heard. Now No vocals is refused while
+the excerpt cannot be played: its button is off, the N key does nothing, and the window's
+own action refuses it too. **Skip / review later** still works, and an earlier answer or No
+vocals mark is never changed because the drive is disconnected. With playback available
+nothing changed. No saved answer was changed by the fix. The answers file does not record
+whether an excerpt could be played when it was marked, so whether any earlier No vocals
+mark was given without playback cannot be checked after the fact.
 
 ## Validation
 

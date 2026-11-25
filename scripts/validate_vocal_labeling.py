@@ -201,6 +201,32 @@ def main(argv=None):
         checks["answers_kept"] = state[first]["label"] == "high_screams" and state[second]["label"] == "sing_screams"
         checks["title_after_reopen"] = again.song.text().startswith("\u266a  ") and "not known" not in again.song.text()
         checks["counts_after_reopen"] = "Answered 2" in again.counts.text()
+
+        # An excerpt whose recording cannot be played, made so in this window's memory only
+        # (the files and the temporary copy are untouched): No vocals and the five answers
+        # are off, the N key saves nothing, and review later still works.
+        last = again.order[-1]
+        recording = again.excerpts[last]["recording"]
+        again.dataset["recordings"][recording] = dict(
+            again.dataset["recordings"][recording], path=str(work / "not-connected.wav")
+        )
+        again.open(last)
+        again.activateWindow()
+        pump(app, 0.3)
+        saved = (work / store.LABELS).read_text(encoding="utf-8")
+        checks["unavailable_no_vocals_off"] = (
+            not again.available
+            and not again.no_vocals_button.isEnabled()
+            and not any(b.isEnabled() for b in again.answer_buttons.values())
+            and again.skip_button.isEnabled()
+        )
+        QTest.keyClick(again, Qt.Key.Key_N)
+        QTest.keyClick(again, Qt.Key.Key_1)
+        checks["unavailable_keys_save_nothing"] = (
+            (work / store.LABELS).read_text(encoding="utf-8") == saved and again.current == last
+        )
+        QTest.mouseClick(again.skip_button, Qt.MouseButton.LeftButton)
+        checks["unavailable_review_later_saved"] = store.Labels(work).state().get(last, {}).get("skip_reason") == "later"
         again.close()
         pump(app, 0.3)
     finally:

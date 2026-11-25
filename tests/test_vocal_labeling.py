@@ -994,3 +994,120 @@ def test_the_window_does_not_ask_again_about_excerpts_marked_no_vocals(labelling
     assert "Still to do 0" in window.counts.text()
     window.next_unlabelled()
     assert "All done" in window.saved.text()
+
+
+@pytest.fixture
+def missing_first(labelling):
+    """The first excerpt's recording is moved away, as when the drive is disconnected."""
+    folder, found, open_window = labelling
+    first = found["order"][0]
+    excerpt = next(e for e in found["excerpts"] if e["id"] == first)
+    path = found["recordings"][excerpt["recording"]]["path"]
+    os.rename(path, str(folder / "moved away.wav"))
+    yield folder, found, open_window, first
+    os.rename(str(folder / "moved away.wav"), path)
+
+
+def events_in(folder):
+    path = folder / store.LABELS
+    return path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+
+
+def test_no_vocals_is_switched_off_when_the_recording_cannot_be_played(missing_first):
+    folder, found, open_window, first = missing_first
+    window = open_window()
+    assert window.current == first and not window.available
+    assert not window.no_vocals_button.isEnabled()
+    assert not any(b.isEnabled() for b in window.answer_buttons.values())
+    assert window.skip_button.isEnabled()
+    assert "No vocals need the excerpt to be heard" in window.audio_problem.text()
+    window.open(found["order"][1])  # a playable excerpt: everything is back
+    assert window.available and window.no_vocals_button.isEnabled()
+    assert all(b.isEnabled() for b in window.answer_buttons.values())
+
+
+def test_the_n_key_cannot_mark_no_vocals_when_the_recording_cannot_be_played(missing_first, app):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    folder, found, open_window, first = missing_first
+    window = open_window()
+    window.show()
+    window.activateWindow()
+    assert QTest.qWaitForWindowActive(window)
+    QTest.keyClick(window, Qt.Key.Key_N)
+    assert events_in(folder) == [] and window.current == first
+    assert "No vocals was not saved" in window.saved.text()
+    for key in (Qt.Key.Key_1, Qt.Key.Key_2, Qt.Key.Key_3):
+        QTest.keyClick(window, key)
+    assert events_in(folder) == []
+
+
+def test_calling_no_vocals_directly_cannot_get_round_the_restriction(missing_first):
+    folder, found, open_window, first = missing_first
+    window = open_window()
+    window.skip("no_vocals")
+    window.no_vocals_button.click()  # a disabled button does nothing, but make sure
+    window.choose("cleans")
+    assert events_in(folder) == [] and first not in store.Labels(folder).state()
+    assert window.current == first  # it does not move on as if something was decided
+
+
+def test_review_later_still_works_when_the_recording_cannot_be_played(missing_first):
+    folder, found, open_window, first = missing_first
+    window = open_window()
+    window.skip_button.click()
+    state = store.Labels(folder).state()[first]
+    assert state["skipped"] and state["skip_reason"] == "later" and not state.get("label")
+    assert window.current != first  # moved on to the next excerpt still to do
+    window.open(first)
+    assert "Skipped: review later" in window.status.text()
+
+
+def test_decisions_already_saved_stay_when_the_recording_becomes_unavailable(labelling):
+    folder, found, open_window = labelling
+    first, second = found["order"][:2]
+    window = open_window()
+    window.skip("no_vocals")  # heard: playable
+    window.open(second)
+    window.choose("low_screams")
+    window.close()
+    before = events_in(folder)
+    for excerpt in (first, second):
+        entry = next(e for e in found["excerpts"] if e["id"] == excerpt)
+        path = found["recordings"][entry["recording"]]["path"]
+        if os.path.exists(path):
+            os.rename(path, path + ".away")
+    again = open_window()
+    again.open(first)
+    assert not again.available and "Done: marked No vocals" in again.status.text()
+    again.skip_button.click()  # review later does not undo a decision already made
+    again.open(first)
+    again.skip("no_vocals")
+    again.open(second)
+    again.skip("later")
+    assert events_in(folder) == before
+    state = store.Labels(folder).state()
+    assert state[first]["skip_reason"] == "no_vocals" and state[second]["label"] == "low_screams"
+
+
+def test_with_playback_available_every_action_works_as_before(labelling):
+    folder, found, open_window = labelling
+    window = open_window()
+    window.advance.setChecked(False)
+    first, second, third = found["order"][:3]
+    assert window.available and window.no_vocals_button.isEnabled() and window.skip_button.isEnabled()
+    window.no_vocals_button.click()
+    assert store.Labels(folder).state()[first]["skip_reason"] == "no_vocals"
+    assert window.current == second  # moves on, as before
+    window.choose("cleans")
+    window.open(third)
+    window.skip("later")
+    window.open(first)
+    window.choose("high_screams")  # a No vocals mark can still be replaced by an answer
+    window.open(third)
+    window.skip("no_vocals")  # and review later by No vocals
+    state = store.Labels(folder).state()
+    assert state[first]["label"] == "high_screams"
+    assert state[second]["label"] == "cleans"
+    assert state[third]["skip_reason"] == "no_vocals"
