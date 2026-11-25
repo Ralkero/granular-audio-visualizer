@@ -225,6 +225,71 @@ soundtracks and some rock and pop-punk; little else. Twelve held-out artists is 
 see whether a classifier works on artists it has not met; it is not enough to estimate
 per-class accuracy precisely, especially for whichever answers turn out to be rare.
 
+## Labelling results (the owner, 2026-11-24)
+
+Kind of evidence: **the owner's own listening**, in the labelling window on CachyOS with
+real playback. The answers stay on the owner's computer; only counts are given here.
+
+**Every excerpt has an answer or a skip.** Of 96 excerpts, 58 have one of the five answers
+and 38 were marked **No vocals**; none was left for review, and none is waiting for a
+redo. The save file has 103 entries and no damaged line.
+
+| | Development (27 artists) | Held out (12 artists) |
+|---|---:|---:|
+| Excerpts | 67 | 29 |
+| Answered | 36 | 22 |
+| No vocals | 31 | 7 |
+
+**Answers on the development side** (the only side whose answers have been looked at):
+
+| Cleans | High Screams | Low Screams | Gutturals | Sing-Screams |
+|---:|---:|---:|---:|---:|
+| 26 | 3 | 5 | 2 | 0 |
+
+The 36 answered development excerpts come from 19 of its 27 artists.
+
+**The held-out answers have deliberately not been read by answer.** Only whether each
+held-out excerpt was answered or marked No vocals was counted. Their answers stay unseen
+until a final evaluation, so nothing built later can be tuned to them, even by accident.
+
+**The seven answers given with the first choices** were all redone with the current ones:
+four received an answer and three were marked No vocals. They are still on record, and none
+was translated automatically.
+
+**How the labelling went.** The 96 current answers and skips were given in one sitting of
+about 15 minutes (13 minutes of it in steady work). The median time between two answers
+was 7.6 s, shorter than an excerpt (10 s), so many answers were given before the excerpt
+had finished. No answer was changed afterwards and no note was written.
+
+**What the existing vocal analysis was worth for choosing excerpts** (development side
+only). Excerpts were placed four ways, and the owner's answers show how often a voice was
+actually there:
+
+| Placement | With a voice | No vocals |
+|---|---:|---:|
+| likely vocal (the existing analysis expected a voice) | 9 | 6 |
+| even | 9 | 7 |
+| random | 10 | 8 |
+| likely instrumental (the analysis expected none) | 8 | 10 |
+
+The analysis's guesses hardly differ from even or random placement. This matches Phase A2:
+GMV's existing analysis cannot reliably tell from a full mix whether a voice is present.
+
+**What this means for the next step.**
+
+- **Two classes are usable on the development side; three are not.** Cleans (26) and Low
+  Screams (5) could start a development experiment. High Screams (3) and Gutturals (2) are
+  too few to learn or check anything, and there is no Sing-Screams example at all.
+- **Answers are skewed:** about three in four development answers are Cleans.
+- **Many excerpts had no voice:** 40% of all excerpts were instrumental, which spends
+  listening time on passages with no vocal delivery to label.
+- **Before any classifier, the dataset needs more harsh vocals.** Add recordings rich in
+  high screams, gutturals and sing-screams, through **Add recordings…**, which keeps each
+  artist's side fixed. A later round could also place excerpts only where the owner's own
+  answers or the music suggests a voice, to waste fewer of them on instrumental passages.
+- **The held-out side** (22 answered) can only show whether something works on unseen
+  artists. It cannot measure per-class accuracy for the rare classes.
+
 ## Validation
 
 - **Automated tests** (`tests/test_vocal_labeling.py`, 29, with generated audio and a
