@@ -50,7 +50,12 @@ def main(argv=None):
     from .evidence import cli as evidence_cli
 
     evidence_cli.add_parser(commands)
+    from .character import cli as character_cli
+
+    character_cli.add_parser(commands)
     args = parser.parse_args(argv)
+    if args.command == "character":
+        return character_cli.run(args)
     if args.command == "corpus":
         return corpus_cli.run(args)
     if args.command == "review":
