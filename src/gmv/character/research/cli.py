@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 DEFAULT_OUT = "local-evidence/sonic-character/research"
+DELIVERY_OUT = "local-evidence/sonic-character/vocal-delivery-classifier"
 
 
 def add_parser(sub):
@@ -39,6 +40,18 @@ def add_parser(sub):
     robust.add_argument("--scales", required=True, help="corpus.json of a corpus run, for the calibration scales")
     robust.add_argument("--every", type=int, default=5, help="Use every Nth evaluation recording")
     robust.add_argument("--seconds", type=float, default=90.0, help="Seconds of each recording")
+    delivery = commands.add_parser(
+        "delivery",
+        help="Phase A4: can the audio tell Cleans, High Screams and Low Screams apart (owner-labelled excerpts, unseen artists)",
+        description="Research experiment, offline. Uses development excerpts only; held-out answers are never read "
+        "by answer. Reports go to the ignored local-evidence folder.",
+    )
+    delivery.add_argument("--folder", help="The labelling folder (default: local-evidence/sonic-character/vocal-labeling)")
+    delivery.add_argument("--note", help="Private note of known vocalist overlap (default: ../expansion-audit/leakage-watch.md beside the folder)")
+    delivery.add_argument("--inventory", help="Music inventory CSV, to link artist groups that share a credited person (optional)")
+    delivery.add_argument("--out", default=DELIVERY_OUT)
+    delivery.add_argument("--no-cache", action="store_true", help="Measure every excerpt again instead of reading the feature cache")
+    delivery.add_argument("--processes", type=int, default=1)
     for command in (analyze, corpus, stems, robust):
         command.add_argument("--out", default=DEFAULT_OUT)
         command.add_argument("--activity-model", help="Weights file of the activity model (gmv.activity), for the vocal_* values")
@@ -88,7 +101,31 @@ def write(path, value):
     path.write_text(json.dumps(value, indent=1, allow_nan=False), encoding="utf-8")
 
 
+def run_delivery(args):
+    from ... import paths
+    from .delivery import data
+    from .delivery import run as experiment
+    from .labeling.cli import default_folder
+
+    folder = Path(args.folder) if args.folder else default_folder()
+    out = Path(args.out)
+    if not out.is_absolute() and paths.checkout():
+        out = paths.REPOSITORY / out
+
+    def progress(number, total):
+        if number == total or number % 10 == 0:
+            print(f"  measured {number} of {total}", flush=True)
+
+    try:
+        experiment.run(folder, out, note=args.note, inventory=args.inventory, use_cache=not args.no_cache,
+                       processes=args.processes, progress=progress, say=lambda text: print(text, flush=True))
+    except data.DataError as exc:
+        raise SystemExit(f"Stopped: {exc}") from None
+
+
 def run(args):
+    if args.research_command == "delivery":
+        return run_delivery(args)
     from . import report
     from ..diagnose import label, safe
 
