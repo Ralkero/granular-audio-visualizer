@@ -118,3 +118,73 @@ Details: [VOCAL_DELIVERY_RECOGNITION.md](VOCAL_DELIVERY_RECOGNITION.md). Researc
     - the output accounts for all 69 excerpts, and the per-group totals agree with the confusion matrix;
     - no fine answer (High/Low, Guttural/Sing-Scream) was stored or reported;
     - the per-excerpt results stay in the ignored local evidence folder.
+
+## 2026-11-26 addendum: Sonic Character, Phase A5.1 (vocal presence annotation foundation)
+
+Details: [VOCAL_PRESENCE_ANNOTATION.md](VOCAL_PRESENCE_ANNOTATION.md). Research tooling; no model trained or evaluated.
+
+- **Automated tests:** `tests/test_vocal_presence.py`, 32, all passing; generated audio and generated projects only, never the owner's answer files. They cover:
+  - schema: bounds and order, union, uncertain masking, statuses, explicit negatives, tags, revisions, the hash chain, crash recovery;
+  - identity and registry: spellings, aliases, featured credits, duplicates, MusicBrainz IDs, generic credits, no movement, conflicts, links to consumed material, freeze refusal;
+  - preparation: no held-out line decoded, A3 files byte-identical, deterministic and stable manifests;
+  - protection: fingerprints, registry consistency, rejected assignments, development loaders unable to read final-test labels (guarded file reads), a final-test manifest unchanged by development changes, broken histories refused;
+  - the window: marking at the position, seeking, listening around boundaries, edits, resume, completion guard, titles, backup and restore, unplayable excerpts, the lock, the A3 project untouched, the status command.
+- **Real machine** (CachyOS, KDE Wayland, PipeWire, window on the HP Omen; generated audio): `scripts/validate_vocal_presence.py`, 19 of 19 checks:
+  - playback stream created, position in real time (1.508 s over 1.508 s);
+  - pause ends the stream and holds the position; exact paused seeks and marks; keyboard marking;
+  - "listen around" stopped at 2.52 s for a 2.5 s target;
+  - completion, backup, no stream after closing, resume, marks kept, history intact.
+- **Real data (private):** the presence project was prepared from the A3 project and inventory.
+  - The A3 files were unchanged, and no held-out answer was decoded.
+  - New recordings' checksums were verified.
+  - The final-test freeze was refused: 7 never-used artist groups against 20 required.
+- **Full suite:** 787 passed, 3 skipped, 4 failed. The failures are the three known `tests/test_remote.py` failures (Linux resource tracker; the fix is on a separate branch) and the known intermittent replay test (its fix is PR #1, not in this stack). No new failure. `ruff check` clean. After the full run, a privacy correction removed local-path defaults from the `prepare` command (now a required `--inventory` and an optional `--map`); `tests/test_vocal_presence.py` was run again afterwards: 32 passed.
+- **Owner's use** (real hardware, owner-evaluated, 2026-11-26), read from the saved history without changing it:
+  - **Progress:** all 171 development excerpts completed (89 with a voice, 82 without), from 20 artist groups and 153 recordings.
+  - **Integrity:** 289 events, chain intact, no damaged line, none rejected, project check passing, A3 answer file unchanged.
+  - **Agreement with A3:** 82 of the 84 A3 voice excerpts have a voice marked; 2 (one Low Screams, one Cleans) are marked no voice, so those answers disagree. All 7 A3 No-vocals excerpts are negatives.
+  - **Candidates:** 7 of 80 instrumental candidates had a voice (song intros 3 of 14, rhythm guitar 2 of 20, guitar solo 1 of 20, orchestral 1 of 10, soundtrack 0 of 16).
+  - **Audio:** no voice mark over near-silence.
+  - **How negatives were judged:** playback is not recorded. On 50 of the 82 negatives, Complete came sooner than the excerpt could play in full; the owner confirmed such answers rest on their knowledge of the recordings (all-instrumental bands, songs known to have none, interludes).
+  - **Not reported:** the owner gave no separate feedback on position sync or boundary placement. No boundary was adjusted after marking.
+- **Validation partition** (real hardware, owner-evaluated, 2026-11-26), read-only check:
+  - **Progress:** all 28 excerpts completed (6 with a voice, 22 without), from 6 artist groups and 25 recordings. A voice fills 19% of the time.
+  - **Marks:** 6 voice stretches, no uncertain stretch; median coverage per voiced excerpt 98%.
+  - **Integrity:** 34 events; the chain is intact in both the loader and an independent recomputation, and no line is damaged or rejected.
+  - **Agreement with A3:** 5 of 6 A3 voice excerpts have a voice marked; 1 Cleans is marked no voice. All 3 A3 No-vocals excerpts are negatives.
+  - **Candidates:** 1 of 19 instrumental candidates had a voice.
+  - **Separation:** no excerpt, recording or artist group is shared with development; each history holds only its own partition's excerpts; no final-test list exists; the reserved groups are unchanged.
+  - **Development:** the history is byte-identical to before. A verified local backup of both partitions exists.
+  - **Limit:** only 6 voiced excerpts (4 groups, 2 harsh), so missed-voice estimates on validation will be imprecise.
+- **Not done:** Windows playback; any model training or evaluation.
+
+
+### 2026-11-26 correction: final-test freeze persistence (Phase A5.1)
+
+- **Root cause:**
+  - Preparation with `--freeze-final-test` computed the frozen registry, then discarded it. The registry had already been saved before the freeze step, and no final-test manifest was written. A successful freeze would therefore have left no trace.
+  - A later preparation run would also have dropped the freeze's timestamp, because the registry rebuild kept only the group entries.
+  - The existing test called the freeze function directly, so the preparation path was never exercised.
+- **Found while testing the fix:** re-preparing could crash when two rebuilt artist groups touched the same registered group, and it could merge two frozen groups. Both are fixed: linked groups are merged once, and a merge of frozen groups stops preparation.
+- **The fix** (details in [VOCAL_PRESENCE_ANNOTATION.md](VOCAL_PRESENCE_ANNOTATION.md), "Freezing the final test"):
+  - The freeze is worked out in full before anything is written; a refusal or an unreadable recording writes nothing.
+  - The final-test manifest is written first and the registry last, as the commit point. The registry records the freeze time and a digest of the cohort's excerpts.
+  - Both are read back. Any failure rolls back to the earlier registry and fingerprints.
+  - The project check now requires the registry and the final-test manifest to agree, so an interrupted or altered freeze is refused.
+  - A frozen cohort is never replaced or extended.
+- **Automated tests** (generated audio and generated projects only): `tests/test_vocal_presence.py` now has 40 tests, 8 of them new. They run the real preparation path:
+  - an insufficient cohort is refused, through the function and the command, with the project byte-identical afterwards;
+  - a sufficient cohort persists a valid manifest. The project check passes, only eligible reserved groups move, and consumed and too-short groups stay out. The same inputs give the same cohort, and the status command and the annotation window recognise it;
+  - repeated freezes, a direct rewrite, and a new never-used artist cannot change the cohort;
+  - an interruption at the worst moment (the frozen registry written, its fingerprint not) rolls back byte for byte, and a later freeze still works;
+  - half-written or altered freezes are refused by the check, the loaders, the status command and preparation: a manifest without a frozen registry, a frozen registry without its manifest, a manifest without its fingerprint, and a manifest rewritten with one excerpt fewer;
+  - development loaders still cannot read final-test labels after a real freeze (guarded file reads);
+  - a rebuilt identity that would merge frozen groups stops preparation with nothing written;
+  - the deterministic, per-group-capped final-test selection;
+  - the registry merge that previously crashed.
+- **Full suite:** 796 passed, 3 skipped, 3 failed. The three failures are the known `tests/test_remote.py` failures (Linux resource tracker; fixed on a separate branch). The intermittent replay test passed in this run. `ruff check` is clean.
+- **The owner's project:**
+  - It was not prepared again, and no cohort was frozen. It has no final-test manifest, and its 7 reserved groups are unchanged.
+  - The new project check passes on it read-only, and its files are byte-identical before and after.
+  - The development (171) and validation (28) annotations are unchanged.
+- **Not done:** a real freeze. It needs about 13 or more new never-used artist groups in the library first.
