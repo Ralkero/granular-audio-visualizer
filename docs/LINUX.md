@@ -13,7 +13,11 @@ passes there apart from the three known `tests/test_remote.py` failures and the 
 replay test, whose fixes are not yet on `main` (see
 [What has been checked](#what-has-been-checked)). CachyOS on a desktop is not
 SteamOS: nothing here is a claim about Flatpak, SteamOS, Steam's Gaming Mode or the Steam
-Deck.
+Deck. To run the current build on a Steam Deck for demos, see
+[STEAM_DECK_DEMO.md](STEAM_DECK_DEMO.md) (for the owner) and
+[STEAM_DECK_FOR_CLAUDE.md](STEAM_DECK_FOR_CLAUDE.md) (for a Claude session on the Deck). Its
+installer has so far been run on the CachyOS desktop only
+([below](#the-steam-deck-installer-on-cachyos-2026-11-26)).
 
 What was run on CachyOS, what was measured there, what was only tested on Windows or against
 a stand-in, what is still unchecked, and the commands that check it, are in
@@ -36,6 +40,7 @@ stand-in sound server), and run on one CachyOS desktop on 2026-11-23, or for the
 | Capture what the system plays on its default output (System audio) | Yes, from the default output's monitor through PipeWire's PulseAudio service; following a change of default output tested against a stand-in only |
 | Capture one output device, one application, or a microphone | **No.** Not offered; see below |
 | Native Arch package (Pacman), with menu entry and icon | Yes, built with `makepkg` from `packaging/arch/` (phase 1c); see [The Arch package](#the-arch-package-cachyos-arch-linux) |
+| Steam Deck (SteamOS), for demos | An installer into the home folder (`packaging/steamdeck/gmv-deck.sh`, no root); run on CachyOS in a stand-in home folder, **not yet on a Deck** ([below](#the-steam-deck-installer-on-cachyos-2026-11-26)) |
 | Flatpak, AUR, other distributions' packages | No |
 
 ## The Arch package (CachyOS, Arch Linux)
@@ -518,6 +523,32 @@ The whole test suite on the phase 1c branch, on this machine: **562 passed, 3 sk
 ([above](#the-test-suite-on-cachyos)); the 15 new tests of `tests/test_install_layout.py`
 passed.
 
+### The Steam Deck installer on CachyOS (2026-11-26)
+
+`packaging/steamdeck/gmv-deck.sh` installs GMV for demos on a Steam Deck. It puts uv
+0.13.10, uv's own CPython 3.14, the environment from `uv.lock` and the source of `main` at
+`cdc75e8` into `~/granular-music-visualizer`. It adds a launcher and a menu entry with icons
+in `~/.local/share`. It checks both downloads against SHA-256 sums in the script. The guide
+is [STEAM_DECK_DEMO.md](STEAM_DECK_DEMO.md); the route chosen, and why, is in
+[STEAM_DECK_FOR_CLAUDE.md](STEAM_DECK_FOR_CLAUDE.md).
+
+**None of this ran on a Steam Deck, under SteamOS or in Steam's Game Mode.** It ran on the
+CachyOS desktop above, with `HOME` pointed at an empty stand-in folder, so the user's own
+settings, sessions and menu were not touched.
+
+| Run | What it showed |
+|---|---|
+| `gmv-deck.sh install`, from nothing | Finished in 10 s on this connection: Python 3.14.10, PySide6 and Qt 6.12.0; Qt's `wayland` and `xcb` plugins load. 625 MB on disk. Nothing was written outside the install folder except the menu entry, the icons and the desktop's own caches; `desktop-file-validate` passed |
+| `gmv-deck.sh smoke` (`validate_linux.py` from the installed copy, `GMV_SCREEN=DP-2`) | **59 of 59 checks passed** in 72 s: Wayland, Wayland with settings remembered, `xcb` and `wayland` forced; WAV and FLAC analysed, sessions recorded and replayed; Radiant on the GPU (RX 9070 XT, Mesa 26.3.1) |
+| The window under **simulated** Gamescope variables (`GAMESCOPE_WAYLAND_DISPLAY` set, `WAYLAND_DISPLAY` removed; not a real Gamescope, which is not installed) | `gmv: Qt platform xcb (inside Gamescope, …)`; both files analysed, the replay matched, Radiant on the GPU through Xwayland |
+| `launch.sh` started without a terminal, with a Steam-like `LD_LIBRARY_PATH` (Steam's `ubuntu12_32` folders), offscreen | The launcher restored `SYSTEM_LD_LIBRARY_PATH`, the way Steam's own `steam.sh` does on exit. It wrote the display variables and everything GMV printed to `last-launch.log`, and GMV ran until stopped |
+| `gmv-deck.sh listen 10` with nothing playing | 493 of about 500 frames, no block dropped, the session logged without audio and replayed in full; the verdict was *only silence*, which was right. The *it hears the music* verdict was not exercised: nothing was played |
+| Update (`install` again), `install --ref main`, back to the pinned build | Each replaced the program in place and kept the rest |
+| `install` with the package index made unreachable at step 3 | It stopped with a message and put the previous program folder back; the installed copy still worked |
+| Refusals | A folder it did not make, a path with a space, unknown options, `remove` without confirmation, `remove` of a folder it did not make: each refused with one sentence and left everything as it was |
+| `gmv-deck.sh remove --yes` | Removed the program, the menu entry and the icons; kept the settings, the sessions and the `smoke` report |
+| `tests/test_steamdeck_helper.py` | 14 tests of the script without the network: commands, refusals, removal, the launcher's library path and log, the menu entry, and the files the pinned commit must contain |
+
 ### On Windows, with the system set to Linux (before CachyOS)
 
 When phase 1a was written no Linux machine was available: the development machine is
@@ -546,7 +577,8 @@ CachyOS run:
 
 - Steam's Gaming Mode, and a nested Gamescope (`gamescope -- uv run gmv-visualizer`): the
   Gamescope rule has not run inside any Gamescope.
-- Anything on SteamOS or a Steam Deck: its audio setup, its graphics, its performance.
+- Anything on SteamOS or a Steam Deck: its audio setup, its graphics, its performance,
+  and the Steam Deck installer (`packaging/steamdeck/gmv-deck.sh`) itself.
 - A native X11 desktop session. `xcb` ran only through the Xwayland of a Plasma Wayland
   session.
 - Whether KWin puts the window on a chosen screen under Wayland, where the compositor places
@@ -633,7 +665,8 @@ not done on the validation machine.
   computer's costs a block or two of audio and an analysis restart every quarter of an hour
   or so (11 ppm, as measured on the CachyOS machine).
 - A file is analysed at playing speed and is not played aloud.
-- **Packaging is the Arch package only.** It is built on the user's machine with
+- **Packaging is the Arch package only**, plus the Steam Deck installer, which sets up a
+  checkout with uv in the home folder. The Arch package is built on the user's machine with
   `makepkg`; it is not on the AUR or in a repository, and there is no Flatpak or package for
   other distributions. Run from a checkout, the window says it is
   `granular-music-visualizer` (its desktop entry's name) but no entry is installed, so on
