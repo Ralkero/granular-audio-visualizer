@@ -169,6 +169,38 @@ Step 1 has run; **step 2 (scoring) has not.** No held-out answer value was read.
 The scoring step checks the predictions against this SHA-256 before reading any answer.
 It runs only with the owner's explicit authorisation.
 
+## Implementation note: a consistency check before opening (2026-11-26)
+
+**A safety correction to the scoring step, made after the seal and before scoring.** It
+changes none of the decisions fixed before the predictions were made: not the model,
+features, training set, sealed predictions or their SHA-256; not the thresholds, the
+guarded interval, the breadth rule, the precaution policy or the coarse mapping.
+
+- **What could go wrong before.** The scoring step checked the predictions against their
+  seal, but not that they belonged to the labelling folder it was pointed at. Pointed at
+  the wrong folder, it could have paired the predictions with an incompatible answer
+  history and used up the one-time test.
+- **What it checks now**, against the dataset supplied for scoring, before anything else
+  happens:
+  - the sealed records parse, with exactly the fields the predict step writes;
+  - the evaluation excerpts are exactly the same set: none missing, none extra, none
+    duplicated, none from the development side, none unknown to the dataset;
+  - for every excerpt, the **recording**, the **artist group** and the **precaution
+    flag** match. The group is that recording's artist in the dataset, as the predict step
+    records it. The precaution flag is recomputed with the plan's rule from the same music
+    inventory, which scoring now requires;
+  - the manifest's held-out count and largest artist group (used by the breadth rule)
+    match the predictions.
+- **The order.** Not opened before, then the seal, then the dataset's own checks, then
+  this consistency check. Only after all of them pass is the opening recorded and are the
+  held-out answers read. Any failure leaves the answers unopened and the one-time test
+  available.
+- **Dry check on the real artifact.** The check was run on the sealed predictions with
+  the real excerpt list and inventory, opening only those files and the manifest, never
+  the answers file. It passed: 69 excerpts, 12 artist groups, 2 precaution excerpts. The
+  predictions file is byte-for-byte unchanged (SHA-256 `48aee927…dfa6a3`), and the answers
+  remain unopened.
+
 ## What happens after
 
 - **Confirmed (broadly):** the clean-against-harsh distinction is worth a separate phase on

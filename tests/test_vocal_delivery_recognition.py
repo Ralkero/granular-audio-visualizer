@@ -58,8 +58,7 @@ def sound(kind, seconds, seed):
     return np.stack([mono, mono], axis=1).astype(np.float32)
 
 
-@pytest.fixture
-def labelled(tmp_path):
+def build_labelled(tmp_path):
     """A labelling folder: 6 development artists and 2 held-out ones, two recordings each,
     two excerpts per recording; answers given, held-out answers carry a poison value; a
     leakage note names both excerpts of one development recording."""
@@ -121,6 +120,11 @@ def labelled(tmp_path):
         "folder": folder, "dataset": dataset, "dev": dev, "held": held, "leak": ids, "kind_of": kind_of,
         "by_recording": by_recording, "special": special, "note": note / "leakage-watch.md",
     }
+
+
+@pytest.fixture
+def labelled(tmp_path):
+    return build_labelled(tmp_path)
 
 
 def reload(labelled):
@@ -746,15 +750,15 @@ def test_score_checks_the_seal_opens_once_and_keeps_answers_coarse(labelled, tmp
     held = held_out_ids(labelled)
     answer_held_out(labelled, [(e, ("cleans", "high_screams", "low_screams", "gutturals")[i % 4]) for i, e in enumerate(held)])
     with pytest.raises(heldout.SealError):
-        heldout.score(labelled["folder"], out, "0" * 64, say=lambda text: None)
+        heldout.score(labelled["folder"], out, "0" * 64, inventory, say=lambda text: None)
     original = (out / heldout.PREDICTIONS).read_text()
     (out / heldout.PREDICTIONS).write_text(original.replace('"harsh"', '"clean"', 1) if '"harsh"' in original
                                             else original.replace('"clean"', '"harsh"', 1))
     with pytest.raises(heldout.SealError):
-        heldout.score(labelled["folder"], out, seal, say=lambda text: None)
+        heldout.score(labelled["folder"], out, seal, inventory, say=lambda text: None)
     assert not (out / heldout.OPENED).exists()  # a failed seal check opens nothing
     (out / heldout.PREDICTIONS).write_text(original)
-    summary = heldout.score(labelled["folder"], out, seal, say=lambda text: None)
+    summary = heldout.score(labelled["folder"], out, seal, inventory, say=lambda text: None)
     assert (out / heldout.OPENED).exists()
     assert summary["verdict"] == "inconclusive"  # far fewer than 10 of each
     interval = summary["interval_95"]
@@ -765,7 +769,7 @@ def test_score_checks_the_seal_opens_once_and_keeps_answers_coarse(labelled, tmp
     public = (out / "heldout-summary.json").read_text()
     assert "VOCAL-" not in public and not any(a in public for a in labelled["held"] + labelled["dev"])
     with pytest.raises(heldout.AlreadyOpened):
-        heldout.score(labelled["folder"], out, seal, say=lambda text: None)
+        heldout.score(labelled["folder"], out, seal, inventory, say=lambda text: None)
 
 
 def test_the_opening_is_recorded_before_any_answer_is_read(labelled, tmp_path, monkeypatch):
@@ -779,16 +783,194 @@ def test_the_opening_is_recorded_before_any_answer_is_read(labelled, tmp_path, m
 
     monkeypatch.setattr(heldout, "read_held_out_coarse", reader)
     with pytest.raises(RuntimeError):
-        heldout.score(labelled["folder"], out, seal, say=lambda text: None)
+        heldout.score(labelled["folder"], out, seal, inventory, say=lambda text: None)
     with pytest.raises(heldout.AlreadyOpened):
-        heldout.score(labelled["folder"], out, seal, say=lambda text: None)
+        heldout.score(labelled["folder"], out, seal, inventory, say=lambda text: None)
 
 
 def test_the_command_does_not_score_without_the_seal_and_the_explicit_flag(tmp_path):
     from gmv.cli import main
 
-    for extra in ([], ["--seal", "0" * 64], ["--open-held-out-answers"]):
+    for extra in ([], ["--seal", "0" * 64], ["--open-held-out-answers"], ["--seal", "0" * 64, "--open-held-out-answers"],
+                  ["--inventory", str(tmp_path / "inventory.csv"), "--seal", "0" * 64]):
         with pytest.raises(SystemExit) as stopped:
             main(["character", "research", "heldout", "score", "--out", str(tmp_path / "out"), *extra])
-        assert "--open-held-out-answers" in str(stopped.value)
+        assert "--open-held-out-answers" in str(stopped.value) and "--inventory" in str(stopped.value)
     assert not (tmp_path / "out").exists()
+
+
+# -- scoring checks the sealed predictions against the supplied dataset -----------------
+
+import shutil  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def sealed_base(tmp_path_factory):
+    """One generated dataset with generated answers, and its sealed generated predictions."""
+    root = tmp_path_factory.mktemp("sealed")
+    built = build_labelled(root)
+    inventory, _flagged = inventory_for(built, root)
+    out = root / "heldout"
+    seal = run_predict(built, out, inventory)["predictions_sha256"]
+    held = held_out_ids(built)
+    answer_held_out(built, [(e, ("cleans", "high_screams", "low_screams", "gutturals")[i % 4]) for i, e in enumerate(held)])
+    return {"root": root, "built": built, "inventory": inventory, "out": out, "seal": seal}
+
+
+@pytest.fixture
+def sealed(sealed_base, tmp_path):
+    """A fresh copy of the sealed predictions and manifest for one test."""
+    out = tmp_path / "heldout"
+    out.mkdir()
+    for name in (heldout.PREDICTIONS, heldout.MANIFEST):
+        shutil.copy(sealed_base["out"] / name, out / name)
+    return dict(sealed_base, out=out)
+
+
+def reseal(out, rows=None, text=None):
+    """Write altered predictions and seal them properly (manifest updated too), so the seal
+    check passes and only the consistency check can catch the problem."""
+    path = out / heldout.PREDICTIONS
+    path.write_text(text if text is not None else json.dumps(rows, indent=1, sort_keys=True) + "\n")
+    manifest = json.loads((out / heldout.MANIFEST).read_text())
+    manifest["predictions_sha256"] = heldout.sha256_of(path)
+    (out / heldout.MANIFEST).write_text(json.dumps(manifest, indent=1) + "\n")
+    return manifest["predictions_sha256"]
+
+
+def forbid_answers(monkeypatch):
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("the held-out answers must not be read")
+
+    monkeypatch.setattr(heldout, "read_held_out_coarse", forbidden)
+
+
+def sealed_rows(sealed):
+    return heldout.parse_predictions((sealed["out"] / heldout.PREDICTIONS).read_text())
+
+
+def altered(kind, rows, dataset):
+    rows = [dict(r) for r in rows]
+    side = data.sides(dataset)
+    held_recordings = sorted({r["recording"] for r in rows})
+    held_groups = sorted({r["group"] for r in rows})
+    if kind == "missing":
+        rows.pop(0)
+    elif kind == "development":
+        dev = next(e for e in dataset["excerpts"] if side[e["id"]] == "development")
+        rows.append(dict(rows[0], excerpt=dev["id"], recording=dev["recording"],
+                         group=dataset["recordings"][dev["recording"]]["artist"], precaution=False))
+    elif kind == "unknown":
+        rows.append(dict(rows[0], excerpt="VOCAL-9999"))
+    elif kind == "duplicate":
+        rows[1] = dict(rows[0])  # the same count: one identifier twice, one missing
+    elif kind == "recording":
+        rows[0]["recording"] = next(r for r in held_recordings if r != rows[0]["recording"])
+    elif kind == "group":
+        rows[0]["group"] = next(g for g in held_groups if g != rows[0]["group"])
+    elif kind == "precaution":
+        rows[0]["precaution"] = not rows[0]["precaution"]
+    return rows
+
+
+def test_sealed_predictions_that_match_their_dataset_pass_the_check(sealed):
+    dataset = labelling.load(sealed["built"]["folder"])
+    manifest = json.loads((sealed["out"] / heldout.MANIFEST).read_text())
+    found = heldout.validate_predictions(sealed_rows(sealed), dataset, sealed["inventory"], manifest)
+    assert found == {"excerpts": 8, "artist_groups": 2, "precaution": 2}
+
+
+@pytest.mark.parametrize("kind, message", [
+    ("missing", "have no prediction"),
+    ("development", "name development excerpts"),
+    ("unknown", "not in the dataset"),
+    ("duplicate", "more than once"),
+    ("recording", "recording that differs"),
+    ("group", "group that differs"),
+    ("precaution", "precaution that differs"),
+])
+def test_resealed_predictions_that_do_not_match_the_dataset_are_refused_unopened(sealed, monkeypatch, kind, message):
+    dataset = labelling.load(sealed["built"]["folder"])
+    seal = reseal(sealed["out"], altered(kind, sealed_rows(sealed), dataset))
+    forbid_answers(monkeypatch)
+    with pytest.raises(heldout.ConsistencyError, match=message):
+        heldout.score(sealed["built"]["folder"], sealed["out"], seal, sealed["inventory"], say=lambda text: None)
+    assert not (sealed["out"] / heldout.OPENED).exists()
+
+
+@pytest.mark.parametrize("text, message", [
+    ("not json at all", "cannot be parsed"),
+    ("{}", "not a list"),
+    ('[{"excerpt": "VOCAL-0001"}]', "exactly the fields"),
+])
+def test_unreadable_prediction_records_are_refused_unopened(sealed, monkeypatch, text, message):
+    seal = reseal(sealed["out"], text=text)
+    forbid_answers(monkeypatch)
+    with pytest.raises(heldout.ConsistencyError, match=message):
+        heldout.score(sealed["built"]["folder"], sealed["out"], seal, sealed["inventory"], say=lambda text: None)
+    assert not (sealed["out"] / heldout.OPENED).exists()
+
+
+def test_a_record_with_wrong_types_is_refused_unopened(sealed, monkeypatch):
+    rows = sealed_rows(sealed)
+    rows[0]["precaution"] = "no"
+    seal = reseal(sealed["out"], rows)
+    forbid_answers(monkeypatch)
+    with pytest.raises(heldout.ConsistencyError, match="precaution flag"):
+        heldout.score(sealed["built"]["folder"], sealed["out"], seal, sealed["inventory"], say=lambda text: None)
+    assert not (sealed["out"] / heldout.OPENED).exists()
+
+
+@pytest.mark.parametrize("variant, message", [
+    ("renamed recordings", "recording that differs"),
+    ("swapped identifiers", "development excerpts"),
+])
+def test_another_labelling_folder_with_as_many_excerpts_is_refused_unopened(sealed, tmp_path, monkeypatch, variant, message):
+    other = tmp_path / "other" / "local-evidence"
+    shutil.copytree(sealed["root"] / "local-evidence", other)
+    folder = other / "sonic-character" / "vocal-labeling"
+    dataset = json.loads((folder / "dataset.json").read_text())
+    side = data.sides(dataset)
+    if variant == "renamed recordings":
+        held = {e["recording"] for e in dataset["excerpts"] if side[e["id"]] == "evaluation"}
+        mapping = {k: f"{k}-other" for k in held}
+        dataset["recordings"] = {mapping.get(k, k): v for k, v in dataset["recordings"].items()}
+        for excerpt in dataset["excerpts"]:
+            excerpt["recording"] = mapping.get(excerpt["recording"], excerpt["recording"])
+    else:
+        a = next(e for e in dataset["excerpts"] if side[e["id"]] == "evaluation")
+        b = next(e for e in dataset["excerpts"] if side[e["id"]] == "development")
+        a["id"], b["id"] = b["id"], a["id"]
+        dataset["excerpts"].sort(key=lambda e: e["id"])
+    (folder / "dataset.json").write_text(json.dumps(dataset))
+    assert labelling.validate(dataset) == []
+    assert len(dataset["excerpts"]) == len(labelling.load(sealed["built"]["folder"])["excerpts"])
+    forbid_answers(monkeypatch)
+    with pytest.raises(heldout.ConsistencyError, match=message):
+        heldout.score(folder, sealed["out"], sealed["seal"], sealed["inventory"], say=lambda text: None)
+    assert not (sealed["out"] / heldout.OPENED).exists()
+
+
+def test_a_missing_inventory_is_refused_unopened(sealed, tmp_path, monkeypatch):
+    forbid_answers(monkeypatch)
+    for inventory in (None, tmp_path / "absent.csv"):
+        with pytest.raises(heldout.ConsistencyError, match="inventory"):
+            heldout.score(sealed["built"]["folder"], sealed["out"], sealed["seal"], inventory, say=lambda text: None)
+    assert not (sealed["out"] / heldout.OPENED).exists()
+
+
+def test_a_failed_check_leaves_the_one_time_scoring_available(sealed, sealed_base, monkeypatch):
+    dataset = labelling.load(sealed["built"]["folder"])
+    seal = reseal(sealed["out"], altered("group", sealed_rows(sealed), dataset))
+    with monkeypatch.context() as patch:
+        forbid_answers(patch)
+        with pytest.raises(heldout.ConsistencyError):
+            heldout.score(sealed["built"]["folder"], sealed["out"], seal, sealed["inventory"], say=lambda text: None)
+    assert not (sealed["out"] / heldout.OPENED).exists()
+    for name in (heldout.PREDICTIONS, heldout.MANIFEST):  # the genuine sealed artifact again
+        shutil.copy(sealed_base["out"] / name, sealed["out"] / name)
+    summary = heldout.score(sealed["built"]["folder"], sealed["out"], sealed["seal"], sealed["inventory"], say=lambda text: None)
+    assert (sealed["out"] / heldout.OPENED).exists() and summary["verdict"] == "inconclusive"
+    with pytest.raises(heldout.AlreadyOpened):
+        heldout.score(sealed["built"]["folder"], sealed["out"], sealed["seal"], sealed["inventory"], say=lambda text: None)
+

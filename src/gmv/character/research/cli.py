@@ -57,12 +57,13 @@ def add_parser(sub):
         "heldout",
         help="The pre-registered held-out test of clean against harsh vocals: predict (blind), then score once",
         description="Plan: docs/VOCAL_DELIVERY_HELDOUT_PLAN.md. 'predict' reads no held-out answer and prints the "
-        "SHA-256 to commit. 'score' needs that SHA-256 and --open-held-out-answers, and runs only once.",
+        "SHA-256 to commit. 'score' needs that SHA-256, the same --inventory and --open-held-out-answers; it checks "
+        "that the sealed predictions match the dataset before opening anything, and runs only once.",
     )
     heldout.add_argument("step", choices=("predict", "score"))
     heldout.add_argument("--folder", help="The labelling folder (default: local-evidence/sonic-character/vocal-labeling)")
     heldout.add_argument("--note", help="Private note of known vocalist overlap (default: beside the folder)")
-    heldout.add_argument("--inventory", help="Music inventory CSV (needed by predict, for the plan's precaution)")
+    heldout.add_argument("--inventory", help="Music inventory CSV (needed by predict and score, for the plan's precaution)")
     heldout.add_argument("--out", default=HELDOUT_OUT)
     heldout.add_argument("--processes", type=int, default=1)
     heldout.add_argument("--seal", help="score: the committed SHA-256 of the predictions")
@@ -174,11 +175,11 @@ def run_heldout(args):
             heldout.predict(folder, out, args.inventory, note=args.note, processes=args.processes,
                             progress=progress, say=say, code=code)
             return
-        if not args.seal or not args.open_held_out_answers:
-            raise SystemExit("score needs --seal <committed SHA-256> and --open-held-out-answers "
+        if not args.seal or not args.inventory or not args.open_held_out_answers:
+            raise SystemExit("score needs --seal <committed SHA-256>, --inventory and --open-held-out-answers "
                              "(only with the owner's authorisation; it runs once)")
-        heldout.score(folder, out, args.seal, say=say)
-    except (data.DataError, heldout.SealError, heldout.AlreadyOpened) as exc:
+        heldout.score(folder, out, args.seal, args.inventory, say=say)
+    except (data.DataError, heldout.SealError, heldout.ConsistencyError, heldout.AlreadyOpened) as exc:
         raise SystemExit(f"Stopped: {exc}") from None
 
 

@@ -23,7 +23,9 @@ later High-against-Low test.
 import csv
 import hashlib
 import json
+import math
 import re
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -64,6 +66,11 @@ class SealError(Exception):
 
 class AlreadyOpened(Exception):
     """The held-out answers have already been opened once."""
+
+
+class ConsistencyError(Exception):
+    """The sealed predictions do not belong to the dataset supplied for scoring. Raised
+    before anything is opened, so the one-time scoring stays available."""
 
 
 def sha256_of(path):
@@ -190,6 +197,100 @@ def predict(folder, out, inventory, note=None, processes=1, progress=None, say=p
 
 # -- step 2 ---------------------------------------------------------------------------------
 
+FIELDS = frozenset({"excerpt", "recording", "group", "precaution", "probabilities", "said", "status"})
+
+
+def parse_predictions(text):
+    """The sealed prediction records, checked field by field as ``predict`` writes them.
+    Anything else raises ``ConsistencyError``."""
+    try:
+        rows = json.loads(text)
+    except ValueError as exc:
+        raise ConsistencyError("the predictions file cannot be parsed") from exc
+    if not isinstance(rows, list) or not rows:
+        raise ConsistencyError("the predictions file is not a list of prediction records")
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != FIELDS:
+            raise ConsistencyError("a prediction record does not have exactly the fields predict writes")
+        if not all(isinstance(row[k], str) and row[k] for k in ("excerpt", "recording", "group", "status")):
+            raise ConsistencyError("a prediction record has an empty or non-text identifier or status")
+        if not isinstance(row["precaution"], bool):
+            raise ConsistencyError("a prediction record's precaution flag is not true or false")
+        if row["status"] == "measured":
+            values = row["probabilities"]
+            if not (isinstance(values, list) and len(values) == len(SUPPORTED) and all(
+                isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in values
+            )):
+                raise ConsistencyError("a measured prediction does not carry three finite probabilities")
+            if row["said"] not in ("clean", "harsh"):
+                raise ConsistencyError("a measured prediction is neither clean nor harsh")
+        elif row["probabilities"] is not None or row["said"] is not None:
+            raise ConsistencyError("an unmeasured excerpt carries a prediction")
+    return rows
+
+
+def expected_assignments(dataset, inventory):
+    """excerpt -> {"recording", "group", "precaution"} for every evaluation excerpt of the
+    supplied dataset, derived exactly as ``predict`` derives them: the excerpt's recording,
+    that recording's artist key in the dataset, and the plan's precaution
+    (``precaution(dataset, inventory)``)."""
+    side = data.sides(dataset)
+    flagged = precaution(dataset, inventory)
+    return {
+        e["id"]: {
+            "recording": e["recording"],
+            "group": dataset["recordings"][e["recording"]]["artist"],
+            "precaution": e["recording"] in flagged,
+        }
+        for e in dataset["excerpts"] if side[e["id"]] == "evaluation"
+    }
+
+
+def validate_predictions(rows, dataset, inventory, manifest=None):
+    """Check the sealed predictions against the dataset supplied for scoring, exactly: the
+    same evaluation excerpts (none missing, none extra, none duplicated, none from the
+    development side or unknown to the dataset), and for each its recording, its artist
+    group and its precaution flag. With the manifest, also its count and the largest artist
+    group that scoring uses for the breadth rule. Raises ``ConsistencyError`` listing every
+    kind of problem (counts only, no identifiers). Reads no answer."""
+    expected = expected_assignments(dataset, inventory)
+    side = data.sides(dataset)
+    ids = [row["excerpt"] for row in rows]
+    problems = []
+    duplicated = [k for k, n in Counter(ids).items() if n > 1]
+    if duplicated:
+        problems.append(f"{len(duplicated)} excerpt identifier(s) appear more than once")
+    unknown = {i for i in ids if i not in side}
+    if unknown:
+        problems.append(f"{len(unknown)} prediction(s) name excerpts that are not in the dataset")
+    development = {i for i in ids if side.get(i) == "development"}
+    if development:
+        problems.append(f"{len(development)} prediction(s) name development excerpts")
+    missing = set(expected) - set(ids)
+    if missing:
+        problems.append(f"{len(missing)} evaluation excerpt(s) of the dataset have no prediction")
+    wrong = Counter()
+    for row in rows:
+        want = expected.get(row["excerpt"])
+        if want is not None:
+            for key in ("recording", "group", "precaution"):
+                if row[key] != want[key]:
+                    wrong[key] += 1
+    for key in ("recording", "group", "precaution"):
+        if wrong[key]:
+            problems.append(f"{wrong[key]} prediction(s) carry a {key} that differs from the dataset's")
+    if manifest is not None:
+        groups = Counter(row["group"] for row in rows)
+        largest = max(sorted(groups), key=lambda g: groups[g])
+        if manifest.get("largest_group") != largest:
+            problems.append("the manifest's largest artist group does not match the predictions")
+        if (manifest.get("held_out") or {}).get("excerpts") != len(rows):
+            problems.append("the manifest's count of held-out excerpts does not match the predictions")
+    if problems:
+        raise ConsistencyError("the sealed predictions do not match the supplied dataset: " + "; ".join(problems))
+    return {"excerpts": len(rows), "artist_groups": len({row["group"] for row in rows}),
+            "precaution": sum(1 for row in rows if row["precaution"])}
+
 
 def read_held_out_coarse(folder, side):
     """excerpt -> "clean", "harsh", "other", "no_vocals", "later" or "unanswered", for
@@ -303,8 +404,15 @@ def verdict(primary, interval, others):
     return step, (None if broad else "mainly on one artist"), reasons
 
 
-def score(folder, out, expected_sha256, say=print):
-    """Step 2: once only, with the owner's authorisation."""
+def score(folder, out, expected_sha256, inventory, say=print):
+    """Step 2: once only, with the owner's authorisation.
+
+    Order: (1) not opened before; (2) the predictions and manifest exist; (3) the
+    predictions match the committed seal and the manifest; (4) the supplied dataset loads
+    and passes its checks; (5, 6) the sealed predictions match that dataset exactly
+    (``validate_predictions``, with the plan's inventory for the precaution flags). Only
+    then (7) is the opening recorded, (8) are the held-out answers read, coarsely, and (9)
+    scored. Every failure before (7) leaves the answers unopened and the test available."""
     out = Path(out)
     if (out / OPENED).exists():
         raise AlreadyOpened("the held-out answers were already opened once; the test is not run again")
@@ -312,18 +420,28 @@ def score(folder, out, expected_sha256, say=print):
     if not predictions_path.is_file() or not manifest_path.is_file():
         raise SealError("no sealed predictions here; run the predict step first")
     actual = sha256_of(predictions_path)
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if actual != expected_sha256 or actual != manifest["predictions_sha256"]:
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        sealed = manifest["predictions_sha256"]
+    except (ValueError, KeyError, TypeError) as exc:
+        raise SealError("the manifest cannot be read") from exc
+    if actual != expected_sha256 or actual != sealed:
         raise SealError("the predictions do not match their committed seal")
-    dataset = labelling.load(folder)
+    try:
+        dataset = labelling.load(folder)
+    except labelling.DatasetError as exc:
+        raise data.DataError(str(exc)) from exc
     data.check_split(dataset)
+    if inventory is None or not Path(inventory).is_file():
+        raise ConsistencyError("the music inventory the plan's precaution uses was not found")
+    rows = parse_predictions(predictions_path.read_text(encoding="utf-8"))
+    validate_predictions(rows, dataset, inventory, manifest)
     side = data.sides(dataset)
     (out / OPENED).write_text(json.dumps({
         "opened_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "predictions_sha256": actual,
     }, indent=1) + "\n", encoding="utf-8")
     coarse = read_held_out_coarse(folder, side)
-    rows = json.loads(predictions_path.read_text(encoding="utf-8"))
     for row in rows:
         row["answer"] = coarse.get(row["excerpt"], "unanswered")
 
