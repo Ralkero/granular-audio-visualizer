@@ -18,11 +18,14 @@ Partitions:
 assigned with. When groups are rebuilt (new recordings, a new alias), a group that shares a
 node with registered entries keeps their partition and gains the new nodes; a group whose
 nodes match entries of two different partitions is a conflict, and nothing is written
-until the owner resolves it. The only transition is ``reserved`` to ``final_test``, made by
-an explicit freeze.
+until the owner resolves it. Rebuilt groups that touch the same registered entry are linked
+through it, so the entries they join are merged once. A merge of frozen final-test groups is
+also a conflict: a frozen cohort never changes silently. The only transition is
+``reserved`` to ``final_test``, made by an explicit freeze.
 """
 
 import hashlib
+from collections import defaultdict
 from datetime import UTC, datetime
 
 PARTITIONS = ("development", "validation", "final_test", "reserved", "excluded")
@@ -64,13 +67,37 @@ def assign(groups, registry, consumed, development_keys, seed=SEED):
     for key, entry in entries.items():
         for node in entry["nodes"]:
             by_node.setdefault(node, set()).add(key)
+    matched_of = {key: set().union(*(by_node.get(n, set()) for n in group["nodes"])) if group["nodes"] else set()
+                  for key, group in groups.items()}
+    # Entries matched by one rebuilt group are one artist; so are entries reached through a
+    # shared entry. Join them (union-find), so every rebuilt group of a component sees the
+    # same entries and the merge below never uses an entry it has already merged away.
+    parent = {}
+
+    def find(x):
+        while parent.setdefault(x, x) != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for matched in matched_of.values():
+        first, *rest = sorted(matched) or [None]
+        for other in rest:
+            a, b = find(first), find(other)
+            if a != b:
+                parent[max(a, b)] = min(a, b)
+    joined = defaultdict(set)
+    for entry_key in set().union(*matched_of.values()) if matched_of else ():
+        joined[find(entry_key)].add(entry_key)
     conflicts, plan, candidates = [], {}, []
     for key, group in sorted(groups.items()):
         nodes = set(group["nodes"])
-        matched = set().union(*(by_node.get(n, set()) for n in nodes)) if nodes else set()
+        matched = joined[find(min(matched_of[key]))] if matched_of[key] else set()
         partitions = {entries[m]["partition"] for m in matched}
-        if len(partitions) > 1 or (partitions and partitions != {"excluded"} and nodes & consumed):
-            conflicts.append(key)  # two partitions joined, or a used group newly linked to consumed material
+        if (len(partitions) > 1 or (partitions and partitions != {"excluded"} and nodes & consumed)
+                or (len(matched) > 1 and "final_test" in partitions)):
+            # two partitions joined, a used group newly linked to consumed material, or a frozen cohort changed
+            conflicts.append(key)
             continue
         if matched:
             plan[key] = ("keep", sorted(matched), partitions.pop())
@@ -81,7 +108,8 @@ def assign(groups, registry, consumed, development_keys, seed=SEED):
         else:
             plan[key] = ("new", [], "reserved")
     if conflicts:
-        raise ConflictError(f"{len(conflicts)} rebuilt group(s) join groups registered in different partitions; "
+        raise ConflictError(f"{len(conflicts)} rebuilt group(s) join groups registered in different partitions, "
+                            "link a used group to consumed material, or merge frozen final-test groups; "
                             "resolve the identity links before preparing again")
 
     def weight(nodes):
@@ -100,16 +128,19 @@ def assign(groups, registry, consumed, development_keys, seed=SEED):
     for key, (how, matched, partition) in plan.items():
         nodes = set(groups[key]["nodes"])
         if how == "keep":
-            target = matched[0]
+            target = matched[0]  # the smallest key of the component: never merged away
             for other in matched[1:]:  # same partition: merge the entries into one
-                nodes |= set(entries.pop(other)["nodes"])
+                if other in entries:  # not already merged by another group of the component
+                    nodes |= set(entries.pop(other)["nodes"])
             entries[target]["nodes"] = sorted(set(entries[target]["nodes"]) | nodes)
         else:
             entries[key] = {"partition": partition, "nodes": sorted(nodes), "assigned_utc": now(),
                             "reason": {"excluded": "touches consumed evaluation material",
                                        "reserved": "never used: held back for a future final test",
                                        "development": "earlier development artist", "validation": "earlier development artist"}[partition]}
-    return {"format": "gmv-vocal-presence-registry", "version": 1, "seed": seed, "entries": dict(sorted(entries.items()))}
+    # Keep the registry's other top-level facts (such as when the final test was frozen).
+    kept = {k: v for k, v in (registry or {}).items() if k not in ("format", "version", "seed", "entries")}
+    return {"format": "gmv-vocal-presence-registry", "version": 1, "seed": seed, **kept, "entries": dict(sorted(entries.items()))}
 
 
 def partition_of(registry, nodes):
@@ -121,9 +152,20 @@ def partition_of(registry, nodes):
     return found.pop() if found else None
 
 
+def is_frozen(registry):
+    """True once a final-test cohort has been frozen (or a freeze was partly recorded)."""
+    return bool(registry.get("final_test_frozen_utc") or registry.get("final_test_cohort_sha256")) or any(
+        e["partition"] == "final_test" for e in registry.get("entries", {}).values())
+
+
 def freeze_final_test(registry, eligible, minimum):
-    """Move eligible ``reserved`` groups to ``final_test``: the cohort is then fixed. ``eligible``:
-    registry keys that have enough suitable material. Refused when fewer than ``minimum``."""
+    """A new registry in which every eligible ``reserved`` group is ``final_test``: the cohort is
+    then fixed. ``eligible``: registry keys that have enough suitable material. Only reserved
+    groups can move, so development, validation and excluded groups never join the cohort.
+    Refused when fewer than ``minimum`` are eligible, and refused when a cohort is already
+    frozen: a frozen cohort is never replaced or extended. The input is not changed."""
+    if is_frozen(registry):
+        raise FreezeRefused("a final-test cohort is already frozen; it is never replaced or extended")
     reserved = [k for k, e in registry["entries"].items() if e["partition"] == "reserved" and k in eligible]
     if len(reserved) < minimum:
         raise FreezeRefused(f"only {len(reserved)} eligible never-used artist group(s); at least {minimum} are needed")

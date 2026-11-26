@@ -158,3 +158,33 @@ Details: [VOCAL_PRESENCE_ANNOTATION.md](VOCAL_PRESENCE_ANNOTATION.md). Research 
   - **Limit:** only 6 voiced excerpts (4 groups, 2 harsh), so missed-voice estimates on validation will be imprecise.
 - **Not done:** Windows playback; any model training or evaluation.
 
+
+### 2026-11-26 correction: final-test freeze persistence (Phase A5.1)
+
+- **Root cause:**
+  - Preparation with `--freeze-final-test` computed the frozen registry, then discarded it. The registry had already been saved before the freeze step, and no final-test manifest was written. A successful freeze would therefore have left no trace.
+  - A later preparation run would also have dropped the freeze's timestamp, because the registry rebuild kept only the group entries.
+  - The existing test called the freeze function directly, so the preparation path was never exercised.
+- **Found while testing the fix:** re-preparing could crash when two rebuilt artist groups touched the same registered group, and it could merge two frozen groups. Both are fixed: linked groups are merged once, and a merge of frozen groups stops preparation.
+- **The fix** (details in [VOCAL_PRESENCE_ANNOTATION.md](VOCAL_PRESENCE_ANNOTATION.md), "Freezing the final test"):
+  - The freeze is worked out in full before anything is written; a refusal or an unreadable recording writes nothing.
+  - The final-test manifest is written first and the registry last, as the commit point. The registry records the freeze time and a digest of the cohort's excerpts.
+  - Both are read back. Any failure rolls back to the earlier registry and fingerprints.
+  - The project check now requires the registry and the final-test manifest to agree, so an interrupted or altered freeze is refused.
+  - A frozen cohort is never replaced or extended.
+- **Automated tests** (generated audio and generated projects only): `tests/test_vocal_presence.py` now has 40 tests, 8 of them new. They run the real preparation path:
+  - an insufficient cohort is refused, through the function and the command, with the project byte-identical afterwards;
+  - a sufficient cohort persists a valid manifest. The project check passes, only eligible reserved groups move, and consumed and too-short groups stay out. The same inputs give the same cohort, and the status command and the annotation window recognise it;
+  - repeated freezes, a direct rewrite, and a new never-used artist cannot change the cohort;
+  - an interruption at the worst moment (the frozen registry written, its fingerprint not) rolls back byte for byte, and a later freeze still works;
+  - half-written or altered freezes are refused by the check, the loaders, the status command and preparation: a manifest without a frozen registry, a frozen registry without its manifest, a manifest without its fingerprint, and a manifest rewritten with one excerpt fewer;
+  - development loaders still cannot read final-test labels after a real freeze (guarded file reads);
+  - a rebuilt identity that would merge frozen groups stops preparation with nothing written;
+  - the deterministic, per-group-capped final-test selection;
+  - the registry merge that previously crashed.
+- **Full suite:** 796 passed, 3 skipped, 3 failed. The three failures are the known `tests/test_remote.py` failures (Linux resource tracker; fixed on a separate branch). The intermittent replay test passed in this run. `ruff check` is clean.
+- **The owner's project:**
+  - It was not prepared again, and no cohort was frozen. It has no final-test manifest, and its 7 reserved groups are unchanged.
+  - The new project check passes on it read-only, and its files are byte-identical before and after.
+  - The development (171) and validation (28) annotations are unchanged.
+- **Not done:** a real freeze. It needs about 13 or more new never-used artist groups in the library first.

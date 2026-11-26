@@ -18,7 +18,8 @@ def add_parser(sub):
     prepare.add_argument("--aliases", help="Private alias and shared-vocalist file (default: identity/aliases.json)")
     prepare.add_argument("--corpus-manifest", help="Corpus manifest, to exclude MUSDB18-HQ test artists (recommended)")
     prepare.add_argument("--freeze-final-test", action="store_true",
-                         help="Freeze the final-test cohort (refused unless enough never-used artist groups exist)")
+                         help="Freeze the final-test cohort, once and for good; refused, with nothing written, "
+                              "unless enough never-used artist groups exist")
     prepare.add_argument("--no-verify", action="store_true", help="Skip checking new recordings' checksums")
     annotate = commands.add_parser("annotate", help="Open the annotation window")
     annotate.add_argument("--partition", choices=("development", "validation", "final_test"), default="development")
@@ -43,7 +44,10 @@ def run(args):
         window.show()
         return app.exec()
     if args.presence_command == "status":
-        return print(json.dumps(status(root), indent=1))
+        try:
+            return print(json.dumps(status(root), indent=1))
+        except project.IntegrityError as exc:
+            raise SystemExit(f"The presence project failed its integrity check; nothing was changed: {exc}") from None
     from ..labeling.cli import default_folder as a3_default
     from . import prepare as preparing
     from . import split
@@ -54,7 +58,7 @@ def run(args):
         summary = preparing.prepare(root, a3_folder, args.inventory, args.aliases, args.corpus_manifest,
                                     drive_map=drive_map, freeze=args.freeze_final_test, verify=not args.no_verify,
                                     say=lambda text: print(text, flush=True))
-    except (preparing.PrepareError, split.ConflictError, project.IntegrityError) as exc:
+    except (preparing.PrepareError, split.ConflictError, split.FreezeRefused, project.IntegrityError) as exc:
         raise SystemExit(f"Stopped, nothing more written: {exc}") from None
     print(json.dumps(summary, indent=1, default=list))
 
@@ -70,6 +74,7 @@ def status(root):
         counts = {s: sum(1 for e in rows if e["status"] == s) for s in schema.STATUSES}
         out["partitions"][partition] = {"excerpts": len(rows), **counts}
     final = project.read_manifest(root, "final_test")
-    out["partitions"]["final_test"] = {"frozen": final is not None, "excerpts": len(final["excerpts"]) if final else 0,
+    out["partitions"]["final_test"] = {"frozen": final is not None, "groups": len(final.get("groups", [])) if final else 0,
+                                      "excerpts": len(final["excerpts"]) if final else 0,
                                       "annotations": "not read by this command"}
     return out

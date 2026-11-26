@@ -16,6 +16,14 @@ A manifest lists a partition's excerpts: each with a stable identifier, its reco
 (checksum, size, length, rate, channels, path), its times, its artist group and why it was
 selected. A manifest is written atomically together with its fingerprint; reading checks the
 fingerprint, so a hand-edited or half-written manifest is refused.
+
+**A frozen final test** is two records that must agree: the registry (its ``final_test``
+groups, the ``final_test_frozen_utc`` stamp and ``final_test_cohort_sha256``, a digest of the
+cohort's excerpts) and ``final-test.json`` (the same stamp, the cohort's ``groups`` and the
+excerpts themselves). ``write_frozen_cohort`` writes the manifest first and
+the frozen registry last, so the registry is the commit point; on any failure it restores
+the earlier registry and fingerprints and removes the new manifest. ``check_final_test``
+refuses every other combination, so an interrupted freeze is reported, never used.
 """
 
 import hashlib
@@ -144,6 +152,87 @@ def write_registry(root, registry):
 
 def read_registry(root):
     return _read_tracked(root, REGISTRY) or {"entries": {}}
+
+
+def cohort_digest(excerpts):
+    """SHA-256 of a cohort's excerpts, independent of their order and of file formatting."""
+    canonical = json.dumps(sorted(excerpts, key=lambda e: e["id"]), sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def seal(registry, excerpts):
+    """The frozen registry, recording the digest of the cohort's excerpts."""
+    return {**registry, "final_test_cohort_sha256": cohort_digest(excerpts)}
+
+
+def check_final_test(registry, manifest):
+    """Problems (empty when sound) between the registry's frozen cohort and the final-test
+    manifest: both or neither must record a freeze, with the same stamp, the same groups and
+    the same excerpts (by digest), and every frozen group must have at least one excerpt."""
+    entries = registry.get("entries", {})
+    members = {k for k, e in entries.items() if e["partition"] == "final_test"}
+    stamp = registry.get("final_test_frozen_utc")
+    if manifest is None:
+        if members or stamp or registry.get("final_test_cohort_sha256"):
+            return ["the registry records a frozen final-test cohort but its manifest is missing (an interrupted freeze?)"]
+        return []
+    if not members or not stamp:
+        return ["a final-test manifest exists but the registry records no frozen cohort (an interrupted freeze?)"]
+    problems = []
+    if manifest.get("frozen_utc") != stamp or any(entries[k].get("frozen_utc") != stamp for k in members):
+        problems.append("the final-test manifest and the registry record different freezes")
+    if set(manifest.get("groups") or ()) != members:
+        problems.append("the final-test manifest's cohort differs from the registry's")
+    if {e["group"] for e in manifest.get("excerpts", [])} != members:
+        problems.append("a frozen final-test group has no excerpt, or an excerpt lies outside the cohort")
+    if registry.get("final_test_cohort_sha256") != cohort_digest(manifest.get("excerpts", [])):
+        problems.append("the final-test manifest's excerpts differ from the frozen cohort")
+    return problems
+
+
+def cohort_problems(excerpts, registry, extra):
+    """Problems (empty when sound) of a planned final-test cohort, before anything is written.
+    ``registry``: the frozen registry, sealed or not."""
+    planned = {"format": FORMAT, "version": VERSION, "partition": "final_test", **extra, "excerpts": excerpts}
+    return sorted(set(check_excerpts("final_test", excerpts) + check_final_test(seal(registry, excerpts), planned)))[:5]
+
+
+def write_frozen_cohort(root, excerpts, registry, extra):
+    """Persist a frozen final-test cohort: ``final-test.json`` (``excerpts`` and ``extra``,
+    which must hold ``frozen_utc`` and ``groups``) and the frozen ``registry``, sealed with
+    the digest of the excerpts. Returns (manifest, sealed registry) as read back.
+
+    The cohort is checked before anything is written. The manifest is written first, then the
+    registry, which is the commit point; both are read back and checked. On any failure or
+    interruption inside this call, the new manifest is removed and the earlier registry and
+    fingerprints are restored byte for byte, then the error is raised. An existing final-test
+    manifest is never replaced."""
+    root = Path(root)
+    manifest_path = root / "manifests" / MANIFESTS["final_test"]
+    if manifest_path.exists():
+        raise IntegrityError("a final-test manifest already exists; a frozen cohort is never replaced")
+    problems = cohort_problems(excerpts, registry, extra)
+    if problems:
+        raise IntegrityError("; ".join(problems))
+    registry = seal(registry, excerpts)
+    earlier = {path: (path.read_bytes() if path.is_file() else None)
+               for path in (root / "manifests" / REGISTRY, root / "fingerprints" / "manifests.json")}
+    try:
+        write_manifest(root, "final_test", excerpts, extra)
+        write_registry(root, registry)  # the commit point
+        written = read_manifest(root, "final_test")
+        if read_registry(root) != registry or check_final_test(registry, written):
+            raise IntegrityError("the frozen cohort did not read back as written")
+    except BaseException:
+        for leftover in (manifest_path, manifest_path.with_suffix(manifest_path.suffix + ".tmp")):
+            leftover.unlink(missing_ok=True)
+        for path, data in earlier.items():
+            if data is None:
+                path.unlink(missing_ok=True)
+            else:
+                _write_atomic(path, data.decode("utf-8"))
+        raise
+    return written, registry
 
 
 def durations(manifest):

@@ -3,8 +3,10 @@
 * ``check_project`` verifies every manifest and the registry against their fingerprints,
   and every excerpt against the registry: its group exists, is in the excerpt's partition,
   and holds the excerpt's recording; no excerpt or recording appears in two partitions;
-  no reserved or excluded group appears in a manifest. Manifests hold no annotations, so
-  reading the final-test manifest here exposes no answer.
+  no reserved or excluded group appears in a manifest; and the registry's frozen final-test
+  cohort agrees with the final-test manifest (``project.check_final_test``), so an
+  interrupted freeze is refused. Manifests hold no annotations, so reading the final-test
+  manifest here exposes no answer.
 * ``development_examples`` is the only loader for development work. It reads the
   development and validation annotation histories and nothing else: asking it for the final
   test raises ``ProtectedSplitError``, and it never opens a path in the final-test folder.
@@ -46,6 +48,7 @@ def check_project(root):
                 problems.add("an excerpt appears in two partitions")
             if owner_of_recording.setdefault(excerpt["recording"], partition) != partition:
                 problems.add("a recording appears in two partitions")
+    problems.update(project.check_final_test(registry, manifests.get("final_test")))
     if problems:
         raise project.IntegrityError("; ".join(sorted(problems)))
     return registry, manifests

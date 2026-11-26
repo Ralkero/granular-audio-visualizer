@@ -5,6 +5,7 @@ import csv
 import hashlib
 import json
 import zipfile
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -268,6 +269,14 @@ def test_groups_never_move_and_conflicts_stop_everything():
         split.assign(joined, first, consumed=set(), development_keys={"dev-a"})
     with pytest.raises(split.ConflictError):  # a used group newly linked to consumed material
         split.assign({"g1": {"nodes": ["a3:dev-a", "rec:1", "a3:held"]}}, first, consumed={"a3:held"}, development_keys={"dev-a"})
+    # A recording credited to another artist links two registered entries, and a second rebuilt
+    # group still touches one of them: one merge, no entry used after it was merged away.
+    registry = {"entries": {"e1": {"partition": "development", "nodes": ["name:a", "rec:1"]},
+                            "e2": {"partition": "development", "nodes": ["name:b", "rec:2"]}}}
+    merged = split.assign({"a-first": {"nodes": ["name:b", "rec:1", "rec:3"]}, "b-second": {"nodes": ["rec:2"]}},
+                          registry, consumed=set(), development_keys=set())
+    assert list(merged["entries"]) == ["e1"] and merged["entries"]["e1"]["partition"] == "development"
+    assert set(merged["entries"]["e1"]["nodes"]) == {"name:a", "name:b", "rec:1", "rec:2", "rec:3"}
 
 
 def test_the_final_test_cannot_be_frozen_without_enough_never_used_groups():
@@ -278,6 +287,11 @@ def test_the_final_test_cannot_be_frozen_without_enough_never_used_groups():
     frozen = split.freeze_final_test(registry, set(groups), minimum=5)
     assert {e["partition"] for e in frozen["entries"].values()} == {"final_test"}
     assert {e["partition"] for e in registry["entries"].values()} == {"reserved"}  # the input is untouched
+    with pytest.raises(split.FreezeRefused, match="already frozen"):  # never replaced or extended
+        split.freeze_final_test(frozen, set(groups), minimum=1)
+    regrown = split.assign({**groups, "late": {"nodes": ["rec:late"]}}, frozen, consumed=set(), development_keys=set())
+    assert regrown["final_test_frozen_utc"] == frozen["final_test_frozen_utc"]  # re-preparing keeps the freeze
+    assert regrown["entries"]["late"]["partition"] == "reserved" and split.is_frozen(regrown)
 
 
 def test_selection_is_deterministic_and_spreads_over_groups_and_recordings():
@@ -363,13 +377,12 @@ def frozen_final_test(root, world):
     registry = project.read_registry(root)
     key = next(k for k, e in registry["entries"].items() if e["partition"] == "reserved")
     registry = split.freeze_final_test(registry, {key}, minimum=1)
-    project.write_registry(root, registry)
     sha = next(n[4:] for n in registry["entries"][key]["nodes"] if n.startswith("rec:"))
     row = next(r for r in world["rows"] if r["sha256"] == sha)
     excerpt = {"id": project.excerpt_id(sha, 1.0), "source": "new", "recording": sha, "path": row["file_path"],
                "size": Path(row["file_path"]).stat().st_size, "duration_s": 40.0, "sample_rate": RATE, "channels": 2,
                "start_s": 1.0, "end_s": 11.0, "group": key, "selection": "final-test cohort"}
-    project.write_manifest(root, "final_test", [excerpt])
+    project.write_frozen_cohort(root, [excerpt], registry, {"frozen_utc": registry["final_test_frozen_utc"], "groups": [key]})
     store = Store(project.partition_folder(root, "final_test"), {excerpt["id"]: 10.0})
     store.add_interval(excerpt["id"], "confirmed", 2.0, 3.0, note=POISON)
     store.set_review(excerpt["id"], "complete")
@@ -664,7 +677,7 @@ def test_the_status_command_counts_without_reading_final_test_answers(world, pre
     root, _summary = prepared
     main(["character", "presence", "status", "--folder", str(root)])
     out = json.loads(capsys.readouterr().out)
-    assert out["partitions"]["final_test"] == {"frozen": False, "excerpts": 0, "annotations": "not read by this command"}
+    assert out["partitions"]["final_test"] == {"frozen": False, "groups": 0, "excerpts": 0, "annotations": "not read by this command"}
     assert out["partitions"]["development"]["incomplete"] == out["partitions"]["development"]["excerpts"]
 
 
@@ -704,3 +717,261 @@ def test_duplicate_identifiers_and_recordings_outside_their_group_are_rejected(w
     with pytest.raises(project.IntegrityError, match="not a member of its artist group"):
         loaders.check_project(root)
     project.write_manifest(root, "development", manifest["excerpts"])
+
+
+# -- freezing the final test through the real preparation path -----------------------------------
+# A generated world with extra never-used artists, so a cohort can be frozen with a small
+# minimum. Nothing here touches a real music library or annotation project.
+
+NEW_ARTISTS = {"Synthetic Artist One": (40.0, 40.0), "Synthetic Artist Two": (40.0,), "Synthetic Artist Three": (40.0,),
+               "Synthetic Artist Four": (40.0,), "Synthetic Artist Short": (8.0,)}  # the last is too short for a window
+
+
+def inventory_with(world, folder, artists):
+    """A copy of the world's inventory plus recordings of ``artists`` ({name: (seconds, ...)})."""
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    rows = [dict(r) for r in world["rows"]]
+    for name, lengths in sorted(artists.items()):
+        for r, seconds in enumerate(lengths):
+            path = folder / f"{name.replace(' ', '-').lower()}-{r}.wav"
+            facts = write_wav(path, seconds, 500 + zlib.crc32(name.encode()) % 1000 + r)  # same audio in every inventory
+            rows.append({**{k: "" for k in rows[0]}, "sha256": facts["sha256"], "artist": name, "title": f"{name} song {r}",
+                         "instrumental_or_vocal": "Vocal", "content_category": "band", "genre": "Rock",
+                         "duration_s": str(seconds), "file_path": str(path)})
+    path = folder / "inventory.csv"
+    with path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    return path
+
+
+@pytest.fixture(scope="module")
+def freeze_inventory(world, tmp_path_factory):
+    return inventory_with(world, tmp_path_factory.mktemp("never-used"), NEW_ARTISTS)
+
+
+def snapshot(root):
+    """Every file under ``root`` with its bytes: proof that nothing was written."""
+    return {str(p.relative_to(root)): p.read_bytes() for p in sorted(Path(root).rglob("*")) if p.is_file()}
+
+
+def quiet_prepare(root, world, inventory, **options):
+    return preparing.prepare(root, world["a3"], inventory, say=lambda text: None, **options)
+
+
+def test_final_test_selection_is_deterministic_and_capped_per_group():
+    recordings = [{"sha256": f"{i:064x}", "group": f"g{i % 3}", "duration_s": 40.0} for i in range(12)]
+    first = selection.final_test_batch(recordings, per_group=2)
+    assert first == selection.final_test_batch(list(reversed(recordings)), per_group=2)
+    assert len(first) == 6 and all(sum(1 for c in first if c["group"] == g) == 2 for g in ("g0", "g1", "g2"))
+    assert all(c["start_s"] == selection.windows(40.0, [])[0] for c in first)
+    assert selection.final_test_batch([{"sha256": "f" * 64, "group": "short", "duration_s": 8.0}]) == []
+
+
+def test_a_refused_freeze_writes_nothing_and_the_command_stops(world, freeze_inventory, tmp_path):
+    root = tmp_path / "presence"
+    summary = quiet_prepare(root, world, freeze_inventory)
+    assert summary["final_test"]["frozen"] is False and summary["final_test"]["eligible_groups"] == 5
+    before = snapshot(root)
+    with pytest.raises(split.FreezeRefused, match="only 5 eligible"):
+        quiet_prepare(root, world, freeze_inventory, freeze=True, minimum_final=6)
+    assert snapshot(root) == before and not (root / "manifests" / "final-test.json").exists()
+    from gmv.cli import main
+
+    with pytest.raises(SystemExit, match="at least 20"):  # the command's own minimum
+        main(["character", "presence", "prepare", "--folder", str(root), "--a3-folder", str(world["a3"]),
+              "--inventory", str(freeze_inventory), "--freeze-final-test"])
+    assert snapshot(root) == before
+    loaders.check_project(root)
+    assert not split.is_frozen(project.read_registry(root))
+
+
+def test_a_successful_freeze_persists_a_valid_cohort_that_reloads(world, freeze_inventory, tmp_path, app, capsys):
+    root = tmp_path / "presence"
+    quiet_prepare(root, world, freeze_inventory)
+    earlier = project.read_registry(root)
+    development_bytes = {p: (root / "manifests" / f"{p}.json").read_bytes() for p in ("development", "validation")}
+    summary = quiet_prepare(root, world, freeze_inventory, freeze=True, minimum_final=5)
+    registry, manifests = loaders.check_project(root)  # integrity holds after the freeze
+    final = manifests["final_test"]
+    members = {k for k, e in registry["entries"].items() if e["partition"] == "final_test"}
+    assert summary["final_test"] == {**summary["final_test"], "frozen": True, "groups": 5, "excerpts": 6}
+    assert len(members) == 5 and set(final["groups"]) == members
+    assert registry["final_test_cohort_sha256"] == project.cohort_digest(final["excerpts"])
+    assert final["frozen_utc"] == registry["final_test_frozen_utc"] and final["minimum_groups"] == 5
+    # Only eligible reserved groups moved; every other group kept its partition.
+    for key, entry in registry["entries"].items():
+        if key in members:
+            assert earlier["entries"][key]["partition"] == "reserved"
+        else:
+            assert entry["partition"] == earlier["entries"][key]["partition"]
+    by_node = {n: e["partition"] for e in registry["entries"].values() for n in e["nodes"]}
+    assert all(by_node[f"a3:{k}"] == "excluded" for k in world["held"])  # consumed groups stay out
+    assert by_node["name:synthetic artist short"] == "reserved"  # no window fits: not eligible
+    # The excerpts: one fixed-position window per recording, in the cohort's own recordings.
+    assert {e["group"] for e in final["excerpts"]} == members and len(final["excerpts"]) == 6
+    assert all(e["selection"] == selection.FINAL_SELECTION and e["end_s"] - e["start_s"] == pytest.approx(10.0)
+               for e in final["excerpts"])
+    assert {p: (root / "manifests" / f"{p}.json").read_bytes() for p in ("development", "validation")} == development_bytes
+    # Reloading: the same cohort from a fresh project, the status command, the annotation window.
+    other = tmp_path / "other"
+    quiet_prepare(other, world, freeze_inventory, freeze=True, minimum_final=5)
+    again = project.read_manifest(other, "final_test")
+    assert again["excerpts"] == final["excerpts"] and again["groups"] == final["groups"]
+    from gmv.cli import main
+    from gmv.character.research.presence.window import PresenceWindow
+
+    main(["character", "presence", "status", "--folder", str(root)])
+    status = json.loads(capsys.readouterr().out)["partitions"]["final_test"]
+    assert status == {"frozen": True, "groups": 5, "excerpts": 6, "annotations": "not read by this command"}
+    w = PresenceWindow(root, "final_test", player=FakePlayer())
+    try:
+        assert not w.problem and w.current in {e["id"] for e in final["excerpts"]}
+    finally:
+        w.close()
+
+
+def test_a_frozen_cohort_is_never_replaced_or_extended(world, freeze_inventory, tmp_path):
+    root = tmp_path / "presence"
+    quiet_prepare(root, world, freeze_inventory, freeze=True, minimum_final=5)
+    final_bytes = (root / "manifests" / "final-test.json").read_bytes()
+    stamp = project.read_registry(root)["final_test_frozen_utc"]
+    before = snapshot(root)
+    with pytest.raises(split.FreezeRefused, match="already frozen"):
+        quiet_prepare(root, world, freeze_inventory, freeze=True, minimum_final=1)
+    assert snapshot(root) == before
+    # A new never-used artist arrives; re-preparing keeps the cohort and holds the newcomer back.
+    later = inventory_with(world, tmp_path / "later", {**NEW_ARTISTS, "Synthetic Artist Five": (40.0,)})
+    summary = quiet_prepare(root, world, later)
+    registry = project.read_registry(root)
+    assert (root / "manifests" / "final-test.json").read_bytes() == final_bytes
+    assert registry["final_test_frozen_utc"] == stamp and summary["final_test"]["frozen"] is True
+    assert {n: e["partition"] for e in registry["entries"].values() for n in e["nodes"]}["name:synthetic artist five"] == "reserved"
+    loaders.check_project(root)
+    with pytest.raises(split.FreezeRefused, match="already frozen"):
+        quiet_prepare(root, world, later, freeze=True, minimum_final=1)
+    manifest = project.read_manifest(root, "final_test")
+    with pytest.raises(project.IntegrityError, match="never replaced"):
+        project.write_frozen_cohort(root, manifest["excerpts"], registry, {"frozen_utc": stamp, "groups": manifest["groups"]})
+    assert (root / "manifests" / "final-test.json").read_bytes() == final_bytes
+
+
+def test_an_interrupted_freeze_rolls_back_and_leaves_no_partial_cohort(world, freeze_inventory, tmp_path, monkeypatch):
+    root = tmp_path / "presence"
+    quiet_prepare(root, world, freeze_inventory)
+    before = snapshot(root)
+    final_path = root / "manifests" / "final-test.json"
+    original = project._write_atomic
+    seen = []
+
+    def interrupted(path, text):
+        # Interrupt at the worst moment: the frozen registry is on disk, its fingerprint not yet.
+        if final_path.exists() and path.name == "manifests.json":
+            seen.append(path)
+            if len(seen) == 2:
+                raise KeyboardInterrupt
+        return original(path, text)
+
+    monkeypatch.setattr(project, "_write_atomic", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        quiet_prepare(root, world, freeze_inventory, freeze=True, minimum_final=5)
+    monkeypatch.setattr(project, "_write_atomic", original)
+    assert snapshot(root) == before  # the earlier registry and fingerprints, byte for byte; no manifest
+    loaders.check_project(root)
+    assert not split.is_frozen(project.read_registry(root))
+    quiet_prepare(root, world, freeze_inventory, freeze=True, minimum_final=5)  # and a later freeze still works
+    loaders.check_project(root)
+
+
+def test_a_half_written_freeze_is_refused_everywhere(world, freeze_inventory, tmp_path):
+    root = tmp_path / "presence"
+    quiet_prepare(root, world, freeze_inventory, freeze=True, minimum_final=5)
+    manifest = project.read_manifest(root, "final_test")
+    frozen = project.read_registry(root)
+    unfrozen = {**{k: v for k, v in frozen.items() if k != "final_test_frozen_utc"},
+                "entries": {k: {**{f: v for f, v in e.items() if f != "frozen_utc"},
+                                "partition": "reserved" if e["partition"] == "final_test" else e["partition"]}
+                            for k, e in frozen["entries"].items()}}
+    # 1. As if killed after the manifest was written but before the registry: the cohort is not valid.
+    project.write_registry(root, unfrozen)
+    for check in (lambda: loaders.check_project(root), lambda: loaders.development_examples(root)):
+        with pytest.raises(project.IntegrityError, match="interrupted freeze"):
+            check()
+    before = snapshot(root)
+    with pytest.raises(preparing.PrepareError, match="interrupted freeze"):
+        quiet_prepare(root, world, freeze_inventory)
+    with pytest.raises(preparing.PrepareError, match="interrupted freeze"):
+        quiet_prepare(root, world, freeze_inventory, freeze=True, minimum_final=5)
+    assert snapshot(root) == before
+    from gmv.cli import main
+
+    with pytest.raises(SystemExit, match="integrity check"):
+        main(["character", "presence", "status", "--folder", str(root)])
+    # 2. A registry that records a freeze whose manifest is missing.
+    project.write_registry(root, frozen)
+    (root / "manifests" / "final-test.json").unlink()
+    with pytest.raises(project.IntegrityError, match="manifest is missing"):
+        loaders.check_project(root)
+    # 3. A manifest cut off before its fingerprint was recorded.
+    (root / "manifests" / "final-test.json").write_text(json.dumps(manifest))
+    prints = json.loads((root / "fingerprints" / "manifests.json").read_text())
+    prints.pop("final-test.json")
+    (root / "fingerprints" / "manifests.json").write_text(json.dumps(prints))
+    with pytest.raises(project.IntegrityError, match="fingerprint"):
+        loaders.check_project(root)
+    # 4. A manifest rewritten through the project's own writer, same groups, one excerpt fewer.
+    project.write_manifest(root, "final_test", manifest["excerpts"][1:],
+                           {k: v for k, v in manifest.items() if k not in ("format", "version", "partition", "excerpts")})
+    with pytest.raises(project.IntegrityError, match="excerpts differ from the frozen cohort"):
+        loaders.check_project(root)
+
+
+def test_after_a_real_freeze_development_loaders_still_cannot_read_final_test_labels(world, freeze_inventory, tmp_path, monkeypatch):
+    root = tmp_path / "presence"
+    quiet_prepare(root, world, freeze_inventory, freeze=True, minimum_final=5)
+    final = project.read_manifest(root, "final_test")
+    store = Store(project.partition_folder(root, "final_test"), project.durations(final))
+    first = final["excerpts"][0]["id"]
+    store.add_interval(first, "confirmed", 2.0, 3.0, note=POISON)
+    store.set_review(first, "complete")
+    for partitions in (("final_test",), ("validation", "final_test")):
+        with pytest.raises(loaders.ProtectedSplitError):
+            loaders.development_examples(root, partitions)
+    final_folder = project.partition_folder(root, "final_test").resolve()
+    original_read, original_open = Path.read_text, Path.open
+
+    def guarded_read(self, *args, **kwargs):
+        assert final_folder not in self.resolve().parents, "a final-test file was read"
+        return original_read(self, *args, **kwargs)
+
+    def guarded_open(self, *args, **kwargs):
+        assert final_folder not in self.resolve().parents, "a final-test file was opened"
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", guarded_read)
+    monkeypatch.setattr(Path, "open", guarded_open)
+    found = loaders.development_examples(root)
+    assert {e["partition"] for e in found} <= {"development", "validation"}
+    assert first not in {e["id"] for e in found} and POISON not in json.dumps(found)
+
+
+def test_re_preparing_never_merges_frozen_groups(world, freeze_inventory, tmp_path):
+    root = tmp_path / "presence"
+    quiet_prepare(root, world, freeze_inventory, freeze=True, minimum_final=5)
+    before = snapshot(root)
+    # A new credit links two frozen artists: the cohort would change, so preparation stops.
+    rows = list(csv.DictReader(Path(freeze_inventory).open(encoding="utf-8")))
+    linked = tmp_path / "linked.csv"
+    path = tmp_path / "duet.wav"
+    facts = write_wav(path, 40.0, 4242)
+    rows.append({**rows[-1], "sha256": facts["sha256"], "artist": "Synthetic Artist One feat. Synthetic Artist Two",
+                 "title": "Duet", "file_path": str(path)})
+    with linked.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    with pytest.raises(split.ConflictError, match="frozen final-test"):
+        quiet_prepare(root, world, linked)
+    assert snapshot(root) == before

@@ -78,7 +78,41 @@ Each partition (development, validation, final test) has its own append-only his
 reads the A3 project (read only), the inventory and, with `--corpus-manifest`, the MUSDB18-HQ
 test artists to exclude. `--map` rewrites the inventory's file paths when the inventory was
 made on another system. It writes only inside the presence folder, and it can be run again:
-existing excerpts are kept, and groups never move.
+existing excerpts are kept, and groups never move. It first runs the project check, and it
+refuses to extend a project that fails it, writing nothing.
+
+### Freezing the final test
+
+`--freeze-final-test` freezes the final-test cohort once and for good, or stops without
+writing anything.
+
+- **Eligible groups:** reserved (never-used) artist groups with at least one recording on
+  disk long enough for a ten-second window clear of the edges (12 s or more). Development,
+  validation and excluded groups, including the consumed A4 held-out groups, can never be
+  eligible.
+- **Refusal:** with fewer than 20 eligible groups, or when a cohort is already frozen, the
+  command stops with a message, and nothing is written. A recording that cannot be read or
+  fails its checksum also stops it before any write.
+- **Selection** (deterministic, as elsewhere): up to 5 recordings per group in a seeded
+  SHA-256 order, one window each, at the first fixed position that fits. The window is blind
+  to why an excerpt was chosen.
+- **Persistence:**
+  - `manifests/final-test.json` holds the excerpts, the cohort's groups, the freeze time and
+    the selection settings, like the other manifests.
+  - The registry moves the cohort's groups from reserved to final test. It records the
+    freeze time and a SHA-256 digest of the cohort's excerpts.
+  - The manifest is written first and the registry last, so the registry is the commit
+    point. Both are read back and checked.
+  - If anything fails during the write, the new manifest is removed and the earlier
+    registry and fingerprints are restored byte for byte.
+- **Checks afterwards:** the project check requires the registry and the final-test
+  manifest to agree on the freeze time, the groups and the excerpts. A freeze interrupted
+  by a crash, or a manifest changed afterwards, is reported and refused by the check, by
+  the development loaders, by the status command and by preparation.
+- **Never changed:**
+  - A frozen cohort is never replaced or extended. New never-used artists stay reserved.
+  - A rebuilt identity that would merge frozen groups stops preparation, as does one that
+    would join two partitions.
 
 ## The annotation window
 
@@ -163,8 +197,9 @@ Everything private lives in the ignored folder `local-evidence/sonic-character/v
   - **Reserved:** never-used groups, held back for a future final test.
   - **Final test:** set only by an explicit freeze, which requires at least 20 eligible
     never-used groups.
-  - Groups never move. A rebuilt group that would join two partitions, or newly link a used
-    group to consumed material, stops preparation until resolved.
+  - Groups never move. A rebuilt group that would join two partitions, newly link a used
+    group to consumed material, or merge frozen final-test groups, stops preparation until
+    resolved. Rebuilt groups that touch the same registered group are merged into it once.
 - Selection never uses model output. Everything is deterministic (seeded SHA-256 orders),
   and re-preparing keeps existing excerpts and adds only new ones.
 

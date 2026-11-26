@@ -7,9 +7,22 @@ A3 files are fingerprinted before and after; any change stops with an error.
 
 Written, inside the presence folder only: the identity groups, the partition registry, the
 development and validation manifests (existing excerpts are always kept; new ones are
-added), private titles, the selection report and candidate lists. The final-test manifest
-is written only when the owner freezes the cohort, and only if enough never-used artist
-groups exist.
+added), private titles, the selection report and candidate lists.
+
+**Freezing the final test** (``freeze=True``) happens only on request, and is all or
+nothing. Everything is worked out before anything is written:
+
+* the eligible groups: reserved (never-used) groups with at least one recording on disk
+  that fits a window (``selection.final_test_batch``);
+* the frozen registry (``split.freeze_final_test``);
+* the cohort's excerpts, with every recording described and, with ``verify``, its checksum
+  confirmed.
+
+A refusal (too few eligible groups, or a cohort already frozen) or an unreadable recording
+stops preparation before it writes anything. Otherwise the cohort is persisted through
+``project.write_frozen_cohort``: the manifest first, the registry last, and both read back.
+A frozen cohort is never replaced or extended. A project whose registry and final-test
+manifest disagree (an interrupted freeze) is refused before anything is written.
 """
 
 import csv
@@ -23,7 +36,7 @@ import soundfile as sf
 from ..delivery import data as delivery_data
 from ..labeling import dataset as labelling
 from ..labeling import titles as labelling_titles
-from . import identity, project, selection, split
+from . import identity, loaders, project, selection, split
 
 A3_FILES = ("dataset.json", "labels.jsonl", "titles.json", "session.json", "reference_vocalists.txt")
 MINIMUM_FINAL_GROUPS = 20  # a cohort of fewer never-used artist groups is not frozen
@@ -77,8 +90,13 @@ def describe(path, sha_expected=None, verify=False):
 
 def prepare(root, a3_folder, inventory_path, aliases_path=None, corpus_manifest=None,
             drive_map=(), freeze=False,
-            minimum_final=MINIMUM_FINAL_GROUPS, per_category=20, target=selection.TARGET, say=print, verify=True):
+            minimum_final=MINIMUM_FINAL_GROUPS, per_category=20, target=selection.TARGET, say=print, verify=True,
+            per_group_final=selection.FINAL_PER_GROUP):
     root = project.layout(root)
+    try:
+        loaders.check_project(root)  # never extend an inconsistent project (e.g. an interrupted freeze)
+    except project.IntegrityError as exc:
+        raise PrepareError(f"the presence project failed its integrity check, so nothing was written: {exc}") from None
     a3_folder = Path(a3_folder)
     before = fingerprint_files(a3_folder)
     dataset = labelling.load(a3_folder)
@@ -142,8 +160,26 @@ def prepare(root, a3_folder, inventory_path, aliases_path=None, corpus_manifest=
                          "taken": taken[row["sha256"]], "path": local_path(row["file_path"], drive_map)})
     negatives = selection.negative_candidates(eligible, per_category=per_category)
 
+    # -- C: final-test windows in never-used (reserved) groups: they decide eligibility -------
+    final_pool = []
+    for row in inventory:
+        key = entry_of.get(row["sha256"])
+        if not key or registry["entries"][key]["partition"] != "reserved":
+            continue
+        try:
+            duration = float(str(row.get("duration_s", "0")).replace(",", "."))
+        except ValueError:
+            continue
+        path = local_path(row["file_path"], drive_map)
+        if Path(path).is_file():
+            final_pool.append({"sha256": row["sha256"], "group": key, "duration_s": duration, "row": row,
+                               "taken": taken[row["sha256"]], "path": path})
+    final_batch = selection.final_test_batch(final_pool, per_group=per_group_final)
+    eligible_groups = sorted({item["group"] for item in final_batch})
+
     # -- manifests -------------------------------------------------------------------------
-    by_sha = {r["sha256"]: r for r in eligible}
+    by_sha = {r["sha256"]: r for r in final_pool}
+    by_sha.update({r["sha256"]: r for r in eligible})
     a3_by_sha = {r["sha256"]: (k, r) for k, r in dataset["recordings"].items()}
     described, problems = {}, Counter()
 
@@ -174,6 +210,28 @@ def prepare(root, a3_folder, inventory_path, aliases_path=None, corpus_manifest=
                 continue
             partition = registry["entries"][item["group"]]["partition"]
             new[partition].append(entry(item["recording"], item["start_s"], selection.EXCERPT_S, "new", item["group"], item["selection"]))
+
+    # -- the freeze, worked out in full before anything is written --------------------------
+    frozen, cohort = None, None
+    if freeze:
+        frozen = split.freeze_final_test(registry, set(eligible_groups), minimum_final)  # FreezeRefused: nothing written
+        members = sorted(k for k, e in frozen["entries"].items() if e["partition"] == "final_test")
+        say(f"freezing a final-test cohort of {len(members)} artist groups")
+        try:
+            excerpts = [entry(item["recording"], item["start_s"], selection.EXCERPT_S, "new", item["group"], item["selection"])
+                        for item in final_batch if item["group"] in members]
+        except Exception as exc:  # noqa: BLE001 (an unreadable recording, whatever the reason)
+            raise PrepareError(f"a final-test recording could not be read, so nothing was written: {exc}") from None
+        cohort = {"excerpts": excerpts,
+                  "extra": {"frozen_utc": frozen["final_test_frozen_utc"], "groups": members,
+                            "minimum_groups": minimum_final, "per_group": per_group_final,
+                            "selection_seed": selection.SEED}}
+        issues = project.cohort_problems(cohort["excerpts"], frozen, cohort["extra"])
+        if issues:
+            raise PrepareError(f"the final-test cohort failed its checks, so nothing was written: {'; '.join(issues)}")
+
+    # -- writing ---------------------------------------------------------------------------------
+    project.write_registry(root, registry)  # first, so no manifest ever names an unregistered group
     written = {}
     for partition in ("development", "validation"):
         keep = {e["id"]: e for e in (existing[partition] or {}).get("excerpts", [])}
@@ -181,7 +239,6 @@ def prepare(root, a3_folder, inventory_path, aliases_path=None, corpus_manifest=
             keep.setdefault(e["id"], e)
         project.write_manifest(root, partition, list(keep.values()))
         written[partition] = list(keep.values())
-    project.write_registry(root, registry)
     (root / "identity" / "groups.json").write_text(json.dumps(groups, indent=1, ensure_ascii=False), encoding="utf-8")
     titles = {}
     for key, recording in dataset["recordings"].items():
@@ -194,16 +251,15 @@ def prepare(root, a3_folder, inventory_path, aliases_path=None, corpus_manifest=
     (root / "identity" / "titles.json").write_text(json.dumps(titles, indent=1, ensure_ascii=False), encoding="utf-8")
 
     # -- final test ---------------------------------------------------------------------------
+    if cohort is not None:
+        _manifest, registry = project.write_frozen_cohort(root, cohort["excerpts"], frozen, cohort["extra"])
     partitions = Counter(e["partition"] for e in registry["entries"].values())
     reserved = [k for k, e in registry["entries"].items() if e["partition"] == "reserved"]
     reserved_recordings = sum(sum(1 for n in registry["entries"][k]["nodes"] if n.startswith("rec:")) for k in reserved)
-    final = {"frozen": False, "reserved_groups": len(reserved), "reserved_recordings": reserved_recordings,
-             "minimum_groups": minimum_final}
-    if freeze:
-        try:
-            split.freeze_final_test(registry, set(reserved), minimum_final)
-        except split.FreezeRefused as exc:
-            final["refused"] = str(exc)
+    final_manifest = project.read_manifest(root, "final_test")
+    final = {"frozen": split.is_frozen(registry), "reserved_groups": len(reserved), "reserved_recordings": reserved_recordings,
+             "eligible_groups": len(eligible_groups), "minimum_groups": minimum_final,
+             "groups": len((final_manifest or {}).get("groups", [])), "excerpts": len((final_manifest or {}).get("excerpts", []))}
     after = fingerprint_files(a3_folder)
     if after != before:
         raise PrepareError("the Phase A3 files changed during preparation")

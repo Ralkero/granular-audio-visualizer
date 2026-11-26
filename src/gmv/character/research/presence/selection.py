@@ -9,6 +9,10 @@
   per confounder type from the inventory's metadata only (genre, content category, the
   "instrumental or vocal" flag and title words such as "solo", "bass", "drum"). They are
   candidates: the owner must listen and confirm there is no voice at all.
+* ``final_test_batch``: new ten-second windows in the recordings of never-used artist groups,
+  for a final-test cohort: up to ``FINAL_PER_GROUP`` recordings per group in a seeded order,
+  one window each at the first fixed position that fits (``windows``). A group with no such
+  window is not eligible for the cohort.
 * ``coverage``: what the development side has per harsh delivery answer, for the gap report.
 
 Every choice uses a seeded SHA-256 order, so the same inputs give the same batches.
@@ -39,6 +43,8 @@ NEGATIVE_RULES = {
 }
 INTRO = "other_song_intro"
 POSITIONS = (0.2, 0.5, 0.8, 0.35, 0.65)
+FINAL_PER_GROUP = 5  # recordings per artist group in a final-test cohort, so no artist dominates
+FINAL_SELECTION = "final-test window at a fixed position in a never-used artist's recording"
 
 
 def order(seed, *parts):
@@ -147,6 +153,29 @@ def negative_candidates(recordings, per_category=20, seed=SEED):
                            "selection": f"negative candidate, {category}: {item['reason']}"})
         out[category] = chosen
     return out
+
+
+def final_test_batch(recordings, per_group=FINAL_PER_GROUP, seed=SEED):
+    """``recordings``: dicts with ``sha256``, ``group``, ``duration_s`` and optionally ``taken``
+    (spans already used). Returns the chosen windows, each with ``recording``, ``group``,
+    ``start_s`` and ``selection``: at most ``per_group`` recordings per group, in a seeded
+    order, one window each. The same inputs, in any order, give the same batch."""
+    by_group, seen = defaultdict(list), set()
+    for rec in sorted(recordings, key=lambda r: order(seed, "final_test", r["sha256"])):
+        if rec["sha256"] not in seen:  # one entry per recording, even if the inventory repeats it
+            seen.add(rec["sha256"])
+            by_group[rec["group"]].append(rec)
+    chosen = []
+    for group in sorted(by_group, key=lambda g: order(seed, "final_test", "group", g)):
+        picked = 0
+        for rec in by_group[group]:
+            if picked >= per_group:
+                break
+            starts = windows(rec["duration_s"], list(rec.get("taken", [])))
+            if starts:
+                chosen.append({"recording": rec["sha256"], "group": group, "start_s": starts[0], "selection": FINAL_SELECTION})
+                picked += 1
+    return chosen
 
 
 def coverage(pool):
