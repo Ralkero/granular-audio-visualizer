@@ -98,51 +98,140 @@ def test_timing_errors_only_for_interior_boundaries_and_predictions_are_clipped(
 
 # -- the low-denominator rule and the screening classes -------------------------------------------------
 
-ROBUST = [(-1.0, 0.0)] * 5
-FRAGILE = [(-1.0, 0.0)] * 4 + [(0.1, 0.0)]
+GROUPS = [f"group_{i:03d}" for i in range(1, 20)]  # synthetic keys; the count comes from the caller
+SEEDS_OK = [(-1.0, 0.0)] * 5
+
+
+def leave_one_out(groups=GROUPS, d_fa=-1.0, d_recall=0.0):
+    return [(g, d_fa, d_recall) for g in groups]
+
+
+def complete():
+    """A complete, passing robustness set: 5 seeds and every expected group once."""
+    return {"seed_recomputations": SEEDS_OK, "group_recomputations": leave_one_out(), "expected_groups": GROUPS}
+
+
+def check(seeds=SEEDS_OK, rows=None, groups=GROUPS):
+    return screening.check_robustness(seeds, leave_one_out() if rows is None else rows, groups)
 
 
 def test_relative_mode_from_exactly_3_s_per_minute_with_no_constant_added():
-    s = screening.screen(1.5, 3.0, 0.8, 0.8, ROBUST)
+    s = screening.screen(1.5, 3.0, 0.8, 0.8, **complete())
     assert s.mode == "relative" and s.ratio == 0.5 and s.fifty_percent == "met" and s.result == "promising"
-    s = screening.screen(1.51, 3.0, 0.8, 0.8, ROBUST)
+    s = screening.screen(1.51, 3.0, 0.8, 0.8, **complete())
     assert s.ratio == pytest.approx(1.51 / 3.0) and s.fifty_percent == "not met" and s.result == "mixed"
 
 
 def test_absolute_mode_below_3_s_per_minute_including_zero():
     for baseline in (2.999, 1.0, 0.0):
-        s = screening.screen(baseline, baseline, 0.8, 0.8, ROBUST)
+        s = screening.screen(baseline, baseline, 0.8, 0.8, **complete())
         assert s.mode == "absolute" and s.ratio is None and s.fifty_percent == "not applicable"
         assert s.d_fa == 0.0
 
 
 def test_amendment_1_classes_improved_maintained_worsened_mixed_and_recall():
-    assert screening.screen(1.0, 2.0, 0.8, 0.8, ROBUST).result == "promising"           # improved
-    maintained = screening.screen(2.0, 2.0, 0.9, 0.8, ROBUST)
+    assert screening.screen(1.0, 2.0, 0.8, 0.8, **complete()).result == "promising"           # improved
+    maintained = screening.screen(2.0, 2.0, 0.9, 0.8, **complete())
     assert maintained.result == "not promising" and maintained.reason.startswith("maintained")
-    worsened = screening.screen(2.5, 2.0, 0.9, 0.8, ROBUST)
+    worsened = screening.screen(2.5, 2.0, 0.9, 0.8, **complete())
     assert worsened.result == "not promising" and worsened.reason.startswith("worsened")
-    assert screening.screen(1.0, 2.0, 0.8, 0.8, FRAGILE).result == "mixed"               # not robust
-    assert screening.screen(1.0, 2.0, 0.8, 0.8, []).result == "mixed"                    # unknown robustness
-    below = screening.screen(1.0, 2.0, 0.7499, 0.8, ROBUST)
+    fragile = {**complete(), "seed_recomputations": SEEDS_OK[:4] + [(0.1, 0.0)]}
+    assert screening.screen(1.0, 2.0, 0.8, 0.8, **fragile).result == "mixed"                  # not robust
+    assert screening.screen(1.0, 2.0, 0.8, 0.8).result == "mixed"                              # nothing supplied
+    below = screening.screen(1.0, 2.0, 0.7499, 0.8, **complete())
     assert below.result == "not promising" and below.reason == "recall below margin"
 
 
 def test_relative_mode_equal_false_activity_is_not_promising():
-    s = screening.screen(4.0, 4.0, 0.9, 0.8, ROBUST)
+    s = screening.screen(4.0, 4.0, 0.9, 0.8, **complete())
     assert s.result == "not promising" and s.d_fa == 0.0
 
 
 def test_the_recall_margin_boundary_is_inclusive():
-    assert screening.screen(1.0, 4.0, 0.75, 0.80, ROBUST).result == "promising"
-    assert screening.screen(1.0, 4.0, 0.7499, 0.80, ROBUST).result == "not promising"
-    assert screening.robust([(-0.1, -0.05)]) and not screening.robust([(-0.1, -0.0501)])
+    assert screening.screen(1.0, 4.0, 0.75, 0.80, **complete()).result == "promising"
+    assert screening.screen(1.0, 4.0, 0.7499, 0.80, **complete()).result == "not promising"
+    assert check(seeds=[(-0.1, -0.05)] * 5).passed
+    assert not check(seeds=[(-0.1, -0.05)] * 4 + [(-0.1, -0.0501)]).passed
 
 
 def test_invalid_screening_inputs_are_refused():
     for args in ((-0.1, 3.0, 0.5, 0.5), (1.0, float("nan"), 0.5, 0.5), (1.0, 3.0, 1.2, 0.5)):
         with pytest.raises(ValueError):
             screening.screen(*args)
+
+
+# -- robustness needs both complete sets (§13 (c), Amendment 1) -------------------------------------
+
+
+def test_five_passing_seeds_and_every_group_once_are_robust():
+    result = check()
+    assert result.passed and result.seeds_supplied == 5 and result.groups_expected == result.groups_supplied == 19
+    assert screening.robust(**complete())
+
+
+def test_one_failed_seed_is_not_robust():
+    for failed in ((0.0, 0.0), (0.2, 0.0), (-1.0, -0.06)):  # D_FA must be < 0 and Δ_R ≥ −0.05
+        result = check(seeds=SEEDS_OK[:4] + [failed])
+        assert not result.passed and "1 of 5 seed" in result.reason
+
+
+def test_one_failed_leave_one_out_group_is_not_robust():
+    rows = leave_one_out()
+    rows[7] = (rows[7][0], -1.0, -0.2)
+    result = check(rows=rows)
+    assert not result.passed and "1 of 19 leave-one-group-out" in result.reason
+
+
+def test_four_seeds_are_not_enough_and_six_are_too_many():
+    assert not check(seeds=SEEDS_OK[:4]).passed
+    assert not check(seeds=SEEDS_OK + [(-1.0, 0.0)]).passed
+
+
+def test_a_missing_duplicated_or_unexpected_group_is_not_robust():
+    missing = check(rows=leave_one_out()[:-1])
+    assert not missing.passed and "1 missing" in missing.reason
+    duplicated = check(rows=leave_one_out() + [leave_one_out()[3]])
+    assert not duplicated.passed and "1 duplicated" in duplicated.reason
+    swapped = check(rows=leave_one_out()[:-1] + [("group_999", -1.0, 0.0)])  # right count, wrong group
+    assert not swapped.passed and "1 missing" in swapped.reason and "1 unexpected" in swapped.reason
+    extra = check(rows=leave_one_out() + [("group_999", -1.0, 0.0)])
+    assert not extra.passed and "1 unexpected" in extra.reason
+
+
+def test_empty_or_incomplete_inputs_never_pass():
+    assert not screening.robust((), (), ())
+    assert not screening.robust(SEEDS_OK, (), GROUPS)
+    assert not screening.robust((), leave_one_out(), GROUPS)
+    assert not screening.robust(SEEDS_OK, (), ())  # no expected groups: nothing to be complete against
+    assert not screening.robust(SEEDS_OK, leave_one_out(), ())
+
+
+def test_both_modes_use_the_same_complete_robustness_requirement():
+    incomplete = {**complete(), "group_recomputations": leave_one_out()[:-1]}
+    relative_ok = screening.screen(1.0, 4.0, 0.8, 0.8, **complete())
+    absolute_ok = screening.screen(1.0, 2.0, 0.8, 0.8, **complete())
+    assert relative_ok.mode == "relative" and relative_ok.result == "promising" and relative_ok.robust
+    assert absolute_ok.mode == "absolute" and absolute_ok.result == "promising" and absolute_ok.robust
+    relative_bad = screening.screen(1.0, 4.0, 0.8, 0.8, **incomplete)
+    absolute_bad = screening.screen(1.0, 2.0, 0.8, 0.8, **incomplete)
+    assert relative_bad.result == absolute_bad.result == "mixed"
+    assert not relative_bad.robust and not absolute_bad.robust
+    assert relative_bad.robustness == absolute_bad.robustness
+
+
+def test_results_and_messages_never_carry_group_keys():
+    rows = leave_one_out()[:-1] + [("group_999", -1.0, 0.0), leave_one_out()[2]]
+    result = screening.screen(1.0, 2.0, 0.8, 0.8, SEEDS_OK, rows, GROUPS)
+    assert "group_" not in repr(result) and "group_" not in result.robustness
+    assert "group_" not in repr(check(rows=rows))
+    with pytest.raises(ValueError) as caught:
+        check(rows=leave_one_out()[:-1] + [("group_019", float("nan"), 0.0)])
+    assert "group_" not in str(caught.value)
+    with pytest.raises(ValueError) as caught:
+        check(rows=leave_one_out()[:-1] + [("group_019", -1.0)])  # a malformed row
+    assert "group_" not in str(caught.value)
+    with pytest.raises(ValueError):
+        check(groups=GROUPS + ["group_001"])  # the expected set itself has a duplicate
 
 
 # -- the descriptive bootstrap always carries its caveat -------------------------------------------------

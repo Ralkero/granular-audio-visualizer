@@ -272,3 +272,26 @@ The protocol is [VOCAL_PRESENCE_MODEL_PROTOCOL.md](VOCAL_PRESENCE_MODEL_PROTOCOL
   - any B0 scoring with weights;
   - training;
   - the timing and convergence gates.
+
+**Correction after independent review (2026-11-26, Stage 1 contract):**
+- **The problem:** the first Stage 1 commit (56e8801) checked screening robustness with `robust(recomputations)`. That accepted any non-empty list whose rows all passed, so a single passing recomputation could count as robust. That does not meet §13 (c): the direction must hold in **all five** single-seed recomputations **and every** leave-one-group-out recomputation.
+- **The interface now:** `check_robustness(seed_recomputations, group_recomputations, expected_groups)`, with `robust(...)` returning its `passed` value.
+  - Exactly 5 seed rows (D_FA, Δ_R) are required.
+  - One leave-one-group-out row (group, D_FA, Δ_R) is required for every group in the caller-supplied expected set. A missing, duplicated or unexpected group makes the set incomplete.
+  - Every row in both sets must have D_FA < 0 and Δ_R ≥ −0.05.
+  - An empty or incomplete set is never robust; there is no fallback.
+  - Malformed or non-finite rows raise an error.
+  - Results and messages report counts only, never group keys.
+  - `screen()` uses it in both the relative and the absolute mode, and records the reason in the result.
+- **Tests:** 8 new synthetic tests:
+  - a complete passing set;
+  - one failed seed;
+  - one failed leave-one-group-out row;
+  - 4 or 6 seeds;
+  - missing, duplicated, unexpected or swapped groups;
+  - empty or incomplete inputs;
+  - both modes held to the same requirement;
+  - no group keys in results or errors.
+
+  The tests that called the old single-list form now supply complete sets, and the Amendment 1 classes are still covered.
+- **Counts now:** metrics and screening have 28 tests (was 20). In the experiments environment **95 passed** (was 87); in the application's environment 74 passed and the CNN file skips (was 66). `ruff check` is clean.
