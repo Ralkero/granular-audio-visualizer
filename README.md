@@ -153,7 +153,7 @@ gmv character analyze --list my-tracks.txt --processes 4 --gain-db -10
 
 `gmv character label` opens a blind listening window for labelling how the voice is delivered in short excerpts of your own music, kept on this computer only; see [docs/VOCAL_DELIVERY_LABELING.md](docs/VOCAL_DELIVERY_LABELING.md).
 
-`gmv character research` holds further offline experiments (harmony, the lead line and voice, rhythmic feel) and their evaluation; see [docs/SONIC_CHARACTER_RESEARCH.md](docs/SONIC_CHARACTER_RESEARCH.md). They are research: the profile above does not include them.
+`gmv character research` holds further offline experiments (harmony, the lead line and voice, rhythmic feel) and their evaluation; see [docs/SONIC_CHARACTER_RESEARCH.md](docs/SONIC_CHARACTER_RESEARCH.md). They are research: the profile above does not include them. `gmv character research delivery` tests whether the audio of those labelled excerpts can tell clean singing, high screams and low screams apart in artists it has never seen (offline, development excerpts only); see [docs/VOCAL_DELIVERY_RECOGNITION.md](docs/VOCAL_DELIVERY_RECOGNITION.md).
 
 ## Licence
 

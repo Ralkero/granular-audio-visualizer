@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 
 DEFAULT_OUT = "local-evidence/sonic-character/research"
+DELIVERY_OUT = "local-evidence/sonic-character/vocal-delivery-classifier"
+HELDOUT_OUT = "local-evidence/sonic-character/vocal-delivery-heldout"
 
 
 def add_parser(sub):
@@ -39,6 +41,34 @@ def add_parser(sub):
     robust.add_argument("--scales", required=True, help="corpus.json of a corpus run, for the calibration scales")
     robust.add_argument("--every", type=int, default=5, help="Use every Nth evaluation recording")
     robust.add_argument("--seconds", type=float, default=90.0, help="Seconds of each recording")
+    delivery = commands.add_parser(
+        "delivery",
+        help="Phase A4: can the audio tell Cleans, High Screams and Low Screams apart (owner-labelled excerpts, unseen artists)",
+        description="Research experiment, offline. Uses development excerpts only; held-out answers are never read "
+        "by answer. Reports go to the ignored local-evidence folder.",
+    )
+    delivery.add_argument("--folder", help="The labelling folder (default: local-evidence/sonic-character/vocal-labeling)")
+    delivery.add_argument("--note", help="Private note of known vocalist overlap (default: ../expansion-audit/leakage-watch.md beside the folder)")
+    delivery.add_argument("--inventory", help="Music inventory CSV, to link artist groups that share a credited person (optional)")
+    delivery.add_argument("--out", default=DELIVERY_OUT)
+    delivery.add_argument("--no-cache", action="store_true", help="Measure every excerpt again instead of reading the feature cache")
+    delivery.add_argument("--processes", type=int, default=1)
+    heldout = commands.add_parser(
+        "heldout",
+        help="The pre-registered held-out test of clean against harsh vocals: predict (blind), then score once",
+        description="Plan: docs/VOCAL_DELIVERY_HELDOUT_PLAN.md. 'predict' reads no held-out answer and prints the "
+        "SHA-256 to commit. 'score' needs that SHA-256, the same --inventory and --open-held-out-answers; it checks "
+        "that the sealed predictions match the dataset before opening anything, and runs only once.",
+    )
+    heldout.add_argument("step", choices=("predict", "score"))
+    heldout.add_argument("--folder", help="The labelling folder (default: local-evidence/sonic-character/vocal-labeling)")
+    heldout.add_argument("--note", help="Private note of known vocalist overlap (default: beside the folder)")
+    heldout.add_argument("--inventory", help="Music inventory CSV (needed by predict and score, for the plan's precaution)")
+    heldout.add_argument("--out", default=HELDOUT_OUT)
+    heldout.add_argument("--processes", type=int, default=1)
+    heldout.add_argument("--seal", help="score: the committed SHA-256 of the predictions")
+    heldout.add_argument("--open-held-out-answers", action="store_true",
+                         help="score: confirm that the owner has authorised reading the held-out answers, once")
     for command in (analyze, corpus, stems, robust):
         command.add_argument("--out", default=DEFAULT_OUT)
         command.add_argument("--activity-model", help="Weights file of the activity model (gmv.activity), for the vocal_* values")
@@ -88,7 +118,76 @@ def write(path, value):
     path.write_text(json.dumps(value, indent=1, allow_nan=False), encoding="utf-8")
 
 
+def run_delivery(args):
+    from ... import paths
+    from .delivery import data
+    from .delivery import run as experiment
+    from .labeling.cli import default_folder
+
+    folder = Path(args.folder) if args.folder else default_folder()
+    out = Path(args.out)
+    if not out.is_absolute() and paths.checkout():
+        out = paths.REPOSITORY / out
+
+    def progress(number, total):
+        if number == total or number % 10 == 0:
+            print(f"  measured {number} of {total}", flush=True)
+
+    try:
+        experiment.run(folder, out, note=args.note, inventory=args.inventory, use_cache=not args.no_cache,
+                       processes=args.processes, progress=progress, say=lambda text: print(text, flush=True))
+    except data.DataError as exc:
+        raise SystemExit(f"Stopped: {exc}") from None
+
+
+def code_version(repository):
+    """The commit the code runs from, and whether ``src`` has uncommitted changes."""
+    import subprocess
+
+    def git(*words):
+        return subprocess.run(["git", "-C", str(repository), *words], capture_output=True, text=True, check=False).stdout.strip()
+
+    return {"commit": git("rev-parse", "HEAD"), "src_clean": git("status", "--porcelain", "--", "src") == ""}
+
+
+def run_heldout(args):
+    from ... import paths
+    from .delivery import data, heldout
+    from .labeling.cli import default_folder
+
+    folder = Path(args.folder) if args.folder else default_folder()
+    out = Path(args.out)
+    if not out.is_absolute() and paths.checkout():
+        out = paths.REPOSITORY / out
+    say = lambda text: print(text, flush=True)  # noqa: E731
+
+    def progress(number, total):
+        if number == total or number % 10 == 0:
+            print(f"  measured {number} of {total}", flush=True)
+
+    try:
+        if args.step == "predict":
+            if not args.inventory:
+                raise SystemExit("predict needs --inventory (the plan's leakage precaution uses it)")
+            code = code_version(paths.REPOSITORY) if paths.checkout() else None
+            if code and not code["src_clean"]:
+                raise SystemExit("Commit the code first: the predictions must come from a recorded commit")
+            heldout.predict(folder, out, args.inventory, note=args.note, processes=args.processes,
+                            progress=progress, say=say, code=code)
+            return
+        if not args.seal or not args.inventory or not args.open_held_out_answers:
+            raise SystemExit("score needs --seal <committed SHA-256>, --inventory and --open-held-out-answers "
+                             "(only with the owner's authorisation; it runs once)")
+        heldout.score(folder, out, args.seal, args.inventory, say=say)
+    except (data.DataError, heldout.SealError, heldout.ConsistencyError, heldout.AlreadyOpened) as exc:
+        raise SystemExit(f"Stopped: {exc}") from None
+
+
 def run(args):
+    if args.research_command == "delivery":
+        return run_delivery(args)
+    if args.research_command == "heldout":
+        return run_heldout(args)
     from . import report
     from ..diagnose import label, safe
 

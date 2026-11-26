@@ -11,6 +11,8 @@ nothing in the application imports them. Findings: docs/SONIC_CHARACTER_RESEARCH
 * ``rhythm``    pulse, tempo ambiguity, events per beat, off-beat weight, repetition
 * ``profile``   every family over a recording, in blocks and as a whole
 * ``evaluate``  group-disjoint corpus statistics; ``stems``: checks against stems and beats
+* ``labeling``  Phase A3: the owner's blind labelling of vocal delivery in excerpts
+* ``delivery``  Phase A4: can the audio tell Cleans, High and Low Screams apart (unseen artists)
 
 Every value is a ``(value, confidence)`` pair. ``None`` means "could not be measured
 here", which is never the same as zero: no reliable pitch is not "no melody", and no
