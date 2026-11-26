@@ -140,12 +140,12 @@ Details: [VOCAL_PRESENCE_ANNOTATION.md](VOCAL_PRESENCE_ANNOTATION.md). Research 
   - The final-test freeze was refused: 7 never-used artist groups against 20 required.
 - **Full suite:** 787 passed, 3 skipped, 4 failed. The failures are the three known `tests/test_remote.py` failures (Linux resource tracker; the fix is on a separate branch) and the known intermittent replay test (its fix is PR #1, not in this stack). No new failure. `ruff check` clean. After the full run, a privacy correction removed local-path defaults from the `prepare` command (now a required `--inventory` and an optional `--map`); `tests/test_vocal_presence.py` was run again afterwards: 32 passed.
 - **Owner's use** (real hardware, owner-evaluated, 2026-11-26), read from the saved history without changing it:
-  - **Progress:** 101 of 171 development excerpts completed (58 with a voice, 43 without); one more is marked but not completed.
-  - **Integrity:** 185 events, chain intact, no damaged line, none rejected, project check passing, A3 answer file unchanged.
-  - **Agreement:** all 54 completed A3 voice excerpts have a voice marked, and all 3 completed A3 No-vocals excerpts are negatives.
-  - **Candidates:** 4 of 44 completed instrumental candidates had a voice.
+  - **Progress:** all 171 development excerpts completed (89 with a voice, 82 without), from 20 artist groups and 153 recordings.
+  - **Integrity:** 289 events, chain intact, no damaged line, none rejected, project check passing, A3 answer file unchanged.
+  - **Agreement with A3:** 82 of the 84 A3 voice excerpts have a voice marked; 2 (one Low Screams, one Cleans) are marked no voice, so those answers disagree. All 7 A3 No-vocals excerpts are negatives.
+  - **Candidates:** 7 of 80 instrumental candidates had a voice (song intros 3 of 14, rhythm guitar 2 of 20, guitar solo 1 of 20, orchestral 1 of 10, soundtrack 0 of 16).
   - **Audio:** no voice mark over near-silence.
-  - **How negatives were judged:** playback is not recorded. On 25 negatives, Complete came sooner than the excerpt could play in full; the owner confirmed these rest on their knowledge of the recordings (all-instrumental bands, songs known to have none, interludes).
+  - **How negatives were judged:** playback is not recorded. On 50 of the 82 negatives, Complete came sooner than the excerpt could play in full; the owner confirmed such answers rest on their knowledge of the recordings (all-instrumental bands, songs known to have none, interludes).
   - **Not reported:** the owner gave no separate feedback on position sync or boundary placement. No boundary was adjusted after marking.
-- **Not done:** the remaining development excerpts and the validation partition; Windows playback; any model training or evaluation.
+- **Not done:** the validation partition; Windows playback; any model training or evaluation.
 

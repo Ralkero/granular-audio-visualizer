@@ -213,41 +213,58 @@ Everything private lives in the ignored folder `local-evidence/sonic-character/v
   artists and instrumental material per confounder type, added to the library and
   inventory. Until then the 7 reserved groups stay unused.
 
-## First annotation session (2026-11-26, aggregate)
+## Development annotation (completed 2026-11-26, aggregate)
 
-The owner annotated in the window on CachyOS (real hardware, owner-evaluated). The checks
-below were read from the saved history and the audio; nothing was changed.
+The owner annotated the development partition in the window on CachyOS (real hardware,
+owner-evaluated), in two sittings and a short round of fixes. The checks below were read
+from the saved history and the audio; nothing was changed.
 
-- **Progress:**
-  - Development: 101 of 171 excerpts completed, worked through in list order. 58 have a voice
-    and 43 have none; none is uncertain or unusable.
-  - One more excerpt has marks but is not yet completed. Validation is not started.
+- **Result:**
+  - All 171 development excerpts are completed: 89 have a voice and 82 have none. None is
+    uncertain or unusable.
+  - They span 20 artist groups and 153 recordings. Voiced excerpts come from 16 groups, and
+    no-voice excerpts from 18.
+  - A voice is audible in 703 of the 1,710 annotated seconds (41%).
+  - Validation (28 excerpts) is not started.
 - **Marks:**
-  - 81 voice stretches, 1 to 3 per voiced excerpt. The median voiced excerpt has a voice in
-    86% of its length; 19 of the 58 are voiced throughout.
+  - 112 voice stretches, 1 to 3 per voiced excerpt (69 have one, 17 two, 3 three). The
+    median voiced excerpt has a voice in 92% of its length; 35 of the 89 are voiced
+    throughout.
   - No boundary was adjusted after marking, so boundaries carry the live-marking lag.
   - No confounder tag or note was used.
 - **History integrity:**
-  - 185 events, chain intact, sequence contiguous, no damaged line, none rejected.
+  - 289 events, chain intact, sequence contiguous, no damaged line, none rejected.
   - The project check passes, and the A3 answer file is unchanged.
-- **Agreement with the A3 delivery answers** (same windows): all 54 completed excerpts with
-  a voice answer have a voice marked, and all 3 completed A3 No-vocals excerpts are
-  negatives.
-- **Metadata candidates:** 4 of the 44 completed instrumental candidates had an audible voice:
-  - a guitar-solo candidate and a rhythm-guitar candidate;
-  - two song-intro windows, where the voice enters 6.0 s and 8.4 s in.
+- **Agreement with the A3 delivery answers** (the same windows):
+  - Of the 84 reused excerpts with an A3 voice answer, 82 have a voice marked. Two (one
+    Low Screams, one Cleans) are marked as having no voice. The two answers disagree, and
+    both histories are kept as they are.
+  - All 7 reused A3 No-vocals excerpts are negatives.
+- **Metadata candidates:** 7 of the 80 instrumental candidates had an audible voice:
 
-  Metadata alone does not make a negative.
+  | Category | With a voice |
+  |---|---:|
+  | Song-intro windows | 3 of 14 |
+  | Distorted rhythm guitar | 2 of 20 |
+  | Guitar lead / solo | 1 of 20 |
+  | Orchestral / ambient | 1 of 10 |
+  | Instrumental soundtrack | 0 of 16 |
+
+  Two song intros have a voice entering 6.0 s and 8.4 s in. Metadata alone does not make a
+  negative.
+- **The 82 negatives:** 73 confirmed candidates, the 7 A3 No-vocals excerpts and the 2
+  disagreements above.
 - **Audio checks:** every completed excerpt's audio could be read. No voice mark lies over
   near-silence, and no negative is mostly silence.
-- **How the negatives were judged:** the window does not record playback. On 25 of the 43
+- **How the negatives were judged:** the window does not record playback. On 50 of the 82
   negatives, Complete came sooner after the previous excerpt than the excerpt could play in
-  full. The owner confirmed these rest on their knowledge of the recordings: all-instrumental
-  bands, songs known to have no vocals, and interludes.
+  full. The owner confirmed that such answers rest on their knowledge of the recordings:
+  all-instrumental bands, songs known to have no vocals, and interludes.
 
 ## Limitations
 
-- About 40% of the development excerpts and all of validation are not yet annotated.
+- Validation (28 excerpts) is not yet annotated.
+- Two development excerpts disagree with their A3 delivery answers (voice in A3, none here).
 - Live marks lag by reaction time; boundary accuracy depends on refining while paused.
 - No-voice answers are the owner's judgement, partly from knowledge of the recordings; how
   much of each excerpt was played is not recorded.
