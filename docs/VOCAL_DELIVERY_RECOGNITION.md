@@ -26,8 +26,12 @@ screams.**
   0.63. All of the gain comes from clean against harsh.
 
 These are **development results with exploratory model selection** (three models compared
-on the same predictions). They are not an untouched final test: the held-out evaluation
-artists were not used at all.
+on the same predictions).
+
+**The independent held-out test was INCONCLUSIVE** (scored 2026-11-26 03:21 UTC, which is 2026-11-25 21:21 CST). The frozen forest got 18
+of the 20 held-out excerpts it could be scored on right, a balanced accuracy of 0.84. But
+there were only 4 harsh excerpts, against the 10 the plan required. Encouraging, but not
+enough to establish that clean against harsh generalises; see "Held-out test" below.
 
 ## What was tested
 
@@ -278,6 +282,50 @@ beside it, and writes into the ignored `local-evidence/sonic-character/vocal-del
 `--no-cache` measures everything again. Without `--inventory` the credit check is skipped
 (the summary records whether it ran).
 
+## Held-out test (scored 2026-11-26 03:21 UTC, 2026-11-25 21:21 CST)
+
+The frozen random forest was tested **once** on the held-out artists. Every decision was
+fixed in a plan before any held-out answer was read
+([VOCAL_DELIVERY_HELDOUT_PLAN.md](VOCAL_DELIVERY_HELDOUT_PLAN.md)). The model was trained on
+the 266 development excerpts and predicted all 69 held-out excerpts blind. The predictions
+were sealed by a published SHA-256 before the answers were opened.
+
+**Verdict: INCONCLUSIVE.** Only 4 held-out excerpts are harsh (High or Low Screams). The
+plan needs at least 10 clean and 10 harsh, and its thresholds were not changed.
+
+| Owner's answer | Called clean | Called harsh |
+|---|---:|---:|
+| Clean (16) | 15 | 1 |
+| Harsh (4) | 1 | 3 |
+
+- **Score:** clean recall 0.94, harsh recall 0.75, balanced accuracy **0.84**, against 0.92
+  in development.
+- **Uncertainty:** 95% interval 0.59 to 1.00, from 2,000 valid resamples of artist groups
+  (2,009 draws, 9 rejected for lacking a class). 9 artist groups contribute clean excerpts
+  and 4 contribute harsh ones.
+- **Breadth:** the largest artist group contributed only 4 scored excerpts, all clean, 3
+  right. The remaining groups pooled had 12 clean and 4 harsh: all 12 clean and 3 of the 4
+  harsh were right, balanced accuracy 0.88. Under the pre-registered breadth rule the result
+  is therefore classified as **mainly on one artist**: the other groups do not provide the
+  required 5 clean and 5 harsh excerpts. This reflects insufficient evidence of breadth,
+  not a large concentration, since the largest group contributed only 4 of the 20 scored
+  excerpts. No held-out recording has both deliveries, so there is no within-recording
+  comparison.
+- **Precaution:** the 2 excerpts held apart as a precaution were both right.
+- **Not scored:** 37 excerpts answered Gutturals or Sing-Screams, and 10 No vocals. Of the
+  No vocals excerpts, the model called 9 clean. **The classifier has no No vocals answer,
+  so it cannot tell whether a voice is present.** It puts instrumental passages into one
+  of its classes, mostly clean.
+- **What it means:**
+  - The development result is encouraging, and the held-out excerpts that could be
+    scored agree with it.
+  - It is not established: 4 harsh excerpts cannot show that clean against harsh
+    generalises to unseen artists.
+  - The held-out artists are now used for this question.
+  - The scoring step read their answers through a coarse mapping that combined High and
+    Low Screams into "harsh". Their High-versus-Low identities were never inspected or
+    retained.
+
 ## Limitations
 
 - **Small and concentrated.** There are 45 High Screams from 7 artists, three of which
@@ -291,27 +339,30 @@ beside it, and writes into the ignored `local-evidence/sonic-character/vocal-del
   technique, so mixed excerpts carry one answer for several deliveries.
 - **One listener.** Every answer is the owner's; there is no second opinion on how
   consistent the High/Low boundary is.
-- **Development only, with exploratory model choice.** No number here is a final test.
+- **Development results with exploratory model choice; the one held-out test was
+  inconclusive.** No number here establishes that the distinction generalises.
+- **No voice-presence detection.** The classifier has no No vocals answer. On held-out
+  instrumental excerpts it answered clean 9 times out of 10. It can only describe how a
+  voice is delivered when a voice is known to be there.
 - **Vocalist identity.** Artist-disjoint folds do not prove that no singer appears in two
   groups. The inventory has no named vocalist credits. Artist credits show no shared
   person between development groups, but an uncredited guest or a shared member would not
   show. The one known case is excluded.
-- **For a later held-out test.** In the music inventory, one held-out recording belongs to
-  a leakage group whose other recordings are on the development side under another artist
-  name. Those development recordings are by other performers and share no audio with it.
-  One of their excerpts is among the 266 used here; that does not affect development
-  validation, which never uses the held-out side. It should be reviewed before the
-  held-out side is ever opened.
+- **A shared inventory leakage group.** In the music inventory, one held-out recording
+  belongs to a leakage group whose other recordings are on the development side under
+  another artist name. Those development recordings are by other performers and share no
+  audio with it, and one of their excerpts is among the 266 used here. The held-out plan
+  scored that recording's 2 excerpts separately, as a precaution (both were right).
 
 ## Does this justify going further?
 
-- **Clean against harsh: yes.** It holds on unseen artists and within recordings. A
-  sensible next step is to freeze one model (the forest, or the simpler logistic
-  regression) and this feature set, then test it **once** on the held-out artists, with
-  the decision and the number to beat written down before looking. Only after that should
-  live use be considered, as a separate phase.
-  That test is planned, with every decision fixed before any held-out answer is read:
-  [VOCAL_DELIVERY_HELDOUT_PLAN.md](VOCAL_DELIVERY_HELDOUT_PLAN.md).
+- **Clean against harsh: encouraging, not established.** It holds on unseen development
+  artists and within recordings. The one held-out test, run once under a plan fixed in
+  advance, was inconclusive: only 4 harsh excerpts
+  ([VOCAL_DELIVERY_HELDOUT_PLAN.md](VOCAL_DELIVERY_HELDOUT_PLAN.md)). The next step is to
+  collect more eligible harsh-vocal examples (High and Low Screams) from additional
+  artists, then design a fresh artist-disjoint evaluation with its own plan. The artists
+  already used cannot serve as that test. Live integration is out of scope.
 - **High against low: not with these features or this data.** It needs both:
   - High Screams from more vocalists (at least 6 to 8 groups with several excerpts each,
     not three groups carrying most of them);

@@ -1,6 +1,6 @@
 # Held-out test of clean against harsh vocals: the plan, fixed before looking
 
-**Status: predictions sealed, not scored** (see "Seal" below). No held-out answer has been read.
+**Status: predictions sealed (2026-11-26, 02:35 UTC, which is 2026-11-25, 20:35 CST), then scored once (2026-11-26, 03:21 UTC, which is 2026-11-25, 21:21 CST). Pre-registered verdict: INCONCLUSIVE** (see "Result" at the end). The held-out artists now count as used for clean against harsh.
 This document is committed **before** the test so that every decision below can be seen to
 have been made without knowing the outcome. Any change to it after the test starts would
 have to be stated as such.
@@ -219,3 +219,106 @@ guarded interval, the breadth rule, the precaution policy or the coarse mapping.
 - High against Low, Gutturals, Sing-Screams: not scored.
 - Live or real-time use, the visualizer, Radiant: unchanged.
 - The owner's dataset and answer history: read only, never changed.
+
+## Result (scored once: 2026-11-26, 03:21 UTC, which is 2026-11-25, 21:21 CST)
+
+**This section records the outcome, after scoring.** The sections above it were fixed
+before the result was known, and none of them was changed by it: the plan, Amendment 1,
+the seal and the implementation note. Those were fixed before any held-out answer was
+read; the implementation note was added after the seal and before scoring.
+
+**How it ran.**
+
+- **Once, with the owner's explicit authorisation,** from commit `39d7881`. The opening
+  marker records 2026-11-26 03:21:39 UTC (2026-11-25 21:21:39 CST). The frozen forest had
+  been trained on the 266 development excerpts.
+- **Preflight:** the predictions matched their seal (`48aee927…a6a3`) and the manifest was
+  unchanged. The answers file matched the owner's latest verified backup byte for byte
+  (SHA-256 `f241d92f…bc6e`). The consistency check passed before the answers were opened.
+- **Answers read through the coarse mapping:** the scoring step read each held-out answer
+  from the answers file and at once reduced it to one of four values. Those are clean;
+  harsh (High and Low Screams together); other (Gutturals and Sing-Screams together); or
+  No vocals. The original fine-grained answers were not inspected or retained.
+- **Files unchanged afterwards:** the predictions, the manifest, the answers file and the
+  backup.
+
+**Verdict: INCONCLUSIVE.** The plan needs at least 10 scored clean and 10 scored harsh
+excerpts, and the held-out side has **16 clean but only 4 harsh**. The thresholds and rules
+were not changed. The numbers below are reported as the plan requires; they are not a
+pass or a fail.
+
+**Where the 69 held-out excerpts went:**
+
+| Excerpts | Count |
+|---|---:|
+| Scored (primary): answered Cleans, High Screams or Low Screams | 20 (16 clean, 4 harsh) |
+| Answered Gutturals or Sing-Screams ("other", not scored) | 37 |
+| No vocals (not scored) | 10 |
+| Precaution excerpts (scored separately) | 2 |
+| Review later, unanswered or unreadable | 0 |
+
+**Primary result**, on the 20 scored excerpts:
+
+| Owner's answer | Called clean | Called harsh |
+|---|---:|---:|
+| Clean (16) | 15 | 1 |
+| Harsh (4) | 1 | 3 |
+
+| Measure | Value |
+|---|---|
+| Clean recall | 0.94 (15 of 16) |
+| Harsh recall | 0.75 (3 of 4) |
+| Balanced accuracy | **0.84** (development estimate: 0.92) |
+| Precision, clean / harsh | 0.94 / 0.75 |
+
+**The guarded interval (Amendment 1):**
+
+- **Range:** the 95% interval for balanced accuracy is **0.59 to 1.00**.
+- **Resampling:** 2,009 draws of artist groups. 9 were rejected for lacking clean or harsh
+  excerpts, leaving 2,000 valid resamples.
+- **Coverage:** 9 artist groups contribute clean excerpts and 4 contribute harsh ones.
+- **Status:** the interval met every one of Amendment 1's conditions. The verdict is
+  inconclusive because of the excerpt count alone.
+
+**Artist groups and breadth:**
+
+- **The largest group** contributed 4 of the 20 primary scored excerpts, all clean, 3 of
+  them right.
+- **The other groups pooled:** 12 clean and 4 harsh. All 12 clean and 3 of the 4 harsh were
+  right, a balanced accuracy of 0.88.
+- **Breadth classification: mainly on one artist.** Under the pre-registered breadth rule, the result remains classified as mainly on one artist because the other groups do not provide the required five clean and five harsh examples. This classification reflects insufficient evidence of breadth, not a large observed concentration: the largest group contributed only four of the 20 primary scored excerpts.
+  - **The conditions:** the other groups had 12 clean excerpts but only 4 harsh, against at
+    least 5 of each. Their balanced accuracy of 0.88 meets the 0.70 condition.
+  - **The scoring output** leaves its breadth field empty, because the implementation
+    attaches the breadth note only to a conclusive verdict. Applied to the reported
+    figures, the written rule gives "mainly on one artist".
+  - **This does not change the verdict,** which remains INCONCLUSIVE because only 4 harsh
+    excerpts were available against the minimum of 10.
+- **Per group:** 10 groups were scored. Every group had at most one wrong answer; the only
+  group with no right answer had a single excerpt, a harsh one.
+- **Within recordings:** no held-out recording has both a clean and a harsh excerpt, so
+  the within-recording comparison was unavailable.
+
+**Precaution excerpts:** 2, both right.
+
+**Described, not scored:**
+
+- **The 37 "other" excerpts:** the model called 24 harsh and 13 clean. It never learned
+  Gutturals or Sing-Screams, so this is a description, not a result.
+- **The 10 No vocals excerpts:** it called 9 clean and 1 harsh. **This is not evidence of
+  detecting whether a voice is present.** The model has no No vocals answer, so it puts an
+  instrumental passage into one of its classes, mostly clean.
+
+**What this means.**
+
+- **Encouraging but insufficient.** On the 20 held-out excerpts it could be scored on, the
+  model got 18 right, including 3 of the 4 harsh ones. Four harsh excerpts and an interval
+  from 0.59 to 1.00 cannot establish that clean against harsh generalises to unseen
+  artists. The model is not confirmed and not validated for any use.
+- **The held-out side had the wrong mix for this question.** Of its 59 answered excerpts,
+  37 were answered Gutturals or Sing-Screams, which this test deliberately does not score.
+- **These artists are used for clean against harsh** and must not serve as a fresh test of
+  it. Their fine-grained High-versus-Low and Guttural-versus-Sing-Scream identities were
+  never inspected or retained.
+- **Next research step:** collect more eligible harsh-vocal examples (High and Low Screams)
+  from additional artists, then design a fresh artist-disjoint evaluation with its own plan.
