@@ -138,6 +138,6 @@ Details: [VOCAL_PRESENCE_ANNOTATION.md](VOCAL_PRESENCE_ANNOTATION.md). Research 
   - The A3 files were unchanged, and no held-out answer was decoded.
   - New recordings' checksums were verified.
   - The final-test freeze was refused: 7 never-used artist groups against 20 required.
-- **Full suite:** 787 passed, 3 skipped, 4 failed. The failures are the three known `tests/test_remote.py` failures (Linux resource tracker; the fix is on a separate branch) and the known intermittent replay test (its fix is PR #1, not in this stack). No new failure. `ruff check` clean.
+- **Full suite:** 787 passed, 3 skipped, 4 failed. The failures are the three known `tests/test_remote.py` failures (Linux resource tracker; the fix is on a separate branch) and the known intermittent replay test (its fix is PR #1, not in this stack). No new failure. `ruff check` clean. After the full run, a privacy correction removed local-path defaults from the `prepare` command (now a required `--inventory` and an optional `--map`); `tests/test_vocal_presence.py` was run again afterwards: 32 passed.
 - **Not done:** any annotation by the owner; Windows playback; any model training or evaluation.
 
