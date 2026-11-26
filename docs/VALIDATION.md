@@ -139,5 +139,13 @@ Details: [VOCAL_PRESENCE_ANNOTATION.md](VOCAL_PRESENCE_ANNOTATION.md). Research 
   - New recordings' checksums were verified.
   - The final-test freeze was refused: 7 never-used artist groups against 20 required.
 - **Full suite:** 787 passed, 3 skipped, 4 failed. The failures are the three known `tests/test_remote.py` failures (Linux resource tracker; the fix is on a separate branch) and the known intermittent replay test (its fix is PR #1, not in this stack). No new failure. `ruff check` clean. After the full run, a privacy correction removed local-path defaults from the `prepare` command (now a required `--inventory` and an optional `--map`); `tests/test_vocal_presence.py` was run again afterwards: 32 passed.
-- **Not done:** any annotation by the owner; Windows playback; any model training or evaluation.
+- **Owner's use** (real hardware, owner-evaluated, 2026-11-26), read from the saved history without changing it:
+  - **Progress:** 101 of 171 development excerpts completed (58 with a voice, 43 without); one more is marked but not completed.
+  - **Integrity:** 185 events, chain intact, no damaged line, none rejected, project check passing, A3 answer file unchanged.
+  - **Agreement:** all 54 completed A3 voice excerpts have a voice marked, and all 3 completed A3 No-vocals excerpts are negatives.
+  - **Candidates:** 4 of 44 completed instrumental candidates had a voice.
+  - **Audio:** no voice mark over near-silence.
+  - **How negatives were judged:** playback is not recorded. On 25 negatives, Complete came sooner than the excerpt could play in full; the owner confirmed these rest on their knowledge of the recordings (all-instrumental bands, songs known to have none, interludes).
+  - **Not reported:** the owner gave no separate feedback on position sync or boundary placement. No boundary was adjusted after marking.
+- **Not done:** the remaining development excerpts and the validation partition; Windows playback; any model training or evaluation.
 

@@ -7,8 +7,10 @@ its current state:
   annotator cannot tell), with start and end in seconds on the excerpt's own timeline,
   kept to the millisecond. Intervals may overlap: several voices at once still mean "a voice
   is present", so binary targets use the union of confirmed intervals;
-* a **review** state: ``in_progress`` (the default), ``complete`` (the whole excerpt was
-  listened to and every audible voice is marked) or ``unusable`` (with a reason);
+* a **review** state: ``in_progress`` (the default), ``complete`` (every audible voice is
+  marked, as far as the annotator can tell; a no-voice answer may rest partly on the
+  annotator's knowledge of the recording, and how much was played is not recorded) or
+  ``unusable`` (with a reason);
 * **confounder tags**: what makes the excerpt useful for testing a detector (guitar solo,
   synth, ...). Tags are never presence labels;
 * an optional free-text **note**.
@@ -16,7 +18,8 @@ its current state:
 Status, from the state:
 
 * ``positive``: complete, at least one confirmed interval;
-* ``negative``: complete, no interval of either kind: an explicit No-vocals example;
+* ``negative``: complete, no interval of either kind: an explicit No-vocals example (the
+  annotator's judgement, from listening and knowledge of the recording);
 * ``uncertain``: complete, only uncertain intervals: its excerpt-level label is unknown;
 * ``incomplete`` and ``unusable``: never used as training or evaluation data, and never a
   negative.

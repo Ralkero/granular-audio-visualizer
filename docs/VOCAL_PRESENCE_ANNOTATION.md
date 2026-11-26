@@ -41,12 +41,16 @@ Each partition (development, validation, final test) has its own append-only his
     the union of confirmed intervals; the original intervals stay in the history.
 - **Review state:**
   - **in progress**, the default;
-  - **complete**: the whole excerpt was listened to and every audible voice is marked;
+  - **complete**: every audible voice is marked, as far as the annotator can tell. A voice is
+    marked by listening. A no-voice answer can also rest on the annotator's knowledge of the
+    recording: a band that never has vocals, a song known to have none, or an interlude. In
+    that case not every second need have been played, and the window does not record how
+    much was heard;
   - **unusable**: with a required reason.
 - **Excerpt status:**
   - **positive**: complete, with at least one confirmed interval;
   - **negative**: complete, with no interval of either kind. This is an explicit No-vocals
-    example;
+    example: the annotator's judgement, from listening and from knowledge of the recording;
   - **uncertain**: complete, with only uncertain intervals. Its excerpt-level label is
     unknown;
   - **incomplete** or **unusable**: never training or evaluation data, and never a
@@ -198,7 +202,7 @@ Everything private lives in the ignored folder `local-evidence/sonic-character/v
     | Drums only | **0** |
 
     The library's metadata supports none of the last three. Each category rests on 2 to 5
-    artist groups (song intros: 19). Every candidate must be confirmed by listening.
+    artist groups (song intros: 19). Every candidate must be confirmed by the annotator.
   - **Harsh vocals:** the development side has High Screams from 7 artist groups, Low
     Screams from 10, Gutturals from 1 and Sing-Screams from 2. Only 42 unused vocal
     recordings exist in the 3 groups that have harsh answers. Broadening harsh coverage
@@ -209,10 +213,44 @@ Everything private lives in the ignored folder `local-evidence/sonic-character/v
   artists and instrumental material per confounder type, added to the library and
   inventory. Until then the 7 reserved groups stay unused.
 
+## First annotation session (2026-11-26, aggregate)
+
+The owner annotated in the window on CachyOS (real hardware, owner-evaluated). The checks
+below were read from the saved history and the audio; nothing was changed.
+
+- **Progress:**
+  - Development: 101 of 171 excerpts completed, worked through in list order. 58 have a voice
+    and 43 have none; none is uncertain or unusable.
+  - One more excerpt has marks but is not yet completed. Validation is not started.
+- **Marks:**
+  - 81 voice stretches, 1 to 3 per voiced excerpt. The median voiced excerpt has a voice in
+    86% of its length; 19 of the 58 are voiced throughout.
+  - No boundary was adjusted after marking, so boundaries carry the live-marking lag.
+  - No confounder tag or note was used.
+- **History integrity:**
+  - 185 events, chain intact, sequence contiguous, no damaged line, none rejected.
+  - The project check passes, and the A3 answer file is unchanged.
+- **Agreement with the A3 delivery answers** (same windows): all 54 completed excerpts with
+  a voice answer have a voice marked, and all 3 completed A3 No-vocals excerpts are
+  negatives.
+- **Metadata candidates:** 4 of the 44 completed instrumental candidates had an audible voice:
+  - a guitar-solo candidate and a rhythm-guitar candidate;
+  - two song-intro windows, where the voice enters 6.0 s and 8.4 s in.
+
+  Metadata alone does not make a negative.
+- **Audio checks:** every completed excerpt's audio could be read. No voice mark lies over
+  near-silence, and no negative is mostly silence.
+- **How the negatives were judged:** the window does not record playback. On 25 of the 43
+  negatives, Complete came sooner after the previous excerpt than the excerpt could play in
+  full. The owner confirmed these rest on their knowledge of the recordings: all-instrumental
+  bands, songs known to have no vocals, and interludes.
+
 ## Limitations
 
-- No annotation has been made yet: all counts above are candidates, not labels.
+- About 40% of the development excerpts and all of validation are not yet annotated.
 - Live marks lag by reaction time; boundary accuracy depends on refining while paused.
+- No-voice answers are the owner's judgement, partly from knowledge of the recordings; how
+  much of each excerpt was played is not recorded.
 - Confounder categories come from sparse metadata; three categories have no candidates.
 - Validation has almost no harsh voices; all negative categories rest on few artists.
 - Identity grouping depends on credits; uncredited shared vocalists would not be caught.
