@@ -310,6 +310,8 @@ beside it, and writes into the ignored `local-evidence/sonic-character/vocal-del
   regression) and this feature set, then test it **once** on the held-out artists, with
   the decision and the number to beat written down before looking. Only after that should
   live use be considered, as a separate phase.
+  That test is planned, with every decision fixed before any held-out answer is read:
+  [VOCAL_DELIVERY_HELDOUT_PLAN.md](VOCAL_DELIVERY_HELDOUT_PLAN.md).
 - **High against low: not with these features or this data.** It needs both:
   - High Screams from more vocalists (at least 6 to 8 groups with several excerpts each,
     not three groups carrying most of them);
