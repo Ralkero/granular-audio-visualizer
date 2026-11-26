@@ -225,7 +225,6 @@ from the saved history and the audio; nothing was changed.
   - They span 20 artist groups and 153 recordings. Voiced excerpts come from 16 groups, and
     no-voice excerpts from 18.
   - A voice is audible in 703 of the 1,710 annotated seconds (41%).
-  - Validation (28 excerpts) is not started.
 - **Marks:**
   - 112 voice stretches, 1 to 3 per voiced excerpt (69 have one, 17 two, 3 three). The
     median voiced excerpt has a voice in 92% of its length; 35 of the 89 are voiced
@@ -261,15 +260,57 @@ from the saved history and the audio; nothing was changed.
   full. The owner confirmed that such answers rest on their knowledge of the recordings:
   all-instrumental bands, songs known to have no vocals, and interludes.
 
+## Validation annotation (completed 2026-11-26, aggregate)
+
+The owner then annotated the validation partition in the same window (real hardware,
+owner-evaluated). The checks were read-only.
+
+- **Result:**
+  - All 28 validation excerpts are completed: 6 have a voice and 22 have none. None is
+    uncertain or unusable.
+  - They span 6 artist groups and 25 recordings. Voiced excerpts come from 4 groups, and
+    no-voice excerpts from 5.
+  - A voice is audible in 52 of the 280 annotated seconds (19%).
+- **Marks:**
+  - 6 voice stretches, one per voiced excerpt, and no uncertain stretch. The median voiced
+    excerpt has a voice in 98% of its length (lowest 44%); 3 of the 6 are voiced throughout.
+  - No confounder tag or note was used.
+- **Sources:**
+  - **Voiced (6):** 3 A3 Cleans, 2 A3 Low Screams and 1 song-intro candidate.
+  - **No voice (22):**
+    - 18 confirmed candidates: 10 orchestral/ambient, 4 instrumental soundtrack and 4 song
+      intros;
+    - 3 A3 No-vocals excerpts;
+    - 1 A3 Cleans excerpt now marked as having no voice. The answers disagree, and both
+      histories are kept.
+  - 1 of the 19 instrumental candidates had a voice.
+- **History integrity:** 34 events. The chain is intact, checked both by the project's
+  loader and by an independent recomputation. The sequence is contiguous, and no line is
+  damaged or rejected.
+- **Separation:**
+  - The project check passes.
+  - Development and validation share no excerpt, recording or artist group, and each
+    history refers only to its own partition's excerpts.
+  - All 6 validation groups are registered as validation. No final-test list exists, and
+    the reserved groups are unchanged.
+  - The development history is byte-identical to its state before validation was
+    annotated. A verified local backup of both partitions was made.
+- **Audio checks:** every excerpt's audio could be read. No voice mark lies over
+  near-silence, and no negative is mostly silence.
+- **What validation can show:** with 22 negatives from 5 groups, it can check false
+  alarms. With only 6 voiced excerpts from 4 groups, and only 2 harsh ones, any estimate
+  of missed voices will be very imprecise.
+
 ## Limitations
 
-- Validation (28 excerpts) is not yet annotated.
-- Two development excerpts disagree with their A3 delivery answers (voice in A3, none here).
+- Three reused excerpts (2 development, 1 validation) disagree with their A3 delivery answers:
+  a voice in A3, none here.
 - Live marks lag by reaction time; boundary accuracy depends on refining while paused.
 - No-voice answers are the owner's judgement, partly from knowledge of the recordings; how
   much of each excerpt was played is not recorded.
 - Confounder categories come from sparse metadata; three categories have no candidates.
-- Validation has almost no harsh voices; all negative categories rest on few artists.
+- Validation has only 6 voiced excerpts (4 artist groups, 2 harsh), so missed-voice estimates
+  on it will be imprecise. All negative categories rest on few artists.
 - Identity grouping depends on credits; uncredited shared vocalists would not be caught.
   One development group was excluded through a composer credit, a conservative merge.
 - The project folder lives in this worktree's ignored `local-evidence/`. Use **Save a backup

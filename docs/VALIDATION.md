@@ -147,5 +147,14 @@ Details: [VOCAL_PRESENCE_ANNOTATION.md](VOCAL_PRESENCE_ANNOTATION.md). Research 
   - **Audio:** no voice mark over near-silence.
   - **How negatives were judged:** playback is not recorded. On 50 of the 82 negatives, Complete came sooner than the excerpt could play in full; the owner confirmed such answers rest on their knowledge of the recordings (all-instrumental bands, songs known to have none, interludes).
   - **Not reported:** the owner gave no separate feedback on position sync or boundary placement. No boundary was adjusted after marking.
-- **Not done:** the validation partition; Windows playback; any model training or evaluation.
+- **Validation partition** (real hardware, owner-evaluated, 2026-11-26), read-only check:
+  - **Progress:** all 28 excerpts completed (6 with a voice, 22 without), from 6 artist groups and 25 recordings. A voice fills 19% of the time.
+  - **Marks:** 6 voice stretches, no uncertain stretch; median coverage per voiced excerpt 98%.
+  - **Integrity:** 34 events; the chain is intact in both the loader and an independent recomputation, and no line is damaged or rejected.
+  - **Agreement with A3:** 5 of 6 A3 voice excerpts have a voice marked; 1 Cleans is marked no voice. All 3 A3 No-vocals excerpts are negatives.
+  - **Candidates:** 1 of 19 instrumental candidates had a voice.
+  - **Separation:** no excerpt, recording or artist group is shared with development; each history holds only its own partition's excerpts; no final-test list exists; the reserved groups are unchanged.
+  - **Development:** the history is byte-identical to before. A verified local backup of both partitions exists.
+  - **Limit:** only 6 voiced excerpts (4 groups, 2 harsh), so missed-voice estimates on validation will be imprecise.
+- **Not done:** Windows playback; any model training or evaluation.
 
