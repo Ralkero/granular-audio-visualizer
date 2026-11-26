@@ -11,6 +11,9 @@ The owner approved the design (proposal revision 4) on 2026-11-26. Every rule be
 fixed without seeing any result. A later change is an **amendment**: appended at the end
 with its date and reason, and made before the predictions it could influence exist.
 
+**Amended once since registration** (Amendment 1, 2026-11-26, before Stage 1; see the
+end). Superseded wording is struck through and kept visible.
+
 **This is an exploratory comparison.** It measures and describes how three vocal-presence
 detectors differ on the owner's development artists. It does **not** test hypotheses:
 the cross-validated results are dependent (§12), so no claim of statistically confirmed
@@ -47,7 +50,8 @@ excerpts, and each false report is drawn as a vocal phrase (Phase A5.0 audit; se
   about 23.7 kHz, so it is left out of training for every arm and out of every paired
   statistic. Model C alone is reported on it, descriptively.
 - **Validation:** 28 excerpts from 6 groups (52 s of voice from 4 groups), used once and
-  descriptively (§13).
+  descriptively (~~§13~~ §14; editorial correction, Amendment 1, A1.4). Its provenance:
+  Amendment 1, A1.2.
 - **Final test:** none. The 7 reserved groups stay reserved and nothing is frozen.
 
 ## 3. The arms
@@ -332,12 +336,13 @@ together with the share of bootstrap draws where it fell below.
 
 | Result | Rule (point estimates, development, C against B0ₜ) |
 |---|---|
-| **Promising: carry forward to confirmation** | All of: (a) the false-activity ratio is ≤ 0.50 — or, under §12.1, FPA_macro(C) ≤ 3 s/min and D_FA ≤ 0; (b) Δ_R ≥ −0.05; (c) the direction of D_FA and the sign of Δ_R + 0.05 hold in all 5 seeds and in every leave-one-group-out recomputation |
+| **Promising: carry forward to confirmation** | All of: (a) the false-activity ratio is ≤ 0.50 — ~~or, under §12.1, FPA_macro(C) ≤ 3 s/min and D_FA ≤ 0~~ (the low-baseline case is replaced by Amendment 1, A1.1); (b) Δ_R ≥ −0.05; (c) the direction of D_FA and the sign of Δ_R + 0.05 hold in all 5 seeds and in every leave-one-group-out recomputation |
 | **Mixed** | Lower false activity than B0ₜ without meeting "promising" |
 | **Not promising** | False activity not lower than B0ₜ, or Δ_R < −0.05 |
 
 B1 is screened against B0ₜ in the same way. If B1 alone is promising, the cheaper retrain
-is the candidate to carry forward.
+is the candidate to carry forward. When FPA_macro(B0ₜ) is below 3 s/min, the
+classification in Amendment 1, A1.1 applies instead of this table.
 
 **The thresholds are owner decisions:**
 - **50% reduction:** the smallest change expected to be clearly visible.
@@ -355,9 +360,9 @@ is the candidate to carry forward.
   - recall and missed voice (52 s from 4 groups);
   - phrases;
   - per group and per excerpt privately.
-- **It cannot confirm anything,** even in principle. With 5 no-voice groups and 4 voice
+- ~~**It cannot confirm anything,** even in principle. With 5 no-voice groups and 4 voice
   groups, the smallest attainable one-sided sign-flip p-values are 1/32 and 1/16, both
-  above 0.025, even if every group favoured C.
+  above 0.025, even if every group favoured C.~~ Replaced by Amendment 1, A1.3.
 - **Confirmation needs an untouched final test:** at least 20 eligible never-used groups
   (A5.1's rule), scored by fixed, frozen models.
   - Only 7 exist, so about 13 or more new artists must be collected first.
@@ -419,8 +424,9 @@ All on generated audio and generated projects:
 
 ## 17. Data protection
 
-- Only the development and validation presence histories are read; validation is read
-  only in Stage 4.
+- Only the development and validation presence histories are read. ~~Validation is read
+  only in Stage 4.~~ This was incomplete; see Amendment 1, A1.2 for the validation data's
+  prior inspection and the access rule from Stage 1 on.
 - No final-test path is opened.
 - Audio, titles, identifiers, paths, features, weights, fold files, predictions and
   per-group results stay in ignored `local-evidence/`.
@@ -442,4 +448,87 @@ All on generated audio and generated projects:
 
 ## Amendments
 
-None yet.
+### Amendment 1 — 2026-11-26, before Stage 1
+
+**State when made:**
+- the protocol had been committed (694fad6);
+- no model had been trained, no prediction made and no feature extracted;
+- no fold file existed;
+- nothing had been run on the owner's music.
+
+The amendment was written from the protocol alone; no annotation history was read for it.
+It does not change the model architecture, data partitions, seeds, fold policy, training
+procedure, compute policy or any other acceptance criterion.
+
+#### A1.1 The low-baseline screening rule
+
+**Why:** when FPA_macro(B0ₜ) is below 3 s/min, the registered rule (§13) called C
+"promising" when FPA_macro(C) ≤ 3 s/min and D_FA ≤ 0. That counted *identical* false
+activity as an improvement.
+
+**Replacement.** When FPA_macro(B0ₜ) < 3 s/min (including zero), C is classified against
+B0ₜ by the first matching row:
+
+| # | Class | Rule (point estimates, development) | Consequence |
+|---|---|---|---|
+| 1 | **Recall below margin** | Δ_R < −0.05 | Not promising: retain B0 |
+| 2 | **Worsened** | D_FA > 0: C has more false vocal activity than B0ₜ | Not promising: retain B0 |
+| 3 | **Improved** | D_FA < 0 (strictly lower), and FPA_macro(C) ≤ 3 s/min, and Δ_R ≥ −0.05, and the robustness requirement of §13 (c): D_FA < 0 and Δ_R + 0.05 ≥ 0 hold in all 5 seeds and in every leave-one-group-out recomputation | Promising: carry forward to confirmation |
+| 4 | **Maintained** | D_FA = 0: the same false activity, both arms meeting the 3 s/min readiness target | **Not an improvement.** Retain the simpler baseline. C could be carried forward only for another benefit that was pre-declared and independently demonstrated. **This protocol pre-declares no such benefit, so "maintained" means retaining B0.** |
+| 5 | **Mixed** | Anything else (for example, D_FA < 0 but the robustness requirement fails) | Not carried forward on this evidence |
+
+**What stays the same:**
+- The 50% relative-reduction criterion stays **not applicable** in this case (§12.1).
+- No constant is added to any denominator.
+- The 3 s/min readiness target is unchanged.
+- "Same" means equal point estimates of FPA_macro, as measured on the 20 ms frame grid; no
+  tolerance band is introduced.
+- **B1 against B0ₜ** is classified with the same rows.
+- When FPA_macro(B0ₜ) ≥ 3 s/min, the §13 table applies unchanged. There, equal false
+  activity already counts as "not lower", so it is not promising.
+
+#### A1.2 Validation provenance
+
+**Why:** §17 said validation is read only in Stage 4. That is not a complete account of
+earlier access.
+
+**Record:**
+- **Already inspected.** The 28-excerpt validation partition was complete before A5.2 was
+  registered. Its annotation history was read during A5.1 completion and integrity checks,
+  and its aggregate statistics were inspected:
+  - counts of excerpts with and without voice;
+  - artist groups;
+  - voiced and no-voice seconds;
+  - interval counts and coverage;
+  - negative categories.
+- **Used for planning.** Those aggregate facts informed the feasibility assessment and the
+  design of A5.2, including its descriptive-only role for validation.
+- **Not used for fitting.** Validation was not used, and will not be used, for model
+  training, feature selection, threshold tuning or model selection.
+- **Not pristine.** No claim is made that validation is unseen or pristine.
+- **From Stage 1 through Stage 3,** the validation annotation history is not read and no
+  individual validation label is used. Any loader call is restricted to the development
+  partition.
+- **Stage 4 is unchanged.** It is a one-time descriptive scoring pass:
+  1. models and operating points are frozen;
+  2. predictions are sealed with SHA-256;
+  3. the validation answers are read only after the owner's separate authorisation.
+
+#### A1.3 Validation's role, without the withdrawn test framework
+
+**Why:** revision 4 of the proposal withdrew formal significance testing. §14 still
+justified validation's role through minimum attainable sign-flip p-values, as if a
+sign-flip test were part of the plan. It is not.
+
+**Replacement.** Validation is descriptive only. Its small number of artist groups and
+positive excerpts cannot provide sufficiently reliable confirmation for the intended
+claims, so no hypothesis test or confirmatory conclusion is planned. The descriptive-only
+reporting restriction of §12 and §14 is unchanged.
+
+§12's explanation of why development results are not tested still mentions sign-flip
+procedures, as the reason they are *not* used. It is kept as written.
+
+#### A1.4 Editorial
+
+§2 referred to §13 for validation; the right section is §14. The original reference is
+struck through and the correct one shown beside it.
