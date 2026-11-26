@@ -548,3 +548,247 @@ def test_the_command_stops_on_unusable_data(tmp_path, capsys):
         main(["character", "research", "delivery", "--folder", str(tmp_path / "nothing"), "--out", str(tmp_path / "out")])
     assert "Stopped" in str(stopped.value)
     assert not (tmp_path / "out" / "summary.json").exists()
+
+
+# -- the pre-registered held-out test ---------------------------------------------------
+
+from gmv.character.research.delivery import heldout  # noqa: E402
+
+FINE = ("high_screams", "low_screams", "gutturals", "sing_screams")
+
+
+def inventory_for(labelled, tmp_path):
+    """Every recording in its own leakage group, except one held-out recording that shares
+    a development recording's group: the plan's precaution must flag it."""
+    dataset = labelled["dataset"]
+    dev_recording = sorted(k for k, r in dataset["recordings"].items() if r["artist"] in labelled["dev"])[0]
+    held_recording = sorted(k for k, r in dataset["recordings"].items() if r["artist"] in labelled["held"])[0]
+    path = tmp_path / "inventory.csv"
+    with path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=["sha256", "artist", "mb_artist", "title", "leakage_group"])
+        writer.writeheader()
+        for identity, recording in dataset["recordings"].items():
+            shared = identity in (dev_recording, held_recording)
+            writer.writerow({"sha256": recording["sha256"], "artist": labelling.artist_name(recording["artist"]),
+                             "mb_artist": "", "title": "x", "leakage_group": "merged-shared" if shared else f"g-{identity}"})
+    return path, held_recording
+
+
+def held_out_ids(labelled):
+    side = data.sides(labelled["dataset"])
+    return sorted(e for e, s in side.items() if s == "evaluation")
+
+
+def answer_held_out(labelled, events):
+    """Replace every held-out line with the given events: (excerpt, value) for an answer of
+    the current scheme, (excerpt, "skip:<reason>") for a skip, (excerpt, "old:<value>") for
+    an answer of the first scheme."""
+    folder = labelled["folder"]
+    held = set(held_out_ids(labelled))
+    lines = [line for line in (folder / store.LABELS).read_text().splitlines()
+             if not any(f'"{h}"' in line for h in held)]
+    for excerpt, value in events:
+        if value.startswith("skip:"):
+            lines.append(json.dumps({"time": "t", "excerpt": excerpt, "event": "skip", "reason": value[5:]}))
+        elif value.startswith("old:"):
+            lines.append(json.dumps({"time": "t", "excerpt": excerpt, "event": "label", "value": value[4:]}))
+        else:
+            lines.append(json.dumps({"time": "t", "excerpt": excerpt, "event": "label", "value": value, "scheme": 2}))
+    (folder / store.LABELS).write_text("\n".join(lines) + "\n")
+
+
+def run_predict(labelled, out, inventory, **extra):
+    return heldout.predict(labelled["folder"], out, inventory, say=lambda text: None, expected_counts=None,
+                           code={"commit": "test", "src_clean": True}, **extra)
+
+
+def test_the_interval_rejects_draws_that_lack_a_class_and_counts_them():
+    groups = [g for g in "abcdef" for _ in range(4)]
+    truth = np.array([0] * 12 + [1] * 12)
+    said = truth.copy()
+    said[[1, 14, 20]] = 1 - said[[1, 14, 20]]
+    found = heldout.guarded_interval(groups, truth, said)
+    assert found["status"] == "ok" and found["valid"] == heldout.VALID_ROUNDS
+    assert found["rejected"] > 0 and found["valid"] + found["rejected"] == found["draws"]
+    assert found["groups_with_clean"] == 3 and found["groups_with_harsh"] == 3
+    low, high = found["interval"]
+    assert 0.0 <= low <= high <= 1.0
+    assert heldout.guarded_interval(groups, truth, said) == found  # fixed seed
+
+
+def test_too_few_artist_groups_for_a_class_gives_no_interval():
+    groups = [g for g in "abcde" for _ in range(3)]
+    truth = np.array([0] * 9 + [1] * 6)  # harsh excerpts in two groups only
+    found = heldout.guarded_interval(groups, truth, truth.copy())
+    assert found["status"] == "inconclusive" and found["interval"] is None
+    assert found["groups_with_harsh"] == 2 and any("harsh" in r for r in found["reasons"])
+
+
+def test_too_many_rejected_draws_give_no_interval():
+    groups = [g for g in "abcdefghij" for _ in range(2)]
+    truth = np.array([0] * 18 + [1] * 2)  # one harsh group of ten: about a third of draws lack it
+    found = heldout.guarded_interval(groups, truth, truth.copy(), min_groups=1)
+    assert found["rejected"] / found["draws"] > heldout.MAX_REJECTED
+    assert found["status"] == "inconclusive" and found["interval"] is None
+    assert any("lacked a class" in r for r in found["reasons"])
+
+
+def test_a_class_that_is_missing_entirely_never_yields_an_interval():
+    found = heldout.guarded_interval(list("aabb"), np.zeros(4, int), np.zeros(4, int), max_draws=300)
+    assert found["valid"] == 0 and found["rejected"] == found["draws"] == 300
+    assert found["status"] == "inconclusive" and found["interval"] is None
+
+
+def test_the_two_class_score_is_never_taken_over_one_class():
+    assert heldout.two_class(np.zeros(5, int), np.zeros(5, int))["balanced_accuracy"] is None
+    found = heldout.two_class(np.array([0, 0, 1, 1]), np.array([0, 1, 1, 1]))
+    assert found["balanced_accuracy"] == pytest.approx(0.75) and found["confusion"] == [[1, 1], [0, 2]]
+
+
+def primary(ba, clean_recall, harsh_recall, clean=20, harsh=20):
+    return {"balanced_accuracy": ba, "recall_clean": clean_recall, "recall_harsh": harsh_recall, "clean": clean, "harsh": harsh}
+
+
+OK = {"status": "ok", "interval": [0.65, 0.95], "reasons": []}
+FEW = {"clean": 3, "harsh": 2, "balanced_accuracy": 0.9}
+
+
+@pytest.mark.parametrize("main, interval, others, expected", [
+    (primary(0.9, 0.9, 0.9, clean=9), OK, FEW, ("inconclusive", None)),
+    (primary(0.9, 0.9, 0.9), {"status": "inconclusive", "interval": None, "reasons": ["few groups"]}, FEW, ("inconclusive", None)),
+    (primary(0.85, 0.8, 0.9), OK, FEW, ("confirmed", "mainly on one artist")),
+    (primary(0.85, 0.8, 0.9), OK, {"clean": 6, "harsh": 5, "balanced_accuracy": 0.75}, ("confirmed", None)),
+    (primary(0.85, 0.8, 0.9), OK, {"clean": 6, "harsh": 5, "balanced_accuracy": 0.6}, ("weaker than in development", "mainly on one artist")),
+    (primary(0.85, 0.8, 0.9), {"status": "ok", "interval": [0.55, 0.9], "reasons": []}, FEW, ("weaker than in development", "mainly on one artist")),
+    (primary(0.72, 0.8, 0.64), OK, FEW, ("weaker than in development", "mainly on one artist")),
+    (primary(0.7, 0.95, 0.45), OK, {"clean": 6, "harsh": 5, "balanced_accuracy": 0.5}, ("not confirmed", "mainly on one artist")),
+    (primary(0.6, 0.6, 0.6), OK, FEW, ("not confirmed", "mainly on one artist")),
+])
+def test_the_verdict_follows_the_plan(main, interval, others, expected):
+    step, breadth, _reasons = heldout.verdict(main, interval, others)
+    assert (step, breadth) == expected
+
+
+def test_predict_reads_no_held_out_answer_and_seals_its_predictions(labelled, tmp_path, monkeypatch):
+    inventory, flagged_recording = inventory_for(labelled, tmp_path)
+    held = held_out_ids(labelled)
+    decoded = []
+    original = data._decode
+
+    def spy(line):
+        decoded.append(line)
+        return original(line)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("the predict step must not read held-out answers")
+
+    monkeypatch.setattr(data, "_decode", spy)
+    monkeypatch.setattr(heldout, "read_held_out_coarse", forbidden)
+    out = tmp_path / "a"
+    manifest = run_predict(labelled, out, inventory)
+    assert decoded and not any(h in line for line in decoded for h in held)
+    assert manifest["held_out_answer_values_decoded"] == 0 and manifest["answers_opened"] is False
+    assert manifest["predictions_sha256"] == heldout.sha256_of(out / heldout.PREDICTIONS)
+    rows = json.loads((out / heldout.PREDICTIONS).read_text())
+    assert [r["excerpt"] for r in rows] == held
+    assert all(r["said"] in ("clean", "harsh") and sum(r["probabilities"]) == pytest.approx(1.0, abs=1e-5) for r in rows)
+    assert {r["excerpt"] for r in rows if r["precaution"]} == set(labelled["by_recording"][flagged_recording])
+    predictions_text = (out / heldout.PREDICTIONS).read_text()
+    assert POISON not in predictions_text and not any(word in predictions_text for word in FINE)
+    manifest_held = {k: v for k, v in manifest.items() if k != "training"}  # training: development counts
+    assert POISON not in json.dumps(manifest) and not any(word in json.dumps(manifest_held) for word in FINE)
+    found = data.load(labelled["folder"])
+    assert manifest["training"]["fingerprint_sha256"] == heldout.training_fingerprint(found["examples"])
+    monkeypatch.setattr(data, "_decode", original)
+    again = run_predict(labelled, tmp_path / "b", inventory)
+    assert again["predictions_sha256"] == manifest["predictions_sha256"]  # the same inputs seal the same
+
+
+def test_predict_never_overwrites_and_never_follows_an_opening(labelled, tmp_path):
+    inventory, _flagged = inventory_for(labelled, tmp_path)
+    out = tmp_path / "out"
+    run_predict(labelled, out, inventory)
+    with pytest.raises(heldout.SealError):
+        run_predict(labelled, out, inventory)
+    (out / heldout.PREDICTIONS).unlink()
+    (out / heldout.OPENED).write_text("{}")
+    with pytest.raises(heldout.AlreadyOpened):
+        run_predict(labelled, out, inventory)
+
+
+def test_predict_stops_if_the_training_set_is_not_phase_a4s(labelled, tmp_path):
+    inventory, _flagged = inventory_for(labelled, tmp_path)
+    with pytest.raises(data.DataError):
+        heldout.predict(labelled["folder"], tmp_path / "out", inventory, say=lambda text: None,
+                        expected_counts={"cleans": 170, "high_screams": 45, "low_screams": 51})
+
+
+def test_the_coarse_reader_keeps_only_clean_harsh_or_other(labelled):
+    held = held_out_ids(labelled)
+    answer_held_out(labelled, [
+        (held[0], "cleans"), (held[1], "high_screams"), (held[2], "low_screams"), (held[3], "gutturals"),
+        (held[4], "sing_screams"), (held[5], "skip:no_vocals"), (held[6], "old:clean"),
+        (held[7], "cleans"), (held[7], "high_screams"), (held[7], "skip:no_vocals"),
+    ])
+    found = heldout.read_held_out_coarse(labelled["folder"], data.sides(labelled["dataset"]))
+    assert found == {
+        held[0]: "clean", held[1]: "harsh", held[2]: "harsh", held[3]: "other", held[4]: "other",
+        held[5]: "no_vocals", held[6]: "unanswered", held[7]: "harsh",
+    }
+    assert not any(word in json.dumps(found) for word in FINE)
+    assert set(found) == set(held)  # development excerpts are not read
+
+
+def test_score_checks_the_seal_opens_once_and_keeps_answers_coarse(labelled, tmp_path):
+    inventory, _flagged = inventory_for(labelled, tmp_path)
+    out = tmp_path / "out"
+    seal = run_predict(labelled, out, inventory)["predictions_sha256"]
+    held = held_out_ids(labelled)
+    answer_held_out(labelled, [(e, ("cleans", "high_screams", "low_screams", "gutturals")[i % 4]) for i, e in enumerate(held)])
+    with pytest.raises(heldout.SealError):
+        heldout.score(labelled["folder"], out, "0" * 64, say=lambda text: None)
+    original = (out / heldout.PREDICTIONS).read_text()
+    (out / heldout.PREDICTIONS).write_text(original.replace('"harsh"', '"clean"', 1) if '"harsh"' in original
+                                            else original.replace('"clean"', '"harsh"', 1))
+    with pytest.raises(heldout.SealError):
+        heldout.score(labelled["folder"], out, seal, say=lambda text: None)
+    assert not (out / heldout.OPENED).exists()  # a failed seal check opens nothing
+    (out / heldout.PREDICTIONS).write_text(original)
+    summary = heldout.score(labelled["folder"], out, seal, say=lambda text: None)
+    assert (out / heldout.OPENED).exists()
+    assert summary["verdict"] == "inconclusive"  # far fewer than 10 of each
+    interval = summary["interval_95"]
+    assert {"draws", "rejected", "valid", "groups_with_clean", "groups_with_harsh"} <= set(interval)
+    assert summary["fine_answers_stored"] is False
+    for name in ("heldout-summary.json", "heldout-results.json", heldout.OPENED):
+        assert not any(word in (out / name).read_text() for word in FINE)
+    public = (out / "heldout-summary.json").read_text()
+    assert "VOCAL-" not in public and not any(a in public for a in labelled["held"] + labelled["dev"])
+    with pytest.raises(heldout.AlreadyOpened):
+        heldout.score(labelled["folder"], out, seal, say=lambda text: None)
+
+
+def test_the_opening_is_recorded_before_any_answer_is_read(labelled, tmp_path, monkeypatch):
+    inventory, _flagged = inventory_for(labelled, tmp_path)
+    out = tmp_path / "out"
+    seal = run_predict(labelled, out, inventory)["predictions_sha256"]
+
+    def reader(*_args):
+        assert (out / heldout.OPENED).exists()
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(heldout, "read_held_out_coarse", reader)
+    with pytest.raises(RuntimeError):
+        heldout.score(labelled["folder"], out, seal, say=lambda text: None)
+    with pytest.raises(heldout.AlreadyOpened):
+        heldout.score(labelled["folder"], out, seal, say=lambda text: None)
+
+
+def test_the_command_does_not_score_without_the_seal_and_the_explicit_flag(tmp_path):
+    from gmv.cli import main
+
+    for extra in ([], ["--seal", "0" * 64], ["--open-held-out-answers"]):
+        with pytest.raises(SystemExit) as stopped:
+            main(["character", "research", "heldout", "score", "--out", str(tmp_path / "out"), *extra])
+        assert "--open-held-out-answers" in str(stopped.value)
+    assert not (tmp_path / "out").exists()

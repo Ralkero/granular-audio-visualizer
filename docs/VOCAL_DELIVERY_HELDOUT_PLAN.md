@@ -107,7 +107,7 @@ is "weaker than in development".
 
 | Verdict | Condition |
 |---|---|
-| **Inconclusive** | Fewer than 10 scored clean or fewer than 10 scored harsh excerpts. Numbers are still reported |
+| **Inconclusive** | Fewer than 10 scored clean or fewer than 10 scored harsh excerpts, **or the interval is inconclusive (Amendment 1)**. Numbers are still reported |
 | **Confirmed** | BA ≥ 0.80, both recalls ≥ 0.70, and the lower end of the 95% interval ≥ 0.60 |
 | **Weaker than in development** | Everything else: BA from 0.65 to 0.80, or a recall from 0.50 to 0.70, or a low interval |
 | **Not confirmed** | BA < 0.65, or a recall < 0.50 |
@@ -119,6 +119,38 @@ own. If they have enough excerpts and fall below 0.70, the verdict is lowered on
 
 For comparison, always answering one class gives BA = 0.50, and the development estimate
 was 0.92.
+
+## Amendment 1: a guarded interval (2026-11-25, before any prediction or answer)
+
+The owner asked for this safeguard when approving the plan. It was added before the
+frozen model was trained, before any held-out prediction was made, and before any
+held-out answer was read.
+
+**The problem.** The interval resamples whole artist groups. A resample can, by chance,
+contain only clean or only harsh excerpts. The general metric routine then averages over
+the classes present. That is fine for some per-group summaries, but it gives an invalid
+two-class balanced accuracy, and an unguarded interval would quietly include those values.
+
+**The rule.**
+
+- **Reject and redraw.** A resample that lacks either clean or harsh excerpts is rejected
+  and drawn again. The interval uses 2,000 **valid** resamples (seed 20261125), with at
+  most 40,000 draws in total.
+- **The report states:** how many draws were rejected, how many valid resamples formed the
+  interval, and how many distinct artist groups contributed scored clean excerpts and
+  scored harsh excerpts.
+- **Too little coverage means no interval.** The interval is **inconclusive**, and no range
+  is given, if any of these holds:
+  - fewer than 3 distinct artist groups contribute scored clean excerpts;
+  - fewer than 3 contribute scored harsh excerpts;
+  - more than 25% of draws had to be rejected;
+  - 2,000 valid resamples could not be reached within 40,000 draws.
+- **An inconclusive interval makes the verdict inconclusive** (first row of the table
+  above), whatever the balanced accuracy. Numbers are still reported.
+
+**The development intervals already published are unaffected.** Re-running their
+resampling with the same seed, none of the 2,000 resamples lacked a class (three-way or
+clean/harsh).
 
 ## What happens after
 
