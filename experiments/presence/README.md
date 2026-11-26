@@ -29,7 +29,32 @@ All inputs and outputs stay in the ignored `local-evidence/`. That covers featur
 files, weights, predictions and per-group results. Tracked files hold aggregates only. No
 external audio or dataset is downloaded.
 
+## Stage 1: the synthetic harness and its tests
+
+Code:
+- `src/gmv/character/research/presence_model/`: NumPy and SciPy only. It holds the front
+  end, labels and collars, training weights, inner folds, post-processing, metrics,
+  screening, the descriptive bootstrap and the seeds.
+- `experiments/presence/cnn.py`: model C, forward pass and streaming only, no training loop
+  (needs PyTorch).
+
+Every test uses generated audio or generated projects. Run them in the experiments
+environment:
+
+```
+~/.venvs/gmv-presence-experiments/bin/python -m pytest -v -p no:cacheprovider \
+    tests/test_presence_model_alignment.py tests/test_presence_model_objective.py \
+    tests/test_presence_model_folds.py tests/test_presence_model_metrics.py \
+    tests/test_presence_model_cnn.py
+```
+
+In the application's own environment, the same command (with `.venv/bin/python`) skips
+`test_presence_model_cnn.py`, because PyTorch is not installed there.
+
 ## Status
 
-Stage 0 is done: the protocol is registered and the environment set up. Nothing has been
-run on the owner's music yet.
+- **Stage 0 is done:** the protocol is registered and the environment set up.
+- **Stage 1 is done for generated data only:** the harness and the protocol §16 tests.
+- **Still outstanding:** the real fold files with their hashes, and the aggregate MUSDB18-HQ
+  overlap check. Both need separate authorisation to use real project data.
+- **Not yet run:** nothing has been run on the owner's music.

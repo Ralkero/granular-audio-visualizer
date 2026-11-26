@@ -188,3 +188,87 @@ Details: [VOCAL_PRESENCE_ANNOTATION.md](VOCAL_PRESENCE_ANNOTATION.md). Research 
   - The new project check passes on it read-only, and its files are byte-identical before and after.
   - The development (171) and validation (28) annotations are unchanged.
 - **Not done:** a real freeze. It needs about 13 or more new never-used artist groups in the library first.
+
+## 2026-11-26 addendum: Sonic Character, Phase A5.2 Stage 1 (synthetic harness and contract tests)
+
+The protocol is [VOCAL_PRESENCE_MODEL_PROTOCOL.md](VOCAL_PRESENCE_MODEL_PROTOCOL.md). Stage 1 was authorised **for generated audio and generated projects only**:
+- no recording, annotation, manifest, registry, private metadata or model weight was opened;
+- no feature was extracted from real audio;
+- no model was trained, no threshold fitted and no prediction made.
+
+**Automated tests** (all on generated audio, generated projects or generated tensors):
+
+| Area (protocol §16) | File | Tests | Result |
+|---|---|---:|---|
+| Alignment (engine frame path against model C's front end at 22.05, 44.1 and 48 kHz) | `tests/test_presence_model_alignment.py` | 15 | All pass |
+| Loss weighting, plus the labels and collars it uses | `tests/test_presence_model_objective.py` | 14 | All pass |
+| Inner folds | `tests/test_presence_model_folds.py` | 17 | All pass |
+| Metrics, events, screening (with Amendment 1), bootstrap caveat, post-processing, seeds | `tests/test_presence_model_metrics.py` | 20 | All pass |
+| Causality and normalisation of model C | `tests/test_presence_model_cnn.py` | 21 | All pass |
+
+**Environments:**
+- **Experiments environment:** Python 3.12.16, torch 2.9.1+cpu, NumPy 2.5.5, SciPy 1.18.1, 16 threads. **87 passed**, 0 skipped.
+- **The application's own environment** (Python 3.14.10, no PyTorch): **66 passed**, with the CNN file skipped as designed.
+- **Lint:** `ruff check` is clean. `ruff format` is not enforced in this repository; existing modules are not formatted with it either.
+
+**What the tests establish:**
+- **Alignment:**
+  - The engine's frames and C's frames have equal counts for awkward lengths (one sample short of a window, exactly a window, a hop minus one, and others).
+  - Their centres agree within 1 ms, and are 23.22 ms after each window's start, every 20 ms.
+  - An impulse peaks in the same frame on both paths, including near the midpoint between frames.
+  - Resampling keeps impulse timing within one sample.
+  - Pre-roll and scored frames agree, including at the very start and end of a recording.
+- **Causality:**
+  - Changing input after frame t leaves C's outputs up to t bit-identical, in inference and in training (with the dropout mask held fixed).
+  - The receptive field is exactly 73 frames.
+  - Deliberately wrong variants (symmetric time padding, BatchNorm) are caught.
+- **FrameNorm:**
+  - It is identical in training and inference and has no running statistics.
+  - The representation before the registered dropout is identical in both modes. Dropout itself is kept, so whole-network outputs differ in training mode as intended.
+- **Batch independence:**
+  - Outputs are bit-identical when only the companions in a batch change.
+  - Across batch sizes they agree to rounding (float32 within 1e-5, float64 within 1e-12), because PyTorch picks a different kernel for a different batch size.
+- **Streaming** equals batch output within 1e-10 (float64).
+- **Seeds:** the same registered seed gives identical weights.
+- **Size:** 154,641 parameters.
+- **Loss:**
+  - Every group's total weight per class is exactly 1/(2·|Aᶜ|).
+  - The weighted sum equals the registered formula, and a longer group gains no weight (pooled weighting would have given it more than 3 times as much).
+  - The 2 s minimum is inclusive and per class.
+  - Excluded frames change nothing.
+  - One epoch's batches reproduce L for any order and batch size; per-batch normalisation would not.
+- **Folds:**
+  - Assignments are deterministic and every check holds.
+  - The outer group is never assigned.
+  - Retries are deterministic, exercised with a stricter test-only share.
+  - Impossible cases stop with an error.
+  - Summaries and messages hold no group keys.
+- **Metrics and screening:**
+  - Collars are inclusive at 0.3 s.
+  - Single-class groups count only in their class.
+  - Event collars hold at their exact boundaries.
+  - At exactly 3 s/min the ratio is used with nothing added; below it the absolute difference is used and the 50% criterion is "not applicable".
+  - The improved, maintained, worsened, mixed and recall-below-margin classes are all tested.
+  - Every bootstrap interval carries the caveat, which cannot be passed in or changed.
+
+**Choices the protocol leaves open**, made for Stage 1 and to be reviewed before Stage 2:
+1. **Mel and log details:** the HTK mel scale, triangular filters on the power spectrum, and log(mel power + 1e-10). The protocol says only "64 mel bands from 40 Hz to 11 kHz, log power with a floor".
+2. **Frame counts:** C takes its frame count from the engine's rule. At 48 kHz its last frame can need up to one resampled sample past the end, which is zero-padded; more than 2 is refused.
+3. **Collars near excerpt edges:** "interior" boundaries are those strictly inside the excerpt. A boundary a few milliseconds from an edge therefore gets a collar; the protocol gives no tolerance.
+4. **Uncertain time:** no collars are added around the edges of uncertain intervals, which the protocol does not specify. None exist today.
+5. **Events at excerpt edges:** the onset and offset collars apply to every reference event as written, including boundaries cut off by the excerpt edge. Timing errors are reported only for interior boundaries. Whether cut-off boundaries should be exempt from matching is not specified.
+6. **Folds:** a group with less than 2 s of both classes is refused, because the protocol does not say where to place it. When ordering single-class groups, voice-only come before no-voice-only, the order the protocol lists them.
+7. **Final models' seeds:** the outer and inner fields of a final model's training seed are not specified. That is left to Stage 2.
+8. **Undefined bootstrap draws:** a draw where no group has a statistic is counted and reported, never dropped silently. In the ratio interval, a draw whose baseline mean is exactly 0 is undefined, and draws below 3 s/min stay in, with their share reported.
+9. **Kernel indexing:** PyTorch's convolutions number the taps oldest first, while the protocol writes newest first. This is the same family of functions.
+
+**Not done in Stage 1 (deferred):**
+- **Data-dependent work, which needs separate authorisation:**
+  - the project's real fold files and their hashes;
+  - the aggregate MUSDB18-HQ overlap check.
+- **Stage 2 work:**
+  - frame silence from real audio (the engine's −65 dBFS rule), which Stage 1 takes as an input;
+  - phrases from `VocalContour` gated by B1 and C;
+  - any B0 scoring with weights;
+  - training;
+  - the timing and convergence gates.
