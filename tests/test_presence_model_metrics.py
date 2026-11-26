@@ -99,7 +99,11 @@ def test_timing_errors_only_for_interior_boundaries_and_predictions_are_clipped(
 # -- the low-denominator rule and the screening classes -------------------------------------------------
 
 GROUPS = [f"group_{i:03d}" for i in range(1, 20)]  # synthetic keys; the count comes from the caller
-SEEDS_OK = [(-1.0, 0.0)] * 5
+SEEDS_OK = [(i, -1.0, 0.0) for i in range(5)]  # (seed_index, D_FA, Δ_R) for the registered indices 0-4
+
+
+def seed_rows(indices=range(5), d_fa=-1.0, d_recall=0.0):
+    return [(i, d_fa, d_recall) for i in indices]
 
 
 def leave_one_out(groups=GROUPS, d_fa=-1.0, d_recall=0.0):
@@ -135,7 +139,7 @@ def test_amendment_1_classes_improved_maintained_worsened_mixed_and_recall():
     assert maintained.result == "not promising" and maintained.reason.startswith("maintained")
     worsened = screening.screen(2.5, 2.0, 0.9, 0.8, **complete())
     assert worsened.result == "not promising" and worsened.reason.startswith("worsened")
-    fragile = {**complete(), "seed_recomputations": SEEDS_OK[:4] + [(0.1, 0.0)]}
+    fragile = {**complete(), "seed_recomputations": SEEDS_OK[:4] + [(4, 0.1, 0.0)]}
     assert screening.screen(1.0, 2.0, 0.8, 0.8, **fragile).result == "mixed"                  # not robust
     assert screening.screen(1.0, 2.0, 0.8, 0.8).result == "mixed"                              # nothing supplied
     below = screening.screen(1.0, 2.0, 0.7499, 0.8, **complete())
@@ -150,8 +154,8 @@ def test_relative_mode_equal_false_activity_is_not_promising():
 def test_the_recall_margin_boundary_is_inclusive():
     assert screening.screen(1.0, 4.0, 0.75, 0.80, **complete()).result == "promising"
     assert screening.screen(1.0, 4.0, 0.7499, 0.80, **complete()).result == "not promising"
-    assert check(seeds=[(-0.1, -0.05)] * 5).passed
-    assert not check(seeds=[(-0.1, -0.05)] * 4 + [(-0.1, -0.0501)]).passed
+    assert check(seeds=seed_rows(d_fa=-0.1, d_recall=-0.05)).passed
+    assert not check(seeds=seed_rows(range(4), -0.1, -0.05) + [(4, -0.1, -0.0501)]).passed
 
 
 def test_invalid_screening_inputs_are_refused():
@@ -163,16 +167,42 @@ def test_invalid_screening_inputs_are_refused():
 # -- robustness needs both complete sets (§13 (c), Amendment 1) -------------------------------------
 
 
-def test_five_passing_seeds_and_every_group_once_are_robust():
+def test_five_distinct_passing_seeds_and_every_group_once_are_robust():
     result = check()
-    assert result.passed and result.seeds_supplied == 5 and result.groups_expected == result.groups_supplied == 19
+    assert result.passed and result.seeds_expected == result.seeds_supplied == 5
+    assert result.groups_expected == result.groups_supplied == 19
     assert screening.robust(**complete())
+    assert check(seeds=list(reversed(SEEDS_OK))).passed  # order does not matter, identity does
+    assert screening.SEED_INDICES == frozenset({0, 1, 2, 3, 4})
 
 
-def test_one_failed_seed_is_not_robust():
-    for failed in ((0.0, 0.0), (0.2, 0.0), (-1.0, -0.06)):  # D_FA must be < 0 and Δ_R ≥ −0.05
-        result = check(seeds=SEEDS_OK[:4] + [failed])
-        assert not result.passed and "1 of 5 seed" in result.reason
+def test_a_failed_result_at_any_seed_index_is_not_robust():
+    for index in range(5):
+        for d_fa, d_recall in ((0.0, 0.0), (0.2, 0.0), (-1.0, -0.06)):  # D_FA must be < 0 and Δ_R ≥ −0.05
+            rows = [(i, d_fa, d_recall) if i == index else (i, -1.0, 0.0) for i in range(5)]
+            result = check(seeds=rows)
+            assert not result.passed and "1 of 5 seed" in result.reason
+
+
+def test_a_missing_seed_index_is_not_robust():
+    result = check(seeds=seed_rows([0, 1, 2, 4]))
+    assert not result.passed and "1 missing" in result.reason
+
+
+def test_a_duplicated_seed_index_is_not_robust_even_with_five_rows():
+    repeated = check(seeds=seed_rows([0, 1, 2, 3, 3]))  # five rows: one seed's result twice, seed 4 absent
+    assert not repeated.passed and "1 duplicated" in repeated.reason and "1 missing" in repeated.reason
+    same = check(seeds=seed_rows([2, 2, 2, 2, 2]))  # the length alone must not satisfy the check
+    assert not same.passed and "4 missing" in same.reason
+    extra = check(seeds=seed_rows([0, 1, 2, 3, 4, 2]))
+    assert not extra.passed and "1 duplicated" in extra.reason
+
+
+def test_an_unexpected_seed_index_is_not_robust():
+    swapped = check(seeds=seed_rows([0, 1, 2, 3, 5]))  # five rows, index 5 instead of 4
+    assert not swapped.passed and "1 unexpected" in swapped.reason and "1 missing" in swapped.reason
+    negative = check(seeds=seed_rows([-1, 0, 1, 2, 3]))
+    assert not negative.passed and "1 unexpected" in negative.reason
 
 
 def test_one_failed_leave_one_out_group_is_not_robust():
@@ -183,8 +213,16 @@ def test_one_failed_leave_one_out_group_is_not_robust():
 
 
 def test_four_seeds_are_not_enough_and_six_are_too_many():
-    assert not check(seeds=SEEDS_OK[:4]).passed
-    assert not check(seeds=SEEDS_OK + [(-1.0, 0.0)]).passed
+    assert not check(seeds=seed_rows(range(4))).passed
+    six = check(seeds=seed_rows(range(6)))
+    assert not six.passed and "6 of 5 rows" in six.reason and "1 unexpected" in six.reason
+
+
+def test_malformed_or_non_finite_seed_rows_are_refused():
+    for bad in ([(0, -1.0)], [(0, float("nan"), 0.0)], [(0, -1.0, float("inf"))], [("0", -1.0, 0.0)],
+                [(0.0, -1.0, 0.0)], [(True, -1.0, 0.0)], [(-1.0, 0.0)]):
+        with pytest.raises(ValueError):
+            check(seeds=SEEDS_OK[:4] + bad)
 
 
 def test_a_missing_duplicated_or_unexpected_group_is_not_robust():
@@ -206,24 +244,32 @@ def test_empty_or_incomplete_inputs_never_pass():
     assert not screening.robust(SEEDS_OK, leave_one_out(), ())
 
 
-def test_both_modes_use_the_same_complete_robustness_requirement():
-    incomplete = {**complete(), "group_recomputations": leave_one_out()[:-1]}
+def test_both_modes_use_the_same_complete_identity_aware_requirement():
     relative_ok = screening.screen(1.0, 4.0, 0.8, 0.8, **complete())
     absolute_ok = screening.screen(1.0, 2.0, 0.8, 0.8, **complete())
     assert relative_ok.mode == "relative" and relative_ok.result == "promising" and relative_ok.robust
     assert absolute_ok.mode == "absolute" and absolute_ok.result == "promising" and absolute_ok.robust
-    relative_bad = screening.screen(1.0, 4.0, 0.8, 0.8, **incomplete)
-    absolute_bad = screening.screen(1.0, 2.0, 0.8, 0.8, **incomplete)
-    assert relative_bad.result == absolute_bad.result == "mixed"
-    assert not relative_bad.robust and not absolute_bad.robust
-    assert relative_bad.robustness == absolute_bad.robustness
+    for broken in ({"group_recomputations": leave_one_out()[:-1]},       # a group missing
+                   {"seed_recomputations": seed_rows([0, 1, 2, 3, 3])},      # a seed repeated, five rows
+                   {"seed_recomputations": seed_rows([0, 1, 2, 3, 9])}):     # an unexpected seed index
+        incomplete = {**complete(), **broken}
+        relative_bad = screening.screen(1.0, 4.0, 0.8, 0.8, **incomplete)
+        absolute_bad = screening.screen(1.0, 2.0, 0.8, 0.8, **incomplete)
+        assert relative_bad.result == absolute_bad.result == "mixed"
+        assert not relative_bad.robust and not absolute_bad.robust
+        assert relative_bad.robustness == absolute_bad.robustness
 
 
-def test_results_and_messages_never_carry_group_keys():
+def test_results_and_messages_never_carry_group_keys_or_seed_indices():
     rows = leave_one_out()[:-1] + [("group_999", -1.0, 0.0), leave_one_out()[2]]
     result = screening.screen(1.0, 2.0, 0.8, 0.8, SEEDS_OK, rows, GROUPS)
     assert "group_" not in repr(result) and "group_" not in result.robustness
     assert "group_" not in repr(check(rows=rows))
+    odd = check(seeds=seed_rows([0, 1, 2, 3, 777]))  # an unexpected index is counted, never named
+    assert "777" not in repr(odd)
+    with pytest.raises(ValueError) as caught:
+        check(seeds=SEEDS_OK[:4] + [("seed-four", -1.0, 0.0)])
+    assert "seed-four" not in str(caught.value)
     with pytest.raises(ValueError) as caught:
         check(rows=leave_one_out()[:-1] + [("group_019", float("nan"), 0.0)])
     assert "group_" not in str(caught.value)

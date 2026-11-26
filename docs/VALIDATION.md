@@ -295,3 +295,21 @@ The protocol is [VOCAL_PRESENCE_MODEL_PROTOCOL.md](VOCAL_PRESENCE_MODEL_PROTOCOL
 
   The tests that called the old single-list form now supply complete sets, and the Amendment 1 classes are still covered.
 - **Counts now:** metrics and screening have 28 tests (was 20). In the experiments environment **95 passed** (was 87); in the application's environment 74 passed and the CNN file skips (was 66). `ruff check` is clean.
+
+**Second correction after independent review (2026-11-26, seed identity):**
+- **The problem:** the first robustness correction (13b6452) counted exactly 5 seed rows but gave them no identity. One seed's result supplied five times would have satisfied it.
+- **The fix:** seed rows are now (seed_index, D_FA, Δ_R), and the set of indices must be exactly {0, 1, 2, 3, 4}, the registered outer and final seed indices (§7).
+  - Missing, duplicated or unexpected indices are rejected, as are four or six rows.
+  - A non-integer or boolean index, a malformed row or a non-finite value raises an error.
+  - Every seed must still have D_FA < 0 and Δ_R ≥ −0.05.
+  - The leave-one-group-out completeness checks are unchanged.
+  - Results and messages count missing, duplicated and unexpected entries without naming seed indices or group keys.
+- **Tests:** new or revised synthetic tests cover:
+  - all five distinct indices, in any order;
+  - a failed result at each index;
+  - a missing, duplicated (including five rows of one seed) or unexpected index;
+  - four or six rows;
+  - malformed and non-finite rows;
+  - both screening modes rejecting a repeated or unexpected seed;
+  - no seed index or group key in results or errors.
+- **Counts now:** metrics and screening have 32 tests (was 28). In the experiments environment **99 passed** (was 95); in the application's environment 78 passed and the CNN file skips (was 74). `ruff check` is clean.

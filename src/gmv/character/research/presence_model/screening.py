@@ -16,27 +16,32 @@ D_FA = FPA(candidate) − FPA(B0ₜ) and Δ_R = R(candidate) − R(B0ₜ).
   4. maintained (D_FA = 0): not an improvement, retain B0;
   5. mixed.
 
-**Robust** (both modes, §13 (c)) requires two complete sets of recomputations, each row a
-(D_FA, Δ_R) pair:
+**Robust** (both modes, §13 (c)) requires two complete sets of recomputations:
 
-* exactly ``SEED_RECOMPUTATIONS`` (5) single-seed recomputations;
-* one leave-one-group-out recomputation for every expected group, and only for those:
-  each row is (group, D_FA, Δ_R), and the caller supplies the expected groups. A missing,
-  duplicated or unexpected group makes the set incomplete.
+* the single-seed set: one (seed_index, D_FA, Δ_R) row for each of the registered outer and
+  final seed indices 0-4 (§7), and only those. A missing, duplicated or unexpected index
+  makes the set incomplete, so four rows, six rows, or one seed's result repeated never
+  pass;
+* the leave-one-group-out set: one (group, D_FA, Δ_R) row for every expected group, and
+  only those; the caller supplies the expected groups. A missing, duplicated or unexpected
+  group makes the set incomplete.
 
 Every row in both sets must satisfy D_FA < 0 and Δ_R ≥ −0.05. An incomplete set is never
 robust; there is no fallback that treats missing rows as passing. Malformed or non-finite
-rows raise ``ValueError``. Results and messages report counts only, never group keys.
+rows raise ``ValueError``. Results and messages report counts only, never seed indices or
+group keys.
 """
 
 import math
+import numbers
 from collections import Counter
 from dataclasses import dataclass
 
 READINESS_S_PER_MIN = 3.0
 RATIO_TARGET = 0.50
 RECALL_MARGIN = 0.05
-SEED_RECOMPUTATIONS = 5
+SEED_INDICES = frozenset(range(5))  # §7: outer and final training seed indices 0-4
+SEED_RECOMPUTATIONS = len(SEED_INDICES)
 EPSILON = 1e-12  # float tolerance for the registered boundaries (≤ 0.50, ≥ −0.05)
 
 
@@ -46,6 +51,7 @@ class Robustness:
 
     passed: bool
     reason: str
+    seeds_expected: int
     seeds_supplied: int
     groups_expected: int
     groups_supplied: int
@@ -87,11 +93,30 @@ def _holds(d_fa, d_recall):
     return d_fa < 0 and d_recall + RECALL_MARGIN >= -EPSILON
 
 
+def _seed_row(row):
+    try:
+        index, d_fa, d_recall = row
+    except (TypeError, ValueError):
+        raise ValueError("a seed recomputation must be (seed_index, D_FA, Δ_R)") from None
+    if isinstance(index, bool) or not isinstance(index, numbers.Integral):
+        raise ValueError("a seed index must be an integer")
+    return (int(index), *_pair((d_fa, d_recall)))
+
+
+def _completeness(supplied, wanted):
+    """(missing, duplicated, unexpected) counts of ``supplied`` identities against ``wanted``."""
+    counts = Counter(supplied)
+    return (sum(1 for key in wanted if key not in counts),
+            sum(1 for _key, n in counts.items() if n > 1),
+            sum(1 for key in counts if key not in wanted))
+
+
 def check_robustness(seed_recomputations, group_recomputations, expected_groups):
-    """``seed_recomputations``: (D_FA, Δ_R) pairs, exactly 5. ``group_recomputations``:
-    (group, D_FA, Δ_R) triples, one per expected group. ``expected_groups``: the groups the
-    leave-one-group-out analysis must cover, given by the caller."""
-    seeds = [_pair(row) for row in seed_recomputations]
+    """``seed_recomputations``: (seed_index, D_FA, Δ_R) triples, one for each index 0-4.
+    ``group_recomputations``: (group, D_FA, Δ_R) triples, one per expected group.
+    ``expected_groups``: the groups the leave-one-group-out analysis must cover, given by
+    the caller."""
+    seeds = [_seed_row(row) for row in seed_recomputations]
     expected = list(expected_groups)
     if len(set(expected)) != len(expected):
         raise ValueError("the expected groups contain a duplicate")
@@ -104,20 +129,19 @@ def check_robustness(seed_recomputations, group_recomputations, expected_groups)
         rows.append((group, *_pair((d_fa, d_recall))))
 
     def result(passed, reason):
-        return Robustness(passed, reason, len(seeds), len(expected), len(rows))
+        return Robustness(passed, reason, SEED_RECOMPUTATIONS, len(seeds), len(expected), len(rows))
 
-    if len(seeds) != SEED_RECOMPUTATIONS:
-        return result(False, f"{len(seeds)} seed recomputations supplied; exactly {SEED_RECOMPUTATIONS} are required")
+    missing, duplicated, unexpected = _completeness([index for index, _, _ in seeds], SEED_INDICES)
+    if missing or duplicated or unexpected or len(seeds) != SEED_RECOMPUTATIONS:
+        return result(False, f"the seed set is incomplete or invalid: {len(seeds)} of {SEED_RECOMPUTATIONS} rows, "
+                             f"{missing} missing, {duplicated} duplicated, {unexpected} unexpected")
     if not expected:
         return result(False, "no expected groups were given for the leave-one-group-out set")
-    counts, wanted = Counter(group for group, _, _ in rows), set(expected)
-    missing = sum(1 for group in wanted if group not in counts)
-    duplicated = sum(1 for group, n in counts.items() if n > 1)
-    unexpected = sum(1 for group in counts if group not in wanted)
+    missing, duplicated, unexpected = _completeness([group for group, _, _ in rows], set(expected))
     if missing or duplicated or unexpected:
         return result(False, f"the leave-one-group-out set is incomplete or invalid: {missing} missing, "
                              f"{duplicated} duplicated, {unexpected} unexpected")
-    failed_seeds = sum(1 for d_fa, d_recall in seeds if not _holds(d_fa, d_recall))
+    failed_seeds = sum(1 for _, d_fa, d_recall in seeds if not _holds(d_fa, d_recall))
     failed_groups = sum(1 for _, d_fa, d_recall in rows if not _holds(d_fa, d_recall))
     if failed_seeds or failed_groups:
         return result(False, f"the direction failed in {failed_seeds} of {len(seeds)} seed and {failed_groups} of "
