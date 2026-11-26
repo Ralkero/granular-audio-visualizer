@@ -1,6 +1,6 @@
 # Held-out test of clean against harsh vocals: the plan, fixed before looking
 
-**Status: plan only.** No held-out answer has been read; nothing described here has run.
+**Status: predictions sealed, not scored** (see "Seal" below). No held-out answer has been read.
 This document is committed **before** the test so that every decision below can be seen to
 have been made without knowing the outcome. Any change to it after the test starts would
 have to be stated as such.
@@ -151,6 +151,23 @@ two-class balanced accuracy, and an unguarded interval would quietly include tho
 **The development intervals already published are unaffected.** Re-running their
 resampling with the same seed, none of the 2,000 resamples lacked a class (three-way or
 clean/harsh).
+
+## Seal: predictions made blind (2026-11-26 02:35 UTC)
+
+Step 1 has run; **step 2 (scoring) has not.** No held-out answer value was read.
+
+| | |
+|---|---|
+| Predictions file SHA-256 | `48aee927ae11d19e3188ad007d5f88f82885324cc6d9e0880fcb6d53c1dfa6a3` |
+| Code commit the predictions came from | `afeb173aeb12d9f19d7d18699ab0093cc1ac4b70` (no uncommitted change in `src`) |
+| Features, model | `delivery_features_v1`; the Phase A4 random forest, 300 trees, seed `[20261125, 1000]` |
+| Training set | 266 development excerpts (Cleans 170, High Screams 45, Low Screams 51); SHA-256 of the training set `4d3defd09890e0288624989d192605168ede9f6175175ea50b0d3bc2a0990e47` |
+| Held-out excerpts predicted | 69 of 69, none unreadable, in 12 artist groups (the largest 43); 2 flagged by the precaution |
+| What the model said | clean 40, harsh 29: predictions only, nothing about the answers |
+| Held-out answer values decoded | 0. The answer reader for held-out lines was not run, and the answers file is byte-for-byte the owner's latest backup |
+
+The scoring step checks the predictions against this SHA-256 before reading any answer.
+It runs only with the owner's explicit authorisation.
 
 ## What happens after
 
