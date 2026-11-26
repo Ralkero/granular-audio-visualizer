@@ -118,3 +118,26 @@ Details: [VOCAL_DELIVERY_RECOGNITION.md](VOCAL_DELIVERY_RECOGNITION.md). Researc
     - the output accounts for all 69 excerpts, and the per-group totals agree with the confusion matrix;
     - no fine answer (High/Low, Guttural/Sing-Scream) was stored or reported;
     - the per-excerpt results stay in the ignored local evidence folder.
+
+## 2026-11-26 addendum: Sonic Character, Phase A5.1 (vocal presence annotation foundation)
+
+Details: [VOCAL_PRESENCE_ANNOTATION.md](VOCAL_PRESENCE_ANNOTATION.md). Research tooling; no model trained or evaluated.
+
+- **Automated tests:** `tests/test_vocal_presence.py`, 32, all passing; generated audio and generated projects only, never the owner's answer files. They cover:
+  - schema: bounds and order, union, uncertain masking, statuses, explicit negatives, tags, revisions, the hash chain, crash recovery;
+  - identity and registry: spellings, aliases, featured credits, duplicates, MusicBrainz IDs, generic credits, no movement, conflicts, links to consumed material, freeze refusal;
+  - preparation: no held-out line decoded, A3 files byte-identical, deterministic and stable manifests;
+  - protection: fingerprints, registry consistency, rejected assignments, development loaders unable to read final-test labels (guarded file reads), a final-test manifest unchanged by development changes, broken histories refused;
+  - the window: marking at the position, seeking, listening around boundaries, edits, resume, completion guard, titles, backup and restore, unplayable excerpts, the lock, the A3 project untouched, the status command.
+- **Real machine** (CachyOS, KDE Wayland, PipeWire, window on the HP Omen; generated audio): `scripts/validate_vocal_presence.py`, 19 of 19 checks:
+  - playback stream created, position in real time (1.508 s over 1.508 s);
+  - pause ends the stream and holds the position; exact paused seeks and marks; keyboard marking;
+  - "listen around" stopped at 2.52 s for a 2.5 s target;
+  - completion, backup, no stream after closing, resume, marks kept, history intact.
+- **Real data (private):** the presence project was prepared from the A3 project and inventory.
+  - The A3 files were unchanged, and no held-out answer was decoded.
+  - New recordings' checksums were verified.
+  - The final-test freeze was refused: 7 never-used artist groups against 20 required.
+- **Full suite:** 787 passed, 3 skipped, 4 failed. The failures are the three known `tests/test_remote.py` failures (Linux resource tracker; the fix is on a separate branch) and the known intermittent replay test (its fix is PR #1, not in this stack). No new failure. `ruff check` clean.
+- **Not done:** any annotation by the owner; Windows playback; any model training or evaluation.
+

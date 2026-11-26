@@ -51,6 +51,9 @@ def add_parser(commands):
     from .research.labeling import cli as labeling_cli
 
     labeling_cli.add_parsers(sub)
+    from .research.presence import cli as presence_cli
+
+    presence_cli.add_parser(sub)
     return parser
 
 
@@ -59,6 +62,10 @@ def run(args):
         from .research.labeling import cli as labeling_cli
 
         return labeling_cli.run(args)
+    if getattr(args, "character_command", None) == "presence":
+        from .research.presence import cli as presence_cli
+
+        return presence_cli.run(args)
     if getattr(args, "character_command", None) == "research":
         from .research import cli as research_cli
 

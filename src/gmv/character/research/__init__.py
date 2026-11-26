@@ -13,6 +13,7 @@ nothing in the application imports them. Findings: docs/SONIC_CHARACTER_RESEARCH
 * ``evaluate``  group-disjoint corpus statistics; ``stems``: checks against stems and beats
 * ``labeling``  Phase A3: the owner's blind labelling of vocal delivery in excerpts
 * ``delivery``  Phase A4: can the audio tell Cleans, High and Low Screams apart (unseen artists)
+* ``presence``  Phase A5.1: time-localised vocal-presence annotation and the protected dataset
 
 Every value is a ``(value, confidence)`` pair. ``None`` means "could not be measured
 here", which is never the same as zero: no reliable pitch is not "no melody", and no
