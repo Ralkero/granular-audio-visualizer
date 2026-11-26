@@ -11,8 +11,8 @@ The owner approved the design (proposal revision 4) on 2026-11-26. Every rule be
 fixed without seeing any result. A later change is an **amendment**: appended at the end
 with its date and reason, and made before the predictions it could influence exist.
 
-**Amended once since registration** (Amendment 1, 2026-11-26, before Stage 1; see the
-end). Superseded wording is struck through and kept visible.
+**Amended ~~once~~ twice since registration** (Amendments 1 and 2, both 2026-11-26, before
+Stage 1; see the end). Superseded wording is struck through and kept visible.
 
 **This is an exploratory comparison.** It measures and describes how three vocal-presence
 detectors differ on the owner's development artists. It does **not** test hypotheses:
@@ -49,9 +49,10 @@ excerpts, and each false report is drawn as a vocal phrase (Phase A5.0 audit; se
 - **The low-rate group** (8 excerpts, 22.05 kHz): the existing model cannot be built below
   about 23.7 kHz, so it is left out of training for every arm and out of every paired
   statistic. Model C alone is reported on it, descriptively.
-- **Validation:** 28 excerpts from 6 groups (52 s of voice from 4 groups), used once and
-  descriptively (~~§13~~ §14; editorial correction, Amendment 1, A1.4). Its provenance:
-  Amendment 1, A1.2.
+- **Validation:** 28 excerpts from 6 groups (52 s of voice from 4 groups), ~~used once and
+  descriptively~~ scored once by A5.2, descriptively, after the owner's separate
+  authorisation (Amendment 2) (~~§13~~ §14; editorial correction, Amendment 1, A1.4). Its
+  provenance, including its earlier inspection during A5.1: Amendment 1, A1.2.
 - **Final test:** none. The 7 reserved groups stay reserved and nothing is frozen.
 
 ## 3. The arms
@@ -351,10 +352,14 @@ classification in Amendment 1, A1.1 applies instead of this table.
 
 ## 14. Validation and the future confirmation
 
-- **Validation is opened once,** only after the owner's separate authorisation:
+- ~~**Validation is opened once,** only after the owner's separate authorisation:~~
+  **A5.2 validation scoring occurs once, after the owner's separate authorisation.** This
+  scoring use is distinct from the earlier A5.1 annotation-history inspection documented
+  in Amendment 1, A1.2. In order (Amendment 2):
   1. final models and operating points are frozen;
   2. predictions for B0, B0ₜ, B1 and C are sealed with SHA-256;
-  3. the answers are read once.
+  3. ~~the answers are read once.~~ the validation answers are then accessed for this
+     scoring pass.
 - **It is descriptive only:**
   - false activity on the material it contains (no guitar-type negatives);
   - recall and missed voice (52 s from 4 groups);
@@ -443,7 +448,7 @@ All on generated audio and generated projects:
 | 1 | The harness and the §16 tests, fold files with their hashes recorded here, and an aggregate check for overlap with MUSDB18-HQ training material |
 | 2 | B1 and C, and the timing and convergence gates |
 | 3 | The nested development run: predictions sealed, then the §12 report |
-| 4 | Validation, descriptive, after separate authorisation |
+| 4 | ~~Validation, descriptive,~~ The one-time A5.2 validation scoring, descriptive, after separate authorisation (Amendment 2) |
 | 5 | Documentation and a draft pull request with the screening result |
 
 ## Amendments
@@ -512,7 +517,8 @@ earlier access.
 - **Stage 4 is unchanged.** It is a one-time descriptive scoring pass:
   1. models and operating points are frozen;
   2. predictions are sealed with SHA-256;
-  3. the validation answers are read only after the owner's separate authorisation.
+  3. the validation answers are ~~read~~ accessed for this scoring pass only after the
+     owner's separate authorisation (wording aligned by Amendment 2).
 
 #### A1.3 Validation's role, without the withdrawn test framework
 
@@ -532,3 +538,44 @@ procedures, as the reason they are *not* used. It is kept as written.
 
 §2 referred to §13 for validation; the right section is §14. The original reference is
 struck through and the correct one shown beside it.
+
+### Amendment 2 — 2026-11-26, before Stage 1
+
+**State when made:** unchanged from Amendment 1:
+- no model had been trained, no prediction made and no feature extracted;
+- no fold file existed;
+- nothing had been run on the owner's music.
+
+The amendment was written from the protocol alone; no annotation history was read for it.
+
+**Why:** the review of Amendment 1 (commit b6bf3f5) found that Stage 4 was still described
+as validation being "opened once" and its answers being "read once". That wording could
+suggest the validation annotations had never been inspected, which contradicts the A5.1
+inspection that A1.2 records.
+
+**Clarification:** Stage 4 is the one-time **A5.2 validation-scoring pass**. It is not the
+first inspection of the validation annotations.
+
+**Replacement wording in §14:** "A5.2 validation scoring occurs once, after the owner's
+separate authorisation. This scoring use is distinct from the earlier A5.1
+annotation-history inspection documented in Amendment 1, A1.2."
+
+**The order is unchanged:**
+1. final models and operating points are frozen;
+2. predictions for B0, B0ₜ, B1 and C are sealed with SHA-256;
+3. the validation answers are then accessed for this scoring pass.
+
+**Where the wording changed** (originals struck through, kept visible):
+- the amendment note at the top;
+- §2 (validation);
+- §14 (the first bullet and its third step);
+- §18 (the Stage 4 row);
+- Amendment 1, A1.2 (the last bullet's third step).
+
+**Unchanged:**
+- models and operating points are frozen before scoring;
+- predictions are sealed before the answers are accessed;
+- the owner's separate, explicit authorisation is required;
+- validation is descriptive only: no confirmatory claim and no claim of generalisation;
+- the validation history is not read in Stages 1 to 3;
+- every other part of the protocol.
