@@ -51,6 +51,22 @@ environment:
 In the application's own environment, the same command (with `.venv/bin/python`) skips
 `test_presence_model_cnn.py`, because PyTorch is not installed there.
 
+## Step 1: the synthetic implementation
+
+Added for Step 1 (generated data only):
+- `presence_model/`: `seedplan`, `b0check`, `grid`, `enginepass`, `integrity`, `foldgen`,
+  `gateway`, `timing`, `normalise`, `augment`;
+- `experiments/presence/rng.py`;
+- `cnn.SeededDropout`.
+
+Run every data-safe test:
+
+```
+~/.venvs/gmv-presence-experiments/bin/python -m pytest -q -p no:cacheprovider tests/test_presence_model_*.py
+```
+
+The spy test needs `strace` (layer 1). Without it, two tests fail by design.
+
 ## Status
 
 - **Stage 0 is done:** the protocol is registered and the environment set up.

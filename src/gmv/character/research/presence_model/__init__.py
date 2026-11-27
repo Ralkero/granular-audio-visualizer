@@ -16,7 +16,15 @@ the parts that need only NumPy and SciPy:
 Step 1 (synthetic only; readiness proposal revision 4.4, provisional until Amendment 3):
 
 * ``seedplan``: every production seed identity, per-consumer streams, collision checks,
-  the deterministic remapping of gate and sensitivity seeds, and the replay ledger.
+  the deterministic remapping of gate and sensitivity seeds, and the replay ledger;
+* ``b0check``: the four-level check that B0 runs at a sample rate without a silent fallback;
+* ``grid``, ``enginepass``: the canonical segment and frame grid, the engine's quiet rule and
+  B1's features;
+* ``integrity``: integrity records and artifact-tree comparison;
+* ``foldgen``: outer and inner fold generation with an independent verifier;
+* ``gateway``: Tier 2 fields only, seal-gated tokens and a parser with no fixed vocabulary;
+* ``timing``: exec-to-exit accounting, the projection and the scheduling simulations;
+* ``normalise``, ``augment``: normalisation interfaces and model C's augmentation.
 
 The convolutional network itself needs PyTorch and lives in ``experiments/presence``, in
 the separate experiments environment. The application never imports this package.

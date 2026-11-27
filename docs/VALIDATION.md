@@ -313,3 +313,28 @@ The protocol is [VOCAL_PRESENCE_MODEL_PROTOCOL.md](VOCAL_PRESENCE_MODEL_PROTOCOL
   - both screening modes rejecting a repeated or unexpected seed;
   - no seed index or group key in results or errors.
 - **Counts now:** metrics and screening have 32 tests (was 28). In the experiments environment **99 passed** (was 95); in the application's environment 78 passed and the CNN file skips (was 74). `ruff check` is clean.
+
+## 2026-11-26 addendum: Sonic Character, Phase A5.2 Step 1 (synthetic implementation)
+
+Authorised by the owner for **generated data only**, against the readiness proposal (revision 4.4) as a provisional baseline. Pending decisions are parameters, not settled choices. No owner recording, annotation, history, manifest, validation or final-test data was opened. Nothing was trained on project data, and no real timing was measured.
+
+| Increment | What was built | Tests | Evidence (synthetic) |
+|---|---|---|---|
+| S1.1 seeds | `seedplan.py`: all 1,682 production seed identities, one stream per consumer, collision checks, `:cN` remapping for gate and sensitivity seeds only, replay ledger. `cnn.SeededDropout` (its own generator); `build()` inside `fork_rng`; `experiments/presence/rng.py` | 23 | The canonical serialisation reproduces the provisional enumeration hash `0436bb71…`. No collision among 1,682 integers, 1,682 PyTorch seeds or 5,887 NumPy generator states (C has 7 consumers, B1 has 2). SC1–SC7 and RP1–RP5 pass. Two optimiser steps on generated data replay bit for bit. The global random state is untouched |
+| S1.2 B0 rates | `b0check.py`: L1–L4, warnings and floating-point errors as failures, the silent fallback detected | 43 | Observed on the scan: up to 23,700 Hz not constructible; 23,720–32,000 Hz construct but fail when computing; 32,001 Hz and up (44.1, 48, 88.2, 96 kHz) supported. At 32,000 Hz the top FFT bin is 15,999.999999999998 Hz, just below the 16 kHz edge, so 32 kHz itself is **not** supported |
+| S1.3 grid | `grid.py` (canonical segment, f0/f1, C rows [max(0, f0−75), f1)); `enginepass.py` (the engine's quiet rule; B1's features) | 29 | T-grid values confirmed. On one 44.1 kHz example, a naive 1.5 s pre-roll cut lands 573 samples off the canonical grid. B1's features equal the engine's bit for bit. C's slice against the full segment: max difference 7.7e-7 (float32), 1.4e-15 (float64). An excerpt starting at the recording start has 499 excerpt frames, not 500 |
+| S1.4 integrity | `integrity.py`: R-A–R-F, public digest, kind-and-count comparison, artifact trees with a provenance allow-list | 31 | Every field mutation is detected. Reports carry no identifiers |
+| S1.5 folds | `foldgen.py` and `tests/presence_synth.py` (a synthetic project built with the A5.1 APIs) | 10 | Folds for every paired group; the low-rate and validation excerpts are not read; two runs are byte-identical; every stop condition fires |
+| S1.6 privacy | `gateway.py` (Tier 2 fields only, `source` never passed, seal-gated tokens, `re.fullmatch` parser, no production vocabulary); spy harness `tests/privacy_*` | 31 | PC1–PC4, PC6–PC9, DU1, DU4 and DU5 pass with the audit-hook and stat-probe layers. **PC5 and the strace layer fail: strace is not installed. Privacy acceptance is not met** |
+| S1.7 timing | `timing.py`: exec-to-exit accounting, projection S + d1 + (E−1)·k·U + p·P, per-component factors, fixed-duration list scheduling, direct contention simulation, throughput diagnostics, stop rules with explicit thresholds | 11 | Arithmetic against independently computed fixtures; toy sleep jobs; no performance measured |
+| S1.8 normalisation and augmentation | `normalise.py`, `augment.py` (M1, M0; M2 refused) | 13 | M1 keeps the primary's power; the partner-to-primary ratio is −6 to 0 dB; masking comes after standardisation |
+
+**Totals (data-safe suites `tests/test_presence_model_*.py` only):**
+- experiments environment: 288 passed, 2 failed (PC5 and the strace layer);
+- application environment: 258 passed, 3 skipped (PyTorch-only files), the same 2 failed.
+- `ruff check` is clean.
+
+**Not covered yet:**
+- the MUSDB matcher (needed before step 2);
+- DU4 and DU5 over Stage 3 artifacts (they need Stage 2 code; extended at RG1b);
+- every empirical timing value (step 5).
