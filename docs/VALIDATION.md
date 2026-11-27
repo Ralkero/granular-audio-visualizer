@@ -338,3 +338,64 @@ Authorised by the owner for **generated data only**, against the readiness propo
 - the MUSDB matcher (needed before step 2);
 - DU4 and DU5 over Stage 3 artifacts (they need Stage 2 code; extended at RG1b);
 - every empirical timing value (step 5).
+
+### RG1 corrections (2026-11-26, generated data only)
+
+The RG1 review (conditional pass) found two defects in the spy test and gaps in S1.5 and S1.7. They are corrected below, still on generated data only. strace is still not installed.
+
+**Spy test, defect A (recorder attribution).**
+- Each recorder writes its own evidence: the strace trace, the audit-hook log and the stat-probe log. Every detection names its recorder, its origin (the main process or a child) and its kind (open, stat, list, chdir, launch, exec and so on).
+- `require` checks one recorder at a time. Another recorder's detection never counts, and a non-empty trace counts only if the required access was classified in it.
+- PC3–PC6 are split by recorder, following revision 4.4:
+
+  | Control | Python-recorder part | strace part |
+  |---|---|---|
+  | PC3 | audit hook: the open | strace: the open |
+  | PC4 | stat probes: the stat and the existence check; audit hook: the listing | strace: all three |
+  | PC5 | (none) | strace: the open inside libsndfile |
+  | PC6 | audit hook: the launch | strace: the child's own open |
+
+- The layer-1 test now requires strace to classify the permitted run's reads, with nothing left unresolved.
+- PC4 follows revision 4's text literally: a relative stat and listing from the project root.
+
+**Spy test, defect B (relative paths).**
+- Relative paths are resolved against the calling process's directory at the time of the call:
+  - for the Python recorders, the directory is recorded with each event;
+  - in the trace, it is followed through `chdir`, `fchdir`, threads (which share it) and new processes (which copy it), and kernel-resolved descriptor paths are preferred.
+- Paths are compared after `realpath`.
+- A record that cannot be resolved is counted as `unresolved`, which is a violation. Examples: a descriptor, a `dir_fd`, a process whose directory is unknown, a truncated string, a shell command, an unreadable line.
+- A listing of a project folder is also a violation, because it reveals Tier 3 names.
+- The recorded process runs with `python -B`. Before this change, writing the bytecode cache after a source edit (which reopens files by descriptor) produced intermittent unresolved records.
+
+**Guard.** `test_presence_model_guard.py` reads every A5.2 test source on every run, and checks that none refers to the private evidence folder.
+
+**Negative controls.** All of these pass without strace.
+1. A Python-only detection does not satisfy a strace requirement. On the PC5 target, Python sees only soundfile's stat, never libsndfile's open.
+2. A non-empty, classified trace that lacks the injected access does not satisfy the requirement.
+3. and 4. Ten relative-path cases are detected by the Python recorders: plain, dot segments, a double separator, a parent segment, a Tier 3 folder after changing into it, a stat, a listing, a glob, a child process, and a symbolic link outside the project. Changing into a Tier 3 folder is itself detected, and a glob pattern spanning project folders fails closed.
+5. Unresolvable records are counted, and they are violations.
+6. Two tests fail on purpose, on worlds that carry canaries. No canary appears in pytest's failure output or in the reports.
+
+Three further tests run the strace reader on hand-written lines in strace's format: directory changes, threads, children, kernel paths, interrupted calls, escapes and unresolvable cases. They test the reader's logic only. The real format is confirmed only when strace runs.
+
+**S1.5.**
+- The fold index carries `public.development_manifest_sha256` and `chain.public_digest_sha256`, and the public digest is written as provenance.
+- R-E carries the seed format and the enumeration fingerprint (`0436bb71…`). Fold generation stops if a caller supplies different seed fields.
+- Per-excerpt records must have exactly the listed fields: `record` refuses others, and `compare` reports them.
+- A declared replay can be claimed only once.
+- DU4 and DU5 now allow exactly revision 4.3's seven provenance changes, and recompute every changed value from the files. DU1 also checks that public provenance is byte-identical.
+
+**S1.7.**
+- The synthetic-versus-real cross-check stop has a pending tolerance and no default.
+- `contention_factors` works from probe records: r = mean time under a configuration ÷ mean solo time, and c = the largest r. T2's τ₄/τ₁ sets a floor for c_T(outer).
+- CPU time per job (user + system, through `wait4`) is recorded for information only.
+- Observed on the toy job with the default thread settings: 2.6 s of CPU time in 0.55 s elapsed, from idle numeric-library threads spinning. This is why no formula uses CPU time; the test pins the job to one thread.
+- All synthetic. No timing was measured.
+
+**Totals (data-safe suites):**
+- experiments environment: 323 passed, 15 failed;
+- application environment: 293 passed, 3 skipped, 15 failed.
+
+The 15 failures are the strace-recorder tests: the strace parts of PC3, PC4, PC5 and PC6, the layer-1 test, and the 10 relative-path strace cases. `ruff check` is clean.
+
+**RG1 privacy acceptance: NOT MET.** It needs strace installed and those 15 tests passing on real traces.

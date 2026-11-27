@@ -65,7 +65,8 @@ Run every data-safe test:
 ~/.venvs/gmv-presence-experiments/bin/python -m pytest -q -p no:cacheprovider tests/test_presence_model_*.py
 ```
 
-The spy test needs `strace` (layer 1). Without it, two tests fail by design.
+The spy test needs `strace` (layer 1). Each control is checked per recorder, so without strace
+the 15 tests that require strace's own detections fail by design.
 
 ## Status
 
