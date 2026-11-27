@@ -59,6 +59,10 @@ Added for Step 1 (generated data only):
 - `experiments/presence/rng.py`;
 - `cnn.SeededDropout`.
 
+Added for Step 1b (generated data only): `presence_model/musdb.py`, the MUSDB18-HQ overlap
+matcher on in-memory inputs, and a spy test of step 2's access profile. Running it on the real
+corpus is step 2, which is not implemented.
+
 Run every data-safe test:
 
 ```
@@ -73,5 +77,6 @@ the 15 tests that require strace's own detections fail by design.
 - **Stage 0 is done:** the protocol is registered and the environment set up.
 - **Stage 1 is done for generated data only:** the harness and the protocol §16 tests.
 - **Still outstanding:** the real fold files with their hashes, and the aggregate MUSDB18-HQ
-  overlap check. Both need separate authorisation to use real project data.
+  overlap check (its matcher exists since Step 1b; running it is step 2). Both need separate
+  authorisation to use real project data.
 - **Not yet run:** nothing has been run on the owner's music.

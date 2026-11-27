@@ -453,3 +453,79 @@ In both environments:
 - every empirical timing value (step 5).
 
 P1 is still required before any real-data step.
+
+## 2026-11-26 addendum: Sonic Character, Phase A5.2 Step 1b (synthetic MUSDB18-HQ matcher)
+
+Authorised by the owner for **generated data only**. Nothing real was read: no corpus manifest, registry, alias or title file, recording or annotation. The matcher was not run on project data, and no real fold file or hash exists.
+
+**What was built.**
+- `presence_model/musdb.py` is the overlap matcher of protocol §18 (Stage 1). Its rules are readiness proposal revision 4, §7 (unchanged to revision 4.4).
+- It works on in-memory inputs and reads no file. It reuses `presence/identity.py` (`credited`, `normalise`, `TITLE_FEATURE`) and the registry's partitions.
+- **Match types:**
+  - exact credit, with aliases and exactly one step of link expansion;
+  - checksum;
+  - title confirmation and permissive-only, both reported only.
+- **Exposure:** G_T and G_V hold paired groups only, from exact or checksum matches.
+- **Test-split stop:** an exact or checksum match from a MUSDB-test record to any development or A5.1-validation group stops the check, before any result exists.
+- **Public report:** every split × partition × match-type cell, holding distinct groups and distinct records (zeros included), plus:
+  - record and unparsed counts per split;
+  - the sizes of G_T and G_V and their overlap;
+  - the commit;
+  - a digest of the four input fingerprints;
+  - the limitations.
+- **Fail closed:** malformed, missing, duplicated or conflicting inputs stop the check, with counts-only messages.
+- **Private part:** the match list, G_T and G_V never print, not even in a pytest failure diff.
+- **Spy-test harness:** the step-2 inputs have their own categories (`ALLOWED_STEP2`), and none of them is allowed at step 3.
+
+**Tests.** 63 matcher tests and 14 spy tests.
+
+| Criterion | Covered by |
+|---|---|
+| 1. Parsing | the first spaced hyphen only; hyphens inside names; extra separators |
+| 2. Unparsed and malformed records | unparsed counted and still matched; 10 malformed shapes refused; other datasets ignored |
+| 3–6. Matching | exact credit, including featured artists, never generic names; aliases; exactly one link step, both directions, nothing transitive; identical checksums only |
+| 7–8. Report-only types | title confirmation and permissive-only reported, never exposing; a checksum match with a matching title gets no title confirmation |
+| 9–10. Exposure and multiplicity | G_T and G_V, paired groups only; groups across several records and match types counted once per cell |
+| 11. Partitions | reserved, final-test and excluded entries never assessed; a misspelt partition refused |
+| 12. Test-split stop | credit or checksum matches to paired, low-rate and validation groups stop; report-only matches do not |
+| 13. Count dimensions | every cell present |
+| 14. Privacy | no canary in public output, error messages or failure diffs |
+| 15. Determinism | shuffled records, entries, links and categories give the same result |
+| 16. Input faults | 20 missing, malformed, duplicated or conflicting cases, and malformed report inputs |
+
+**The spy test, with strace 7.3:** the synthetic check reads exactly the corpus manifest, the registry and the two identity files. strace and the audit hook each record all four. An extra open of a Tier 3 identity file, the development manifest or the validation history is detected by both recorders. The step-2 inputs stay violations at step 3, and the public report holds no canary.
+
+**Independent review:**
+- Fixed:
+  - an unknown partition was skipped rather than refused (it could hide a test-split match);
+  - empty or unnormalised alias names were accepted (an empty alias could create an exposure);
+  - one test claim was incomplete;
+  - a small widening of the step-3 directory list (the corpus folder now has a step-2-only category);
+  - the private part could appear in pytest's dataclass diffs.
+- Reported, not resolved: see the open points below.
+
+**Results (strace 7.3, data-safe suites, visible terminal):**
+
+| Environment | Passed | Failed | Skipped |
+|---|---|---|---|
+| Experiments | 416 | 0 | 0 |
+| Application | 386 | 0 | 3 (environmental: the PyTorch-only files) |
+
+That is 77 more than the RG1 baseline, with no regression. `ruff check` is clean.
+
+**Open points for the owner before step 2:**
+1. **Paired versus low-rate.** The registered count table splits development groups into paired and low-rate. That split comes from the excerpts' sample rates in the development manifest, which is not among step 2's registered inputs, and it is not among the fingerprinted inputs either. The matcher takes it as an argument and resolves nothing.
+2. **Literal readings, stated in the module:**
+   - " and " and " with " are matched in lower case only, so the permissive tier misses "And" and "With" (report-only);
+   - an empty title key never confirms;
+   - an id such as " - Title" is parsed, with an empty artist;
+   - the corpus's `unassigned` split is refused rather than classed;
+   - each cell counts both groups and records.
+3. **Consequences of the registered rules themselves:**
+   - `credited` reads "(With …)" in a title as a featured credit, which can over-match and exclude;
+   - a link whose end is an alias spelling never expands.
+4. **For step 2's loader:**
+   - `identity.read_aliases` returns nothing when the alias file is missing;
+   - two spellings that normalise to the same key resolve silently.
+
+Step 1b is not formally accepted until the owner has reviewed these results. Step 2, step 3 and P1 are not started.
