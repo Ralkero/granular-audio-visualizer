@@ -14,6 +14,13 @@ setup, teardown and unmarked time), the first epoch d1 separately, k per trainin
 epoch from epochs 2 ... E, and p per predicted excerpt; the gate-only evaluation is excluded.
 Measured values are per size class.
 
+**CPU time** (user plus system) is recorded separately where the platform reports it, for
+information only; no formula uses it.
+
+**Contention factors.** ``contention_factors`` turns T3 probe records into slowdown ratios
+and per-component, per-size-class factors for ``estimate``; ``stops`` includes the T1
+synthetic-versus-real cross-check. Step 1 exercises both on synthetic records only.
+
 **Scheduling.** ``list_schedule`` simulates four workers with fixed job durations, for which
 the classical bound makespan <= (sum + 3·max)/4 holds; ``contention_schedule`` simulates
 durations that depend on how many jobs run at once. The planning estimate built from
@@ -23,6 +30,7 @@ estimated durations is not a proven bound for contention-dependent durations.
 import json
 import os
 import subprocess
+import threading
 import time
 from dataclasses import dataclass, field
 
@@ -71,6 +79,7 @@ class JobRecord:
     exec_ns: int
     exit_ns: int
     intervals: tuple  # (label, start_ns, end_ns)
+    cpu_s: float | None = None  # user + system time of the job's process tree; information only
 
     @property
     def elapsed_s(self):
@@ -78,13 +87,45 @@ class JobRecord:
 
 
 def run_job(name, command, marks_path, size_class, units, predictions, env=None, timeout=None):
-    """Run one job alone, timing exec to exit on the monotonic clock."""
+    """Run one job alone, timing exec to exit on the monotonic clock. Where ``os.wait4`` exists,
+    the job's CPU time (user + system, its own and its waited-for children's) is recorded too,
+    separately; it is never used in a formula."""
     exec_ns = time.monotonic_ns()
-    subprocess.run(command, env=env, check=True, timeout=timeout)
-    exit_ns = time.monotonic_ns()
+    process = subprocess.Popen(command, env=env)
+    cpu_s = None
+    if hasattr(os, "wait4"):
+        expired = threading.Event()
+
+        def kill():
+            expired.set()
+            process.kill()
+
+        timer = threading.Timer(timeout, kill) if timeout else None
+        if timer:
+            timer.start()
+        try:
+            _pid, status, usage = os.wait4(process.pid, 0)
+        finally:
+            if timer:
+                timer.cancel()
+        exit_ns = time.monotonic_ns()
+        process.returncode = os.waitstatus_to_exitcode(status)
+        cpu_s = usage.ru_utime + usage.ru_stime
+        if expired.is_set():
+            raise subprocess.TimeoutExpired(command, timeout)
+    else:
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            raise
+        exit_ns = time.monotonic_ns()
+    if process.returncode != 0:
+        raise subprocess.CalledProcessError(process.returncode, command)
     with open(marks_path, encoding="utf-8") as file:
         intervals = tuple(tuple(i) for i in json.load(file))
-    return JobRecord(name, size_class, units, predictions, exec_ns, exit_ns, intervals)
+    return JobRecord(name, size_class, units, predictions, exec_ns, exit_ns, intervals, cpu_s)
 
 
 def accounting(record):
@@ -196,6 +237,54 @@ def h_plan(durations, workers=WORKERS):
     return (sum(durations) + (workers - 1) * max(durations)) / workers
 
 
+# -- contention factors from T3 probe records -----------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Probe:
+    """One T3 probe run: ``component`` S (setup), T (training) or P (prediction); its size
+    class (None for P, whose cost does not depend on model size); ``configuration`` ``solo``
+    for the probe alone, otherwise the co-load's name, with ``co_runners`` m."""
+
+    component: str
+    size_class: str | None
+    configuration: str
+    co_runners: int
+    repetition: int
+    seconds: float
+
+
+def contention_factors(probes, sustained=None):
+    """T3's slowdowns and factors. r = (mean over repetitions of the probe's time under a
+    configuration) / (mean over repetitions of the same probe alone); c_X(z) = the largest r.
+    ``sustained`` = (tau1, tau4) from T2 sets c_T(outer) to at least tau4/tau1. Returns
+    (factors in ``estimate``'s shape, [(r, m), ...] for ``stops``); P is None if unprobed."""
+    solo, under = {}, {}
+    for p in probes:
+        if p.component not in ("S", "T", "P") or not (np.isfinite(p.seconds) and p.seconds > 0):
+            raise ValueError("a probe record is malformed")
+        key = (p.component, None if p.component == "P" else p.size_class)
+        if p.configuration == "solo":
+            solo.setdefault(key, []).append(p.seconds)
+        else:
+            under.setdefault((key, p.configuration, p.co_runners), []).append(p.seconds)
+    factors, ratios = {"S": {}, "T": {}, "P": None}, []
+    for (key, _configuration, m), times in sorted(under.items(), key=lambda item: repr(item[0])):
+        if key not in solo:
+            raise ValueError("a probe has no solo measurement")
+        r = float(np.mean(times) / np.mean(solo[key]))
+        ratios.append((r, m))
+        component, z = key
+        if component == "P":
+            factors["P"] = max(factors["P"] or 0.0, r)
+        else:
+            factors[component][z] = max(factors[component].get(z, 0.0), r)
+    if sustained is not None:
+        tau1, tau4 = sustained
+        factors["T"]["outer"] = max(factors["T"].get("outer", 0.0), tau4 / tau1)
+    return factors, ratios
+
+
 # -- scheduling simulations -----------------------------------------------------------------------
 
 
@@ -256,10 +345,12 @@ def cv(epochs):
 
 
 def stops(ratios=(), cvs=(), drifts=(), realised=(), estimated=(), makespan=None, plan=None,
-          cv_threshold=None, drift_threshold=None, per_count_limit=False):
+          cv_threshold=None, drift_threshold=None, per_count_limit=False, cross_checks=(),
+          cross_check_tolerance=None):
     """Reasons (fixed texts) that make a measurement unresolved. ``ratios``: (slowdown,
-    co-runners) pairs. Pending thresholds have no defaults: a check is applied only when its
-    threshold is given."""
+    co-runners) pairs. ``cross_checks``: (synthetic, real) pairs of T1 values measured at the
+    same size (k or S). Pending thresholds and the cross-check tolerance have no defaults: a
+    check is applied only when its value is given."""
     out = []
     if any(r > WORKERS for r, _m in ratios):
         out.append("a slowdown exceeds 4: four at once would be slower than one at a time")
@@ -269,6 +360,9 @@ def stops(ratios=(), cvs=(), drifts=(), realised=(), estimated=(), makespan=None
         out.append("epoch times vary more than the coefficient-of-variation threshold")
     if drift_threshold is not None and any(d > drift_threshold for d in drifts):
         out.append("throughput is still falling (drift above threshold)")
+    if cross_check_tolerance is not None and any(
+            abs(s - r) > cross_check_tolerance * abs(r) * (1 + 1e-9) for s, r in cross_checks):
+        out.append("synthetic and real timing at the same size differ by more than the cross-check tolerance")
     if any(d > e * (1 + 1e-9) for d, e in zip(realised, estimated, strict=True)):  # float tolerance only
         out.append("a job took longer than its estimate")
     if makespan is not None and plan is not None and makespan > plan * (1 + 1e-9):

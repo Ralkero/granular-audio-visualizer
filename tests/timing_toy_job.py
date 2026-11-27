@@ -1,4 +1,6 @@
-"""A toy job for the timing-harness tests: it only sleeps, in marked phases.
+"""A toy job for the timing-harness tests: it sleeps in marked phases, except for a short busy
+loop in its prediction phase, so that its CPU time is visibly non-zero yet smaller than its
+elapsed time.
 
     python timing_toy_job.py <marks.json> <gap-seconds>
 
@@ -22,5 +24,7 @@ for epoch in range(4):
 with marks.phase("gate_eval"):
     time.sleep(0.01)
 with marks.phase("prediction"):
-    time.sleep(0.02)
+    end = time.process_time() + 0.05
+    while time.process_time() < end:
+        pass
 marks.write()

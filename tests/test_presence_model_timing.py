@@ -4,7 +4,10 @@ No performance is measured. Expected values are computed independently in each t
 explicit synthetic fixtures; none of the earlier illustrative figures is reused.
 """
 
+import dataclasses
+import os
 import random
+import subprocess
 import sys
 from pathlib import Path
 
@@ -144,3 +147,72 @@ def test_a_toy_job_is_timed_from_exec_to_exit(tmp_path, gap, complete):
     assert timing.complete(r, max_other_s=0.05) is complete
     total = a["startup"] + a["setup"] + sum(a["epochs"]) + a["gate_eval"] + a["prediction"] + a["other"] + a["teardown"]
     assert total == pytest.approx(r.elapsed_s, abs=1e-6)
+
+
+@pytest.mark.skipif(not hasattr(os, "wait4"), reason="the platform does not report a child's CPU time")
+def test_cpu_time_is_recorded_separately_and_used_by_no_formula(tmp_path):
+    marks = tmp_path / "marks.json"
+    # one thread: with many, idle numeric-library threads can spin, and CPU time then exceeds
+    # elapsed time (observed: 2.6 s of CPU in 0.55 s), which is why no formula uses it
+    r = timing.run_job("toy", [sys.executable, str(TOY), str(marks), "0.2"], marks, "outer", units=10,
+                       predictions=2, env=timing.thread_environment(1))
+    assert r.cpu_s is not None and r.cpu_s >= 0.045  # at least the busy loop
+    assert r.cpu_s < r.elapsed_s  # with one thread, the sleeps (over 0.3 s) cost elapsed time, not CPU time
+    without = dataclasses.replace(r, cpu_s=None)
+    assert timing.components(r) == timing.components(without) and timing.accounting(r) == timing.accounting(without)
+    assert record([3.0, 2.0]).cpu_s is None  # synthetic records carry none
+
+
+def test_a_failing_or_overrunning_job_stops(tmp_path):
+    marks = tmp_path / "marks.json"
+    with pytest.raises(subprocess.CalledProcessError):
+        timing.run_job("fail", [sys.executable, "-c", "raise SystemExit(4)"], marks, "outer", 1, 0)
+    with pytest.raises(subprocess.TimeoutExpired):
+        timing.run_job("slow", [sys.executable, "-c", "import time; time.sleep(30)"], marks, "outer", 1, 0, timeout=0.5)
+
+
+def probe(component, size_class, configuration, m, repetition, seconds):
+    return timing.Probe(component, size_class, configuration, m, repetition, seconds)
+
+
+def test_contention_factors_follow_their_definition_on_synthetic_probes():
+    probes = [
+        probe("T", "outer", "solo", 0, 0, 10.0), probe("T", "outer", "solo", 0, 1, 12.0),  # solo mean 11
+        probe("T", "outer", "T+T", 2, 0, 15.0), probe("T", "outer", "T+T", 2, 1, 17.0),  # mean 16
+        probe("T", "outer", "S+P+T", 3, 0, 20.0), probe("T", "outer", "S+P+T", 3, 1, 24.0),  # mean 22
+        probe("T", "inner", "solo", 0, 0, 4.0), probe("T", "inner", "T", 1, 0, 5.0),
+        probe("S", "final", "solo", 0, 0, 2.0), probe("S", "final", "T+T+T", 3, 0, 3.0),
+        probe("P", None, "solo", 0, 0, 0.5), probe("P", None, "P+P", 2, 0, 0.6), probe("P", None, "S", 1, 0, 0.55),
+    ]
+    factors, ratios = timing.contention_factors(probes)
+    assert factors["T"] == pytest.approx({"outer": 22 / 11, "inner": 5 / 4})
+    assert factors["S"] == pytest.approx({"final": 1.5}) and factors["P"] == pytest.approx(1.2)
+    expected = [(16 / 11, 2), (2.0, 3), (1.25, 1), (1.5, 3), (1.2, 2), (1.1, 1)]
+    assert [(round(r, 9), m) for r, m in sorted(ratios)] == [(round(r, 9), m) for r, m in sorted(expected)]
+    # T2's sustained 4-way slowdown sets a floor under c_T(outer) only
+    raised, _ = timing.contention_factors(probes, sustained=(5.0, 12.5))
+    assert raised["T"] == pytest.approx({"outer": 2.5, "inner": 1.25}) and raised["S"] == factors["S"]
+    job = timing.Job("outer", 150, 30, 9)
+    m = timing.Measured(S={"outer": 10.0}, d1={"outer": 8.0}, k={"outer": 0.04}, p=0.2)
+    s, t, q = timing.split(job, m)
+    plan_factors = {"S": {"outer": 1.4}, "T": raised["T"], "P": raised["P"]}
+    assert timing.estimate(job, m, plan_factors) == pytest.approx(1.4 * s + 2.5 * t + 1.2 * q)
+
+
+def test_contention_factors_refuse_incomplete_or_malformed_probes():
+    with pytest.raises(ValueError):
+        timing.contention_factors([probe("T", "outer", "T+T", 2, 0, 15.0)])  # no solo time
+    for bad in (probe("X", "outer", "solo", 0, 0, 1.0), probe("T", "outer", "solo", 0, 0, 0.0),
+                probe("T", "outer", "solo", 0, 0, float("nan"))):
+        with pytest.raises(ValueError):
+            timing.contention_factors([bad])
+
+
+def test_the_cross_check_stop_applies_only_with_a_given_tolerance():
+    pairs = [(1.00, 1.02), (0.040, 0.050)]  # (synthetic, real): 2% and 20% apart
+    assert timing.stops(cross_checks=pairs) == []  # the tolerance is pending: no default
+    assert timing.stops(cross_checks=pairs, cross_check_tolerance=0.25) == []
+    reason = "synthetic and real timing at the same size differ by more than the cross-check tolerance"
+    assert timing.stops(cross_checks=pairs, cross_check_tolerance=0.10) == [reason]
+    assert timing.stops(cross_checks=[(1.1, 1.0)], cross_check_tolerance=0.10) == []  # exactly at the tolerance
+    assert timing.stops(cross_checks=[(0.5, 1.0)], cross_check_tolerance=0.10) == [reason]  # either direction
