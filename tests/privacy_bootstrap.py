@@ -2,11 +2,23 @@
 
     python privacy_bootstrap.py <evidence-dir> <module:function> <json-arguments>
 
-Layer 2: a Python audit hook records file opens, directory listings and process starts.
-Layer 3: ``os.stat``, ``os.lstat`` and ``os.access`` are wrapped to record metadata probes.
-Both are installed before the target module is imported. Standard output and error are
-redirected to files in the evidence folder, so nothing the target prints reaches pytest.
-Layer 1 (strace) is applied from outside by the harness when it is installed.
+Two in-process recorders are installed before the target module is imported. Each writes its
+own evidence file, so their detections stay distinguishable:
+
+* the audit hook (``audit.jsonl``, layer 2): file opens, directory listings, globbing,
+  directory changes, process launches, library loads and file copies, from Python's audit
+  events;
+* the stat probes (``probes.jsonl``, layer 3): ``os.stat``, ``os.lstat`` and ``os.access``,
+  wrapped, because the audit hook has no stat event.
+
+Each record keeps the call's arguments with their types (strings, file descriptors, lists),
+the process's working directory at the time of the call and, for probes, whether a
+``dir_fd`` was given, so the harness can resolve relative paths later or report them as
+unresolved. A record that cannot be written in full is replaced by an ``unrecordable``
+marker, never dropped. Interpretation happens in the harness, not here.
+
+Standard output and error are redirected to files in the evidence folder, so nothing the
+target prints reaches pytest. strace (layer 1) is applied from outside by the harness.
 """
 
 import json
@@ -14,25 +26,46 @@ import os
 import sys
 
 evidence = sys.argv[1]
-log = open(os.path.join(evidence, "python_access.log"), "a", buffering=1, encoding="utf-8")  # noqa: SIM115
-WATCHED = ("open", "os.listdir", "os.scandir", "glob.glob", "subprocess.Popen", "os.system",
-           "os.posix_spawn", "ctypes.dlopen", "shutil.copyfile")
+AUDIT = open(os.path.join(evidence, "audit.jsonl"), "a", buffering=1, encoding="utf-8")  # noqa: SIM115
+PROBES = open(os.path.join(evidence, "probes.jsonl"), "a", buffering=1, encoding="utf-8")  # noqa: SIM115
+WATCHED = {"open", "os.listdir", "os.scandir", "glob.glob", "glob.glob/2", "os.chdir", "subprocess.Popen",
+           "os.system", "os.posix_spawn", "ctypes.dlopen", "shutil.copyfile"}
 
 
-def _flat(values):
-    for value in values:
-        if isinstance(value, (list, tuple)):
-            yield from _flat(value)
-        elif isinstance(value, (str, bytes, os.PathLike)):
-            yield os.fsdecode(value)
+def _encode(value):
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, str):
+        return {"s": value}
+    if isinstance(value, (bytes, os.PathLike)):
+        return {"s": os.fsdecode(value)}
+    if isinstance(value, int):
+        return {"fd": value}
+    if isinstance(value, (list, tuple)):
+        return {"l": [_encode(v) for v in value]}
+    return {"t": type(value).__name__}
+
+
+def _cwd():
+    try:
+        return os.getcwd()
+    except OSError:
+        return None
+
+
+def _write(stream, record):
+    try:
+        stream.write(json.dumps(record) + "\n")
+    except Exception:  # noqa: BLE001 - recording must never break the target
+        try:
+            stream.write('{"event": "unrecordable"}\n')
+        except Exception:  # noqa: BLE001, S110
+            pass
 
 
 def hook(event, args):
     if event in WATCHED or event.startswith(("os.exec", "os.spawn")):
-        try:
-            log.write(event + "\t" + json.dumps(list(_flat(args))) + "\n")
-        except Exception:  # noqa: BLE001 - recording must never break the target
-            pass
+        _write(AUDIT, {"event": event, "args": [_encode(a) for a in args], "cwd": _cwd()})
 
 
 sys.addaudithook(hook)
@@ -40,7 +73,8 @@ for _name in ("stat", "lstat", "access"):
     _original = getattr(os, _name)
 
     def _probe(path, *args, _original=_original, _name=_name, **kwargs):
-        log.write(f"os.{_name}\t" + json.dumps([str(path)]) + "\n")
+        _write(PROBES, {"event": f"os.{_name}", "args": [_encode(path)], "cwd": _cwd(),
+                        "dir_fd": kwargs.get("dir_fd") is not None})
         return _original(path, *args, **kwargs)
 
     setattr(os, _name, _probe)

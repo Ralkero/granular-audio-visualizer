@@ -1,15 +1,17 @@
 """Target functions the A5.2 spy test runs under recording (see ``privacy_bootstrap``).
 
 ``fold_generation`` and ``report_stage`` are the code under test; the ``inject_*`` functions
-make deliberately prohibited accesses, so the positive controls can show they are caught.
+make deliberately prohibited accesses, so the positive and negative controls can show which
+recorder catches them.
 """
 
+import glob
 import json
 import os
 import subprocess
 from pathlib import Path
 
-from soundfile import info as soundfile_info  # imported before any wrapper could see it
+from soundfile import info as soundfile_info
 
 from gmv.character.research.presence_model import b0check, enginepass, foldgen, gateway, integrity
 
@@ -40,15 +42,18 @@ def inject_open(root, path):
         file.read(1)
 
 
-def inject_probes(root, paths):
+def inject_probes(root, audio):
+    """PC4 as specified: a relative stat and listing from the project root, and an existence
+    probe of validation audio."""
     gateway.Gateway(root, step=3)
-    for path in paths:
-        Path(path).exists()
-        if os.path.isdir(path):
-            os.listdir(path)
+    os.chdir(root)
+    os.stat("final-test/annotations.jsonl")
+    os.listdir("final-test")
+    Path(audio).exists()
 
 
 def inject_native(root, path):
+    """PC5: libsndfile opens the file in native code (Python sees only soundfile's stat)."""
     gateway.Gateway(root, step=3)
     soundfile_info(path)
 
@@ -56,6 +61,38 @@ def inject_native(root, path):
 def inject_child(root, path):
     gateway.Gateway(root, step=3)
     subprocess.run(["cat", path], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def inject_relative(root, rel, operation, directory="."):
+    """A prohibited access by a relative path after changing directory (``directory`` is
+    relative to ``root``)."""
+    gateway.Gateway(root, step=3)
+    os.chdir(os.path.join(root, directory))
+    if operation == "open":
+        with open(rel, encoding="utf-8") as file:
+            file.read(1)
+    elif operation == "stat":
+        os.stat(rel)
+    elif operation == "list":
+        os.listdir(rel)
+    elif operation == "glob":
+        glob.glob(rel)
+    elif operation == "child":
+        subprocess.run(["cat", rel], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        raise ValueError("unknown operation")
+
+
+def inject_unresolvable(root):
+    """Accesses whose targets the Python recorders cannot establish: a listing and a stat
+    through a directory descriptor."""
+    gateway.Gateway(root, step=3)
+    fd = os.open(os.path.join(root, "validation"), os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.listdir(fd)
+        os.stat("annotations.jsonl", dir_fd=fd)
+    finally:
+        os.close(fd)
 
 
 def raise_after_reading(root):

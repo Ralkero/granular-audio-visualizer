@@ -3,13 +3,22 @@ DU5). Synthetic worlds only, built under pytest's temporary directory.
 
 Canaries are fresh random tokens planted in Tier 1 and Tier 3 items, in development keys and
 paths, in ``source`` and in ``selection``. They are synthetic, not private data, but PC7 is
-applied in full. Access is recorded by an audit hook and stat probes (layers 2 and 3) and,
-when installed, by strace (layer 1). The tests that need strace fail without it.
+applied in full.
+
+Access is recorded by three recorders whose evidence is kept apart (``privacy_harness``):
+strace (layer 1, when installed), the audit hook (layer 2) and the stat probes (layer 3).
+Each PC3-PC6 control is split by recorder: a test naming a recorder passes only if that
+recorder itself classified the injected access. The strace tests fail while strace is not
+installed. Relative paths are resolved against the calling process's directory; anything that
+cannot be resolved is reported as ``unresolved``, which is a violation. Negative controls show
+that one recorder cannot stand in for another, that a non-empty trace proves nothing by
+itself, and that canaries reach neither reports nor pytest's failure output.
 """
 
 import json
 import secrets
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -97,6 +106,12 @@ def evidence_dir(tmp_path_factory, name):
     return tmp_path_factory.mktemp("evidence", numbered=True) / name
 
 
+def python_only(report):
+    """The same report with every strace record removed: what the Python recorders alone saw."""
+    return {**report, "recorders": [r for r in report["recorders"] if r != "strace"],
+            "detections": {k: n for k, n in report["detections"].items() if not k.startswith("strace|")}}
+
+
 @pytest.fixture(scope="module")
 def step3(world, weights, tmp_path_factory):
     out = tmp_path_factory.mktemp("out3")
@@ -114,6 +129,7 @@ def test_pc1_fold_generation_touches_only_permitted_items(step3):
     report, out, _evidence = step3
     assert report["exit"] == 0, "fold generation failed under recording"
     assert harness.violations(report) == {}, "a prohibited item was accessed"
+    assert all(n == 0 for n in report["unresolved"].values()), "records were left unresolved"
     for needed in ("development-manifest", "development-history", "tier1:validation-manifest",
                    "tier1:registry", "tier1:fingerprints", "paired-audio"):
         assert report["counts"].get(needed, 0) > 0
@@ -149,48 +165,116 @@ def test_pc2_a_corrupted_tier1_file_gives_a_generic_integrity_failure(world, wei
     assert harness.canary_hits(list(canaries.values()), [evidence / "exception.txt"]) == 0
 
 
-# -- PC3-PC6: prohibited accesses are detected ------------------------------------------------------
+# -- PC3-PC6: prohibited accesses are detected, by the recorders revision 4.4 requires ---------------
+#
+# Each control is split by recorder. A test that names a recorder passes only if that recorder
+# itself classified the injected access (``harness.require``); another recorder's detection
+# never counts. The strace tests fail while strace is not installed.
 
 
-def test_pc3_opening_tier3_files_is_detected(world, tmp_path_factory):
-    for rel, category in (("validation/annotations.jsonl", "tier3:validation"),
-                          ("final-test/annotations.jsonl", "tier3:final-test"),
-                          ("development/session.json", "tier3:session")):
-        report = harness.run_target(world["world"], evidence_dir(tmp_path_factory, "open"), "inject_open",
-                                    {"root": str(world["root"]), "path": str(world["root"] / rel)}, world["paired"])
-        assert category in harness.violations(report), "an injected open was not detected"
+def validation_audio(world):
+    return next(str(p) for p in world["paths"] if "val-" in p.name)
 
 
-def test_pc4_metadata_probes_and_listings_are_detected(world, tmp_path_factory):
-    validation_audio = next(str(p) for p in world["paths"] if "val-" in p.name)
-    report = harness.run_target(world["world"], evidence_dir(tmp_path_factory, "probe"), "inject_probes",
-                                {"root": str(world["root"]),
-                                 "paths": [str(world["root"] / "final-test"), validation_audio]}, world["paired"])
-    found = harness.violations(report)
-    assert "tier3:final-test" in found and "tier3:audio" in found
+PC3_FILES = (("validation/annotations.jsonl", "tier3:validation"),
+             ("final-test/annotations.jsonl", "tier3:final-test"),
+             ("development/session.json", "tier3:session"))
 
 
-def test_pc5_native_library_access_is_detected(world, tmp_path_factory):
-    if not harness.strace_available():
-        pytest.fail("PC5 needs strace (layer 1); it is not installed, so native access is not recorded")
-    validation_audio = next(str(p) for p in world["paths"] if "val-" in p.name)
-    report = harness.run_target(world["world"], evidence_dir(tmp_path_factory, "native"), "inject_native",
-                                {"root": str(world["root"]), "path": validation_audio}, world["paired"])
-    assert "tier3:audio" in harness.violations(report)
+@pytest.fixture(scope="module")
+def pc3(world, tmp_path_factory):
+    return [(category, harness.run_target(world["world"], evidence_dir(tmp_path_factory, "open"), "inject_open",
+                                          {"root": str(world["root"]), "path": str(world["root"] / rel)},
+                                          world["paired"]))
+            for rel, category in PC3_FILES]
 
 
-def test_pc6_child_process_access_is_detected(world, tmp_path_factory):
-    report = harness.run_target(world["world"], evidence_dir(tmp_path_factory, "child"), "inject_child",
-                                {"root": str(world["root"]),
-                                 "path": str(world["root"] / "validation" / "annotations.jsonl")}, world["paired"])
-    assert "tier3:validation" in harness.violations(report)
+@pytest.fixture(scope="module")
+def pc4(world, tmp_path_factory):
+    return harness.run_target(world["world"], evidence_dir(tmp_path_factory, "probe"), "inject_probes",
+                              {"root": str(world["root"]), "audio": validation_audio(world)}, world["paired"])
 
 
-def test_layer1_strace_is_recording(step3):
-    report, _out, evidence = step3
-    if not harness.strace_available():
-        pytest.fail("strace (layer 1) is not installed; native and child-process access is only partly recorded")
-    assert report["layers"][0] == "strace" and (evidence / "strace.log").stat().st_size > 0
+@pytest.fixture(scope="module")
+def pc5(world, tmp_path_factory):
+    return harness.run_target(world["world"], evidence_dir(tmp_path_factory, "native"), "inject_native",
+                              {"root": str(world["root"]), "path": validation_audio(world)}, world["paired"])
+
+
+@pytest.fixture(scope="module")
+def pc6(world, tmp_path_factory):
+    return harness.run_target(world["world"], evidence_dir(tmp_path_factory, "child"), "inject_child",
+                              {"root": str(world["root"]),
+                               "path": str(world["root"] / "validation" / "annotations.jsonl")}, world["paired"])
+
+
+def test_pc3_the_audit_hook_detects_each_tier3_open(pc3):
+    """PC3, layer 2 part (revision 4.4: flagged by layer 1 and layer 2)."""
+    for category, report in pc3:
+        assert report["exit"] == 0
+        harness.require(report, "audit-hook", category, "open", "main")
+
+
+def test_pc3_strace_detects_each_tier3_open(pc3):
+    """PC3, layer 1 part."""
+    for category, report in pc3:
+        harness.require(report, "strace", category, "open", "main")
+
+
+def test_pc4_the_stat_probes_detect_each_metadata_probe(pc4):
+    """PC4, layer 3 part: ``os.stat("final-test/annotations.jsonl")`` (relative, from the
+    project root) and ``Path(<validation audio>).exists()``."""
+    assert pc4["exit"] == 0
+    harness.require(pc4, "stat-probes", "tier3:final-test", "stat", "main")
+    harness.require(pc4, "stat-probes", "tier3:audio", "stat", "main")
+
+
+def test_pc4_the_audit_hook_detects_the_listing(pc4):
+    """``os.listdir("final-test")`` is an audit event, not a stat."""
+    harness.require(pc4, "audit-hook", "tier3:final-test", "list", "main")
+
+
+def test_pc4_strace_detects_each_probe_and_the_listing(pc4):
+    """PC4, layer 1 part (revision 4.4: flagged by layer 1, and layer 3)."""
+    harness.require(pc4, "strace", "tier3:final-test", "stat", "main")
+    harness.require(pc4, "strace", "tier3:final-test", "list", "main")
+    harness.require(pc4, "strace", "tier3:audio", "stat", "main")
+
+
+def test_pc5_the_python_recorders_cannot_see_the_native_open(pc5):
+    """Negative control: Python sees only soundfile's own existence check (a stat), never the
+    open made inside libsndfile. So the Python recorders cannot satisfy PC5."""
+    assert pc5["exit"] == 0
+    assert harness.detected(pc5, "stat-probes", "tier3:audio", "stat") > 0
+    assert harness.detected(pc5, "audit-hook", "tier3:audio") == 0
+    assert harness.detected(pc5, "stat-probes", "tier3:audio", "open") == 0
+    with pytest.raises(harness.RecorderRequirement):
+        harness.require(python_only(pc5), "strace", "tier3:audio", "open")
+
+
+def test_pc5_strace_detects_the_native_open(pc5):
+    """PC5 (revision 4.4: flagged by layer 1): the open inside libsndfile itself."""
+    harness.require(pc5, "strace", "tier3:audio", "open", "main")
+
+
+def test_pc6_the_audit_hook_detects_the_launch(pc6):
+    """PC6, layer 2 part: the process start and its arguments."""
+    assert pc6["exit"] == 0
+    harness.require(pc6, "audit-hook", "tier3:validation", "launch", "main")
+
+
+def test_pc6_strace_detects_the_child_processes_own_open(pc6):
+    """PC6 (revision 4.4: flagged by layer 1): the file opened by the child process itself."""
+    harness.require(pc6, "strace", "tier3:validation", "open", "child")
+
+
+def test_layer1_strace_classifies_the_permitted_run(step3):
+    """A non-empty trace is not enough: strace must itself classify the run's permitted
+    reads, with nothing left unresolved."""
+    report, _out, _evidence = step3
+    harness.require(report, "strace", "development-manifest", "open", "main")
+    harness.require(report, "strace", "paired-audio", "open", "main")
+    assert report["unresolved"]["strace"] == 0, "strace records were left unresolved"
 
 
 # -- PC7: no canary leaks ---------------------------------------------------------------------------
@@ -397,3 +481,258 @@ def test_du4_the_breakdown_follows_the_changed_selection_values(du_base, tmp_pat
         tables.append(gateway.breakdown(gw.release_tokens(seal, vocabulary, require_approved=False), groups))
     assert set(tables[0]["categories"]) == {"candidate:drums_only"}
     assert set(tables[1]["categories"]) == {"candidate:bass_focused"}
+
+
+# -- relative paths, directory changes and normalisation -------------------------------------------
+#
+# Each case: (directory to change into, relative to the project root; path; operation; recorder
+# and kind the Python layers must report; kind strace must report). Every case reaches a Tier 3
+# item.
+
+RELATIVE = {
+    "plain": (".", "validation/annotations.jsonl", "open", "audit-hook", "open", "open"),
+    "dot-segments": (".", "./validation/../validation/annotations.jsonl", "open", "audit-hook", "open", "open"),
+    "double-separator": (".", "validation//annotations.jsonl", "open", "audit-hook", "open", "open"),
+    "parent-segment": ("development", "../validation/annotations.jsonl", "open", "audit-hook", "open", "open"),
+    "inside-tier3": ("validation", "annotations.jsonl", "open", "audit-hook", "open", "open"),
+    "stat": (".", "final-test/annotations.jsonl", "stat", "stat-probes", "stat", "stat"),
+    "listing": (".", "final-test", "list", "audit-hook", "list", "list"),
+    "glob": (".", "validation/*", "glob", "audit-hook", "list", "list"),
+    "child": (".", "validation/annotations.jsonl", "child", "audit-hook", "launch", "open"),
+    # a symbolic link outside the project, opened by a relative path from its own folder
+    "symlink": ("../..", "outside-link.jsonl", "open", "audit-hook", "open", "open"),
+}
+RELATIVE_CATEGORY = {"stat": "tier3:final-test", "listing": "tier3:final-test"}
+
+
+@pytest.fixture(scope="module")
+def relative(world, tmp_path_factory):
+    link = world["world"].parent / "outside-link.jsonl"
+    if not link.exists():
+        link.symlink_to(world["root"] / "validation" / "annotations.jsonl")
+    return {name: harness.run_target(world["world"], evidence_dir(tmp_path_factory, f"rel-{name}"), "inject_relative",
+                                     {"root": str(world["root"]), "rel": rel, "operation": operation,
+                                      "directory": directory}, world["paired"])
+            for name, (directory, rel, operation, *_kinds) in RELATIVE.items()}
+
+
+@pytest.mark.parametrize("case", RELATIVE)
+def test_relative_tier3_accesses_are_detected_by_the_python_recorders(relative, case):
+    """Negative controls 3 and 4: a relative path, after a change of directory, still names the
+    Tier 3 item it reaches."""
+    _directory, _rel, _operation, recorder, kind, _strace_kind = RELATIVE[case]
+    report = relative[case]
+    assert report["exit"] == 0
+    harness.require(report, recorder, RELATIVE_CATEGORY.get(case, "tier3:validation"), kind, "main")
+    assert report["unresolved"][recorder] == 0
+
+
+def test_changing_into_a_tier3_folder_is_itself_detected(relative):
+    harness.require(relative["inside-tier3"], "audit-hook", "tier3:validation", "chdir", "main")
+
+
+@pytest.mark.parametrize("case", RELATIVE)
+def test_relative_tier3_accesses_are_detected_by_strace(relative, case):
+    """The same accesses in the trace, resolved through the process's own directory (for the
+    child, the directory it inherited)."""
+    origin = "child" if case == "child" else "main"
+    harness.require(relative[case], "strace", RELATIVE_CATEGORY.get(case, "tier3:validation"), RELATIVE[case][5], origin)
+
+
+def test_a_pattern_spanning_project_folders_fails_closed(world, tmp_path_factory):
+    report = harness.run_target(world["world"], evidence_dir(tmp_path_factory, "rel-pattern"), "inject_relative",
+                                {"root": str(world["root"]), "rel": "*/annotations.jsonl", "operation": "glob"},
+                                world["paired"])
+    assert report["exit"] == 0 and "unclassified" in harness.violations(report)
+
+
+# -- negative controls -------------------------------------------------------------------------------
+
+
+def test_negative_python_only_detection_cannot_satisfy_a_strace_requirement(pc3):
+    """Control 1: the Python recorders caught the open, yet the strace requirement still fails."""
+    _category, report = pc3[0]
+    harness.require(report, "audit-hook", "tier3:validation", "open")
+    with pytest.raises(harness.RecorderRequirement):
+        harness.require(python_only(report), "strace", "tier3:validation", "open")
+
+
+def synthetic_trace(project_root, cwd):
+    """Hand-written lines in strace's ``-f -y`` format: a non-empty trace of permitted reads."""
+    return "\n".join((
+        '300 execve("/usr/bin/python3", ["python3", "bootstrap.py"], 0x7ffd5 /* 30 vars */) = 0',
+        '300 openat(AT_FDCWD, "/usr/lib/python3.12/os.py", O_RDONLY|O_CLOEXEC) = 3</usr/lib/python3.12/os.py>',
+        f'300 newfstatat(AT_FDCWD, "{cwd}", {{st_mode=S_IFDIR|0700, st_size=0, ...}}, 0) = 0',
+        f'300 openat(AT_FDCWD, "{project_root}/manifests/development.json", O_RDONLY|O_CLOEXEC) = '
+        f'3<{project_root}/manifests/development.json>',
+        '300 exit_group(0)                       = ?',
+    )) + "\n"
+
+
+def test_negative_a_non_empty_strace_log_without_the_event_does_not_count(world, tmp_path):
+    """Control 2: a trace that is non-empty and classified, but lacks the injected access, does
+    not satisfy the strace requirement, although the Python recorders caught the access."""
+    fresh = tmp_path / "fresh"
+    report = harness.run_target(world["world"], fresh, "inject_open",
+                                {"root": str(world["root"]), "path": str(world["root"] / "validation" / "annotations.jsonl")},
+                                world["paired"])
+    assert report["exit"] == 0
+    evidence = tmp_path / "with-trace"
+    evidence.mkdir(mode=0o700)
+    for name in ("audit.jsonl", "probes.jsonl"):
+        shutil.copy(fresh / name, evidence / name)
+    (evidence / "strace.log").write_text(synthetic_trace(world["root"], fresh))
+    analysed = harness.analyse(evidence, world["world"], world["paired"], fresh)
+    harness.require(analysed, "strace", "development-manifest", "open")  # the trace was read and classified
+    harness.require(analysed, "audit-hook", "tier3:validation", "open")
+    with pytest.raises(harness.RecorderRequirement):
+        harness.require(analysed, "strace", "tier3:validation", "open")
+
+
+def test_negative_unclassifiable_records_are_reported_and_fail_closed(world, tmp_path_factory):
+    """Control 5: a listing and a stat through a directory descriptor cannot be resolved by the
+    Python recorders; they are counted as unresolved, and unresolved is a violation."""
+    report = harness.run_target(world["world"], evidence_dir(tmp_path_factory, "unresolvable"), "inject_unresolvable",
+                                {"root": str(world["root"])}, world["paired"])
+    assert report["exit"] == 0
+    assert report["unresolved"]["audit-hook"] >= 1 and report["unresolved"]["stat-probes"] >= 1
+    assert "unresolved" in harness.violations(report)
+    lines = ["not json", '{"event": "unrecordable"}', '{"event": "os.system", "args": [{"s": "cat x"}], "cwd": "/"}',
+             '{"event": "open", "args": [{"fd": 5}, {"s": "r"}, {"fd": 0}], "cwd": "/"}',
+             '{"event": "os.stat", "args": [{"s": "x"}], "cwd": null}']
+    assert [a.path for a in harness.python_accesses(lines, "audit-hook")] == [None] * 5
+
+
+NESTED = '''
+import json
+import secrets
+import sys
+from pathlib import Path
+
+sys.path.insert(0, {tests!r})
+import presence_synth
+import privacy_harness as harness
+
+OUT = Path({out!r})
+
+
+def world(tmp_path):
+    canary = "CANARY-" + secrets.token_hex(12)
+    known = json.loads((OUT / "canaries.json").read_text()) if (OUT / "canaries.json").exists() else []
+    (OUT / "canaries.json").write_text(json.dumps([*known, canary]))
+    built = presence_synth.build(tmp_path / "world" / "presence", presence_synth.default_spec(groups=2),
+                                 selection=lambda i: "negative candidate, drums_only: " + canary,
+                                 source=lambda i: "src-" + canary, validation_note=canary)
+    target = built["root"] / "validation" / (canary + ".jsonl")
+    target.write_text(canary)
+    return harness.run_target(tmp_path / "world", tmp_path / "evidence", "inject_open",
+                              {{"root": str(built["root"]), "path": str(target)}}, set())
+
+
+def test_a_violation_assertion_fails(tmp_path):
+    assert harness.violations(world(tmp_path)) == {{}}
+
+
+def test_a_recorder_requirement_fails(tmp_path):
+    harness.require(world(tmp_path), "strace", "tier3:selection", "open")
+'''
+
+
+def test_negative_canaries_do_not_reach_reports_or_failure_output(tmp_path):
+    """Control 6: two tests fail on purpose, on worlds whose Tier 3 file names and contents,
+    sources and selections carry canaries. Neither pytest's failure output nor the sanitised
+    reports contain any canary."""
+    out = tmp_path / "out"
+    out.mkdir()
+    test_file = tmp_path / "test_nested_failure.py"
+    test_file.write_text(NESTED.format(tests=str(Path(__file__).resolve().parent), out=str(out)))
+    basetemp = tmp_path / "basetemp"
+    done = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--tb=short",
+                           f"--basetemp={basetemp}", str(test_file)], cwd=tmp_path, capture_output=True, check=False)
+    (out / "pytest-output.txt").write_bytes(done.stdout + done.stderr)
+    assert done.returncode == 1 and b"2 failed" in done.stdout
+    canaries = json.loads((out / "canaries.json").read_text())
+    reports = list(basetemp.rglob("*.report.json"))
+    assert len(canaries) == 2 and len(reports) == 2
+    assert harness.canary_hits(canaries, [out / "pytest-output.txt", *reports]) == 0
+
+
+# -- the strace reader, on hand-written lines in strace's format ---------------------------------------
+#
+# These check the reader's logic on lines written to strace's documented ``-f -y`` format. Whether
+# the installed strace prints exactly this format is established only by the strace tests above, on
+# real traces.
+
+
+def trace_report(world, lines, cwd):
+    evidence = world["world"].parent / f"trace-{secrets.token_hex(4)}"
+    evidence.mkdir(mode=0o700)
+    (evidence / "strace.log").write_text("\n".join(lines) + "\n")
+    return harness.analyse(evidence, world["world"], world["paired"], cwd)
+
+
+def test_the_strace_reader_follows_directories_through_chdir_threads_and_children(world):
+    r = world["root"]
+    report = trace_report(world, [
+        '100 execve("/usr/bin/python3", ["python3", "x.py"], 0x7ffd /* 30 vars */) = 0',
+        f'100 chdir("{r}") = 0',
+        '100 openat(AT_FDCWD, "validation/annotations.jsonl", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file)',
+        '100 newfstatat(AT_FDCWD, "final-test/annotations.jsonl", 0x7ffc5, 0) = 0',
+        '100 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM, exit_signal=0,'
+        ' stack=0x7f, stack_size=0x7fff00} => {parent_tid=[101]}, 88) = 101',
+        '101 chdir("validation") = 0',  # a thread shares the directory
+        '100 newfstatat(AT_FDCWD, "annotations.jsonl", 0x7ffc5, 0) = 0',
+        '100 clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLD, child_tidptr=0x7f) = 103',
+        '103 chdir("/") = 0',  # a new process changes only its own copy
+        '100 access("annotations.jsonl", R_OK) = 0',
+        '100 vfork() = 102',
+        '102 execve("/usr/bin/cat", ["cat", "../final-test/annotations.jsonl"], 0x7ffd /* 30 vars */) = 0',
+        '102 openat(AT_FDCWD, "../final-test/annotations.jsonl", O_RDONLY) = -1 ENOENT (No such file)',
+        f'100 getdents64(5<{r}/final-test>, 0x5591, 32768) = 48',
+        '102 +++ exited with 1 +++',
+        '100 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=102} ---',
+    ], "/evidence")
+    assert report["unresolved"]["strace"] == 0
+    assert harness.detected(report, "strace", "tier3:validation", "open", "main") == 1
+    assert harness.detected(report, "strace", "tier3:final-test", "stat", "main") == 1
+    assert harness.detected(report, "strace", "tier3:validation", "stat", "main") == 2  # after the thread's chdir
+    assert harness.detected(report, "strace", "tier3:validation", "chdir", "main") == 1  # a thread is the main process
+    assert harness.detected(report, "strace", "tier3:final-test", "open", "child") == 1  # the inherited directory
+    assert harness.detected(report, "strace", "tier3:final-test", "list", "main") == 1
+
+
+def test_the_strace_reader_uses_kernel_paths_and_joins_interrupted_calls(world):
+    r = world["root"]
+    report = trace_report(world, [
+        f'200 openat(AT_FDCWD</elsewhere>, "x", O_RDONLY) = 3<{r}/validation/annotations.jsonl>',
+        f'200 openat(AT_FDCWD, "{r}/final-test/annotations.jsonl", O_RDONLY <unfinished ...>',
+        '201 newfstatat(AT_FDCWD, "/usr", 0x7ff, 0) = 0',
+        f'200 <... openat resumed>) = 4<{r}/final-test/annotations.jsonl>',
+        f'200 openat(AT_FDCWD, "{r}/validation/\\303\\251.jsonl", O_RDONLY) = -1 ENOENT (No such file)',
+        f'200 openat(AT_FDCWD, "y", O_RDONLY) = 5<{r}/validation/gone.jsonl (deleted)>',
+        f'200 fchdir(6<{r}/development>) = 0',
+        '200 openat(AT_FDCWD, "session.json", O_RDONLY) = -1 ENOENT (No such file)',
+        f'200 statx(7<{r}/final-test>, "", AT_EMPTY_PATH, STATX_ALL, 0x7ff) = 0',
+    ], "/evidence")
+    assert report["unresolved"]["strace"] == 0
+    assert harness.detected(report, "strace", "tier3:validation", "open") == 3
+    assert harness.detected(report, "strace", "tier3:final-test", "open") == 1
+    assert harness.detected(report, "strace", "tier3:session", "open") == 1
+    assert harness.detected(report, "strace", "tier3:final-test", "stat") == 1
+
+
+def test_the_strace_reader_reports_records_it_cannot_resolve(world):
+    r = world["root"]
+    report = trace_report(world, [
+        '400 execve("/usr/bin/python3", ["python3"], 0x7ffd /* 30 vars */) = 0',
+        '400 openat(7, "annotations.jsonl", O_RDONLY) = -1 EACCES (Permission denied)',  # a bare directory descriptor
+        '404 openat(AT_FDCWD, "validation/annotations.jsonl", O_RDONLY) = -1 ENOENT (x)',  # a process of unknown origin
+        f'400 openat(AT_FDCWD, "{r}/validation/annot"..., O_RDONLY) = -1 ENOENT (x)',  # a truncated path
+        '400 this is not a system call',
+        'a line without a process id',
+        '400 <... openat resumed>) = 3',  # resumed without a start
+        '400 fchdir(9) = 0',  # an undecorated descriptor
+        '400 newfstatat(AT_FDCWD, "x", 0x7ff, 0) = 0',  # the directory is unknown after fchdir(9)
+    ], "/evidence")
+    assert report["unresolved"]["strace"] == 8
+    assert "unresolved" in harness.violations(report)
