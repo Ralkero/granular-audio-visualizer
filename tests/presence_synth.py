@@ -42,15 +42,18 @@ def default_spec(groups=8, rate=44100, low_rate_group=True):
 
 
 def build(root, spec=None, selection=lambda i: f"negative candidate, drums_only: synthetic {i}",
-          source=lambda i: f"new-{i}"):
-    """Write the project; returns {"root", "excerpts", "expected"} (expected aggregates)."""
+          source=lambda i: f"new-{i}", audio_name=lambda i: f"rec-{i:03d}.wav", extra_registry=None,
+          validation_note=""):
+    """Write the project; returns {"root", "expected", "paths"} (expected aggregates and each
+    spec item's audio path)."""
     root = project.layout(Path(root))
     spec = default_spec() if spec is None else spec
     audio_dir = root.parent / "audio"
     audio_dir.mkdir(parents=True, exist_ok=True)
-    by_partition, entries, annotations = {"development": [], "validation": []}, {}, {}
+    by_partition, entries, annotations, paths = {"development": [], "validation": []}, {}, {}, []
     for i, (group, partition, rate, confirmed) in enumerate(spec):
-        path = audio_dir / f"rec-{i:03d}.wav"
+        path = audio_dir / audio_name(i)
+        paths.append(path)
         sha = write_audio(path, rate, seed=i)
         excerpt = {"id": project.excerpt_id(sha, EXCERPT_START), "source": source(i), "recording": sha,
                    "path": str(path), "size": path.stat().st_size, "duration_s": RECORDING_S,
@@ -61,12 +64,14 @@ def build(root, spec=None, selection=lambda i: f"negative candidate, drums_only:
         annotations[excerpt["id"]] = (partition, confirmed)
     for partition, excerpts in by_partition.items():
         project.write_manifest(root, partition, excerpts)
+    entries.update(extra_registry or {})
     project.write_registry(root, {"format": "gmv-vocal-presence-registry", "version": 1, "entries": entries})
     for partition, excerpts in by_partition.items():
         store = Store(project.partition_folder(root, partition), project.durations({"excerpts": excerpts}))
         for e in excerpts:
             for start, end in annotations[e["id"]][1]:
-                store.add_interval(e["id"], "confirmed", start, end)
+                store.add_interval(e["id"], "confirmed", start, end,
+                                   note=validation_note if partition == "validation" else "")
             store.set_review(e["id"], "complete")
     development = [s for s in spec if s[1] == "development"]
     low = [s for s in development if s[2] < 23700]
@@ -78,4 +83,4 @@ def build(root, spec=None, selection=lambda i: f"negative candidate, drums_only:
         "voiced_groups": len({s[0] for s in paired if s[3]}), "novoice_groups": len({s[0] for s in paired}),
         "voiced_s": round(voiced), "novoice_s": round(len(paired) * EXCERPT_S - voiced),
     }
-    return {"root": root, "expected": expected}
+    return {"root": root, "expected": expected, "paths": paths}
