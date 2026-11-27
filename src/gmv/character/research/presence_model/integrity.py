@@ -5,7 +5,11 @@ proposal, revision 4.4, section 5). NumPy and the standard library only.
   frame array (labels, masks, quiet) and the frame counts. No input-manifest fingerprints.
 * **R-B** the annotation history and the folded state used; **R-C** the development manifest
   (public) and, privately, the registry, fingerprints and other manifests; **R-D** code and
-  environment; **R-E** the configuration; **R-F** caches and normalisation statistics.
+  environment; **R-E** the configuration, which must carry the seed format version and the
+  seed enumeration fingerprint; **R-F** caches and normalisation statistics.
+
+Per-excerpt records have an exact field set (``EXCERPT_FIELDS``): ``record`` refuses any other,
+and ``compare`` reports an unexpected or missing field.
 
 ``compare`` reports mismatches as kinds and counts only (never excerpt identifiers or
 values). Artifact trees keep computational outputs (no provenance, no timestamps) apart from
@@ -25,6 +29,7 @@ EXCERPT_FIELDS = (
     "f0", "f1", "labels_sha256", "evaluation_sha256", "training_sha256", "quiet_sha256",
     "n_voiced_training", "n_novoice_training", "n_voiced_evaluation", "n_novoice_evaluation",
 )
+REQUIRED_CONFIGURATION = ("seed_format", "seed_enumeration_sha256")
 
 
 class IntegrityMismatch(RuntimeError):
@@ -71,6 +76,12 @@ def excerpt_record(audio_sha256, size, sample_rate, channels, frames, segment, a
 
 def record(excerpts, history_sha256, folded_state_sha256, development_manifest_sha256,
            private_inputs, environment, configuration, caches=None):
+    """The integrity record. Each R-A entry must hold exactly ``EXCERPT_FIELDS``; R-E's
+    configuration must carry the seed format and enumeration fingerprint."""
+    if any(set(r) != set(EXCERPT_FIELDS) for r in excerpts.values()):
+        raise ValueError("an excerpt record does not hold exactly the required fields")
+    if any(not configuration.get(k) for k in REQUIRED_CONFIGURATION):
+        raise ValueError("the configuration lacks the seed format or the seed enumeration fingerprint")
     return {
         "R-A": dict(excerpts),
         "R-B": {"history_sha256": history_sha256, "folded_state_sha256": folded_state_sha256},
@@ -119,6 +130,11 @@ def compare(expected, actual):
         for field in EXCERPT_FIELDS:
             if ea[key].get(field) != aa[key].get(field):
                 bump(f"R-A.{field}")
+        for side in (ea[key], aa[key]):
+            if set(side) - set(EXCERPT_FIELDS):
+                bump("R-A.unexpected_field")
+            if set(EXCERPT_FIELDS) - set(side):
+                bump("R-A.missing_field")
     rest_e = flatten({k: v for k, v in expected.items() if k != "R-A"})
     rest_a = flatten({k: v for k, v in actual.items() if k != "R-A"})
     for path in rest_e.keys() | rest_a.keys():

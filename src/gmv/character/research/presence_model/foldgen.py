@@ -12,7 +12,10 @@ paired excerpts' audio and the development history and manifest bytes for proven
 4. Folds: groups typed from integer counts, ordered by SHA-256 of ``{FOLD_SEED}:outer:{key}``;
    ``folds.for_outer`` per outer fold; an independent integer verifier.
 5. Artifacts: computational (outer order, fold files, group counts, public summary) and
-   provenance (the integrity record, the fold index) kept apart, plus a run log.
+   provenance kept apart, plus a run log. Provenance: the integrity record (its R-E carries
+   the seed format and enumeration fingerprint), the public digest (development scope only)
+   and the fold index, whose ``public`` and ``chain`` fields hold the public development
+   manifest hash and the hashes of the integrity record and of the public digest.
 """
 
 import hashlib
@@ -21,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import folds, grid, integrity
+from . import folds, grid, integrity, seedplan
 from ..presence.schema import union
 from .seeds import FOLD_SEED
 
@@ -166,6 +169,10 @@ def generate(records, root, out, rate_class, quiet_of, expected=REGISTERED, envi
         verify(counts, key, assignment)
         assignments.append(assignment)
     root = Path(root)
+    configuration = dict(configuration or {})
+    for key, value in seedplan.configuration().items():
+        if configuration.setdefault(key, value) != value:
+            raise FoldGenerationError("the configuration's seed fields differ from the checked seed plan")
     record = integrity.record(
         excerpts,
         history_sha256=integrity.file_sha256(root / "development" / "annotations.jsonl"),
@@ -176,7 +183,7 @@ def generate(records, root, out, rate_class, quiet_of, expected=REGISTERED, envi
             ("fingerprints_file_sha256", "fingerprints/manifests.json"),
             ("validation_manifest_sha256", "manifests/validation.json"),
             ("final_test_manifest_sha256", "manifests/final-test.json")) if (root / rel).is_file()},
-        environment=environment or {}, configuration=configuration or {},
+        environment=environment or {}, configuration=configuration,
     )
     integrity.write_artifact(out, "computational", "outer_order.json", order)
     fold_hashes = []
@@ -187,12 +194,16 @@ def generate(records, root, out, rate_class, quiet_of, expected=REGISTERED, envi
     integrity.write_artifact(out, "computational", "group_counts.json", {k: list(v) for k, v in counts.items()})
     integrity.write_artifact(out, "computational", "summary.json",
                              [a.summary | {"outer": o} for o, a in enumerate(assignments)])
+    public = integrity.public_digest(record)
     integrity.write_artifact(out, "provenance", "integrity.json", record)
+    integrity.write_artifact(out, "provenance", "public_digest.json", public)
     integrity.write_artifact(out, "provenance", "fold_index.json", {
         "inputs": {"development_manifest_sha256": record["R-C"]["development_manifest_sha256"],
                    "history_sha256": record["R-B"]["history_sha256"]},
+        "public": {"development_manifest_sha256": public["development_manifest_sha256"]},
         "folds": {"sha256": fold_hashes, "outer_order_sha256": integrity.sha256_bytes(integrity.canonical_json(order))},
-        "chain": {"integrity_record_sha256": integrity.sha256_bytes(integrity.canonical_json(record))},
+        "chain": {"integrity_record_sha256": integrity.sha256_bytes(integrity.canonical_json(record)),
+                  "public_digest_sha256": integrity.sha256_bytes(integrity.canonical_json(public))},
     })
     integrity.write_artifact(out, "runlog", "log.txt", f"folds written: {len(assignments)}\n".encode())
     return record

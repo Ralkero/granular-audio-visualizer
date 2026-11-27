@@ -182,6 +182,21 @@ def test_rp5_a_replay_that_differs_stops():
         seedplan.verify_replay(b"\x01\x02", b"\x01\x03")
 
 
+def test_a_declared_replay_cannot_be_claimed_twice(ledger):
+    source = seedplan.REPLAYS["G-C3"]
+    ledger.claim_production("G-C1", source)
+    ledger.claim_replay("G-C3", source)
+    with pytest.raises(seedplan.ReplayError):
+        ledger.claim_replay("G-C3", source)
+    ledger.claim_production("G-B1-1", seedplan.REPLAYS["G-B1-3"])
+    ledger.claim_replay("G-B1-3", seedplan.REPLAYS["G-B1-3"])  # each declared replay runs once
+
+
+def test_the_configuration_carries_the_format_and_the_checked_fingerprint(production_plan):
+    assert seedplan.configuration() == {"seed_format": seedplan.FORMAT, "seed_enumeration_sha256": production_plan.sha256}
+    assert seedplan.configuration()["seed_enumeration_sha256"] == PROVISIONAL_SHA256
+
+
 def test_a_seed_outside_the_plan_is_refused(ledger):
     with pytest.raises(seedplan.SeedPlanError):
         ledger.claim_production("run-x", "gmv-a5.2:C:99:0:0")

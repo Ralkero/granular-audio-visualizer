@@ -35,9 +35,13 @@ def base_record():
         {"CANARY-excerpt-1": excerpt(), "CANARY-excerpt-2": excerpt(3.013)},
         history_sha256="b" * 64, folded_state_sha256="c" * 64, development_manifest_sha256="d" * 64,
         private_inputs={"registry_sha256": "CANARY-registry", "fingerprints_file_sha256": "f" * 64},
-        environment={"python": "3.x", "numpy": "2.x"}, configuration={"preroll_s": 5.0, "collar_s": 0.3},
-        caches={"mel": "e" * 64},
+        environment={"python": "3.x", "numpy": "2.x"}, configuration=CONFIGURATION, caches={"mel": "e" * 64},
     )
+
+
+# a synthetic fingerprint: these tests check the record, not the seed plan
+CONFIGURATION = {"preroll_s": 5.0, "collar_s": 0.3, "seed_format": "a5.2-seed-format-v1",
+                 "seed_enumeration_sha256": "9" * 64}
 
 
 def test_identical_records_have_no_difference():
@@ -74,6 +78,30 @@ def test_missing_extra_and_private_differences_are_reported_without_identifiers(
     with pytest.raises(integrity.IntegrityMismatch) as caught:
         integrity.require_equal(a, b)
     assert "CANARY" not in str(caught.value) and "CANARY" not in repr(report)
+
+
+def test_excerpt_records_must_hold_exactly_the_required_fields():
+    a = base_record()
+    extra, missing = copy.deepcopy(a), copy.deepcopy(a)
+    extra["R-A"]["CANARY-excerpt-1"]["unlisted_field"] = 9
+    del missing["R-A"]["CANARY-excerpt-2"]["quiet_sha256"]
+    assert integrity.compare(a, extra) == {"R-A.unexpected_field": 1}
+    assert integrity.compare(a, missing) == {"R-A.missing_field": 1, "R-A.quiet_sha256": 1}
+    for bad in (extra, missing):
+        with pytest.raises(ValueError):
+            integrity.record(bad["R-A"], "b" * 64, "c" * 64, "d" * 64, {}, {}, CONFIGURATION)
+
+
+def test_the_configuration_record_carries_the_seed_format_and_fingerprint():
+    rec = base_record()
+    assert rec["R-E"]["configuration"]["seed_format"] == "a5.2-seed-format-v1"
+    changed = copy.deepcopy(rec)
+    changed["R-E"]["configuration"]["seed_enumeration_sha256"] = "8" * 64
+    assert integrity.compare(rec, changed) == {"R-E.configuration.seed_enumeration_sha256": 1}
+    for key in integrity.REQUIRED_CONFIGURATION:
+        without = {k: v for k, v in CONFIGURATION.items() if k != key}
+        with pytest.raises(ValueError):
+            integrity.record(rec["R-A"], "b" * 64, "c" * 64, "d" * 64, {}, {}, without)
 
 
 def test_a_segment_cut_on_another_grid_fails_the_contract():

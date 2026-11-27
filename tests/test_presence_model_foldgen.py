@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import presence_synth  # noqa: E402
 
 from gmv.character.research.presence import loaders  # noqa: E402
-from gmv.character.research.presence_model import b0check, enginepass, folds, foldgen, integrity  # noqa: E402
+from gmv.character.research.presence_model import b0check, enginepass, folds, foldgen, integrity, seedplan  # noqa: E402
 
 
 def gateway_like(root):
@@ -75,6 +75,26 @@ def test_two_runs_are_byte_identical(generated, project, rate_class, tmp_path):
     report = integrity.compare_trees(out, tmp_path)
     assert report == {"missing_or_extra_files": 0, "computational": 0, "provenance_unexpected": 0,
                       "provenance_allowed": 0, "breakdown": 0}
+
+
+def test_provenance_carries_the_public_digest_and_the_seed_fields(generated):
+    out, record = generated
+    index = integrity.json.loads((out / "provenance" / "fold_index.json").read_text())
+    public = integrity.json.loads((out / "provenance" / "public_digest.json").read_text())
+    assert public == integrity.public_digest(record)
+    assert index["public"] == {"development_manifest_sha256": record["R-C"]["development_manifest_sha256"]}
+    assert index["chain"] == {"integrity_record_sha256": integrity.sha256_bytes(integrity.canonical_json(record)),
+                              "public_digest_sha256": integrity.sha256_bytes(integrity.canonical_json(public))}
+    configuration = record["R-E"]["configuration"]
+    assert {k: configuration[k] for k in integrity.REQUIRED_CONFIGURATION} == seedplan.configuration()
+    assert record["R-E"]["configuration_sha256"] == integrity.sha256_bytes(integrity.canonical_json(configuration))
+
+
+def test_a_configuration_with_other_seed_fields_stops(project, rate_class, tmp_path):
+    with pytest.raises(foldgen.FoldGenerationError):
+        foldgen.generate(gateway_like(project["root"]), project["root"], tmp_path, rate_class, enginepass.quiet_mask,
+                         project["expected"], configuration={"seed_enumeration_sha256": "0" * 64})
+    assert not any(tmp_path.iterdir())
 
 
 def test_an_aggregate_mismatch_stops(project, rate_class, tmp_path):

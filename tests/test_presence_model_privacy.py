@@ -426,17 +426,38 @@ def du_base(tmp_path_factory, rate_class):
     return built, base / "out"
 
 
+# Revision 4.3's DU4/DU5 list: integrity record (R-C development manifest, private fingerprints);
+# fold index (inputs and public development manifest, both chain hashes); public digest (its
+# development manifest field).
 DEV_MANIFEST_CHANGES = ("R-C.development_manifest_sha256", "R-C.private.fingerprints_file_sha256",
-                        "inputs.development_manifest_sha256", "chain.integrity_record_sha256")
+                        "inputs.development_manifest_sha256", "public.development_manifest_sha256",
+                        "chain.integrity_record_sha256", "chain.public_digest_sha256", "development_manifest_sha256")
 
 
 def check_du(base_out, built, out, allowed, expected_allowed):
     report = integrity.compare_trees(base_out, out, allowed)
     assert report["computational"] == 0 and report["missing_or_extra_files"] == 0
     assert report["provenance_unexpected"] == 0 and report["provenance_allowed"] == expected_allowed
+    # every provenance value equals a fresh recomputation from the actual files (DU4 and DU5, D)
+    root = built["root"]
     recorded = json.loads((out / "provenance" / "integrity.json").read_text())
-    assert recorded["R-C"]["development_manifest_sha256"] == integrity.file_sha256(
-        built["root"] / "manifests" / "development.json")
+    public = json.loads((out / "provenance" / "public_digest.json").read_text())
+    index = json.loads((out / "provenance" / "fold_index.json").read_text())
+    development = integrity.file_sha256(root / "manifests" / "development.json")
+    assert recorded["R-C"]["development_manifest_sha256"] == development
+    for name, rel in (("registry_sha256", "manifests/split-registry.json"),
+                      ("fingerprints_file_sha256", "fingerprints/manifests.json"),
+                      ("validation_manifest_sha256", "manifests/validation.json")):
+        assert recorded["R-C"]["private"][name] == integrity.file_sha256(root / rel)
+    assert index["inputs"]["development_manifest_sha256"] == index["public"]["development_manifest_sha256"] == development
+    assert public == integrity.public_digest(recorded) and public["development_manifest_sha256"] == development
+    assert index["chain"]["integrity_record_sha256"] == integrity.sha256_bytes(integrity.canonical_json(recorded))
+    assert index["chain"]["public_digest_sha256"] == integrity.sha256_bytes(integrity.canonical_json(public))
+
+
+def public_provenance(out):
+    index = json.loads((out / "provenance" / "fold_index.json").read_text())
+    return (out / "provenance" / "public_digest.json").read_bytes(), index["public"], index["chain"]["public_digest_sha256"]
 
 
 def retag(excerpt):
@@ -448,14 +469,14 @@ def test_du4_changing_selection_changes_only_expected_provenance(du_base, tmp_pa
     base, base_out = du_base
     built = du_variant(base, tmp_path, development=retag)
     run_folds(built, tmp_path / "out", rate_class)
-    check_du(base_out, built, tmp_path / "out", DEV_MANIFEST_CHANGES, 4)
+    check_du(base_out, built, tmp_path / "out", DEV_MANIFEST_CHANGES, 7)
 
 
 def test_du5_changing_source_changes_only_expected_provenance(du_base, tmp_path, rate_class):
     base, base_out = du_base
     built = du_variant(base, tmp_path, development=lambda e: e | {"source": "another-source"})
     run_folds(built, tmp_path / "out", rate_class)
-    check_du(base_out, built, tmp_path / "out", DEV_MANIFEST_CHANGES, 4)
+    check_du(base_out, built, tmp_path / "out", DEV_MANIFEST_CHANGES, 7)
 
 
 def test_du1_changing_tier1_metadata_leaves_development_provenance_alone(du_base, tmp_path, rate_class):
@@ -466,6 +487,8 @@ def test_du1_changing_tier1_metadata_leaves_development_provenance_alone(du_base
     allowed = ("R-C.private.validation_manifest_sha256", "R-C.private.registry_sha256",
                "R-C.private.fingerprints_file_sha256", "chain.integrity_record_sha256")
     check_du(base_out, built, tmp_path / "out", allowed, 4)
+    # public provenance stays development-only: byte-identical under Tier 1 changes
+    assert public_provenance(tmp_path / "out") == public_provenance(base_out)
 
 
 def test_du4_the_breakdown_follows_the_changed_selection_values(du_base, tmp_path):

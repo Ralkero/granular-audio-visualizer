@@ -26,9 +26,14 @@ random sequences are disjoint, nor that training runs are statistically independ
 take the suffix ``:c1``, ``:c2``, ... until their integer and every consumer value are unique.
 
 **Replays.** ``RunLedger`` accepts a seed string a second time only for a declared replay
-(``REPLAYS``) whose source has already run; any other reuse stops.
+(``REPLAYS``) whose source has already run, and each declared replay once; any other reuse
+stops.
+
+**Configuration.** ``configuration`` gives the seed format version and the plan's enumeration
+fingerprint, which every integrity record carries in R-E.
 """
 
+import functools
 import hashlib
 from dataclasses import dataclass
 
@@ -261,14 +266,26 @@ def plan(policy="C", strings=None, integer_of=integer_of, torch_seed_of=torch_se
 # -- runs and replays ----------------------------------------------------------------------------
 
 
+@functools.lru_cache(maxsize=2)
+def _checked_plan_sha256(policy):
+    return plan(policy).sha256
+
+
+def configuration(policy="C"):
+    """The seed fields of the configuration record (R-E): the format version and the
+    enumeration fingerprint of the checked plan (``plan`` stops on any collision)."""
+    return {"seed_format": FORMAT, "seed_enumeration_sha256": _checked_plan_sha256(policy)}
+
+
 class RunLedger:
-    """Which run used which seed identity. A production identity runs once; a replay reuses
-    its declared source's string, only after the source has run."""
+    """Which run used which seed identity. A production identity runs once; a declared replay
+    runs once, reusing its source's string, only after the source has run."""
 
     def __init__(self, seed_plan, replays=REPLAYS):
         self.allowed = {f for _b, f, _n in seed_plan.identities}
         self.replays = dict(replays)
         self.used = {}
+        self.replayed = set()
 
     def claim_production(self, run_id, text):
         if text not in self.allowed:
@@ -284,6 +301,9 @@ class RunLedger:
             raise ReplayError("a replay's seed differs from its declared source")
         if text not in self.used:
             raise ReplayError("a replay ran before its source")
+        if replay_id in self.replayed:
+            raise ReplayError("a declared replay was claimed twice")
+        self.replayed.add(replay_id)
 
 
 def verify_replay(source, replay):
