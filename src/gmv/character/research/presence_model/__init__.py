@@ -13,6 +13,11 @@ the parts that need only NumPy and SciPy:
 * ``bootstrap``: descriptive group-bootstrap intervals that always carry their caveat (§12);
 * ``seeds``: the registered seeds (§7).
 
+Step 1 (synthetic only; readiness proposal revision 4.4, provisional until Amendment 3):
+
+* ``seedplan``: every production seed identity, per-consumer streams, collision checks,
+  the deterministic remapping of gate and sensitivity seeds, and the replay ledger.
+
 The convolutional network itself needs PyTorch and lives in ``experiments/presence``, in
 the separate experiments environment. The application never imports this package.
 """

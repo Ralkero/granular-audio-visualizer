@@ -7,8 +7,9 @@ What is compared, precisely: the registered network ends with dropout 0.2 before
 layer. Dropout is meant to differ between training and inference, so whole-network outputs
 are only compared across modes up to the representation *before* dropout
 (``PresenceCNN.features``); FrameNorm is compared across modes on its own; and
-training-mode causality is checked with the random generator reset before each forward
-pass, so both runs draw the same dropout mask.
+training-mode causality is checked with the dropout generator reset before each forward
+pass, so both runs draw the same dropout mask. Dropout draws from its own generator
+(``SeededDropout``), never from PyTorch's global random state.
 """
 
 import sys
@@ -89,9 +90,9 @@ def test_changing_later_input_leaves_earlier_outputs_bit_identical_in_inference(
 def test_changing_later_input_leaves_earlier_outputs_bit_identical_in_training(t):
     model = cnn.build(4).train()
     x = mel()
-    torch.manual_seed(1234)  # the same dropout mask in both runs
+    model.dropout.generator.manual_seed(1234)  # the same dropout mask in both runs
     a = model(x)
-    torch.manual_seed(1234)
+    model.dropout.generator.manual_seed(1234)
     b = model(changed_after(x, t))
     assert torch.equal(a[:, : t + 1], b[:, : t + 1])
     assert torch.equal(model.features(x)[..., : t + 1], model.features(changed_after(x, t))[..., : t + 1])
@@ -159,7 +160,7 @@ def test_the_representation_before_dropout_is_identical_in_both_modes():
     x = mel()
     assert torch.equal(model.train().features(x), model.eval().features(x))
     # the registered dropout makes training-mode outputs differ, as intended; it is not removed
-    torch.manual_seed(0)
+    model.dropout.generator.manual_seed(0)
     assert not torch.equal(model.train()(x), model.eval()(x))
 
 

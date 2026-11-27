@@ -22,6 +22,11 @@ family of functions.
 FrameNorm normalises each frame over its own channels (× frequency, in 2D) with a
 per-channel scale and shift and no running statistics: training and inference compute the
 same thing, and no frame depends on another frame or another batch item.
+
+Dropout is ``SeededDropout``: the same inverted dropout as ``nn.Dropout`` (each element zeroed
+with probability p, survivors scaled by 1/(1−p), identity in inference), drawing its mask
+from its own ``torch.Generator`` so it never touches PyTorch's global random state. It has
+no parameters or buffers. In training mode it refuses to run without a generator.
 """
 
 import torch
@@ -71,6 +76,23 @@ class FrameNorm1d(nn.Module):
         return y * self.weight[None, :, None] + self.bias[None, :, None]
 
 
+class SeededDropout(nn.Module):
+    """Inverted dropout with a dedicated generator (``generator`` must be set to train)."""
+
+    def __init__(self, p):
+        super().__init__()
+        self.p = p
+        self.generator = None
+
+    def forward(self, x):
+        if not self.training or self.p == 0:
+            return x
+        if self.generator is None:
+            raise RuntimeError("SeededDropout needs its own generator in training mode")
+        keep = torch.empty_like(x).bernoulli_(1 - self.p, generator=self.generator)
+        return x * keep / (1 - self.p)
+
+
 class PresenceCNN(nn.Module):
     def __init__(self):
         super().__init__()
@@ -83,7 +105,7 @@ class PresenceCNN(nn.Module):
         self.project_norm = FrameNorm1d(WIDTH)
         self.temporal = nn.ModuleList(nn.Conv1d(WIDTH, WIDTH, 3, dilation=d, bias=False) for d in DILATIONS)
         self.temporal_norms = nn.ModuleList(FrameNorm1d(WIDTH) for _ in DILATIONS)
-        self.dropout = nn.Dropout(DROPOUT)
+        self.dropout = SeededDropout(DROPOUT)
         self.out = nn.Conv1d(WIDTH, 1, 1, bias=True)
 
     def features(self, mel):
@@ -108,10 +130,15 @@ def parameter_count(model):
     return sum(p.numel() for p in model.parameters())
 
 
-def build(seed, dtype=torch.float32):
-    """A freshly initialised model; the same seed always gives the same weights."""
-    torch.manual_seed(int(seed))
-    return PresenceCNN().to(dtype)
+def build(seed, dtype=torch.float32, dropout_seed=None):
+    """A freshly initialised model; the same seed always gives the same weights. PyTorch's
+    global random state is left as it was. The dropout generator is seeded with
+    ``dropout_seed`` (default: ``seed``); ``rng.build_for`` derives both from a seed plan."""
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(int(seed))
+        model = PresenceCNN().to(dtype)
+    model.dropout.generator = torch.Generator().manual_seed(int(seed if dropout_seed is None else dropout_seed))
+    return model
 
 
 class Streamer:
