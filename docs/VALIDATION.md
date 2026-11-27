@@ -528,4 +528,9 @@ That is 77 more than the RG1 baseline, with no regression. `ruff check` is clean
    - `identity.read_aliases` returns nothing when the alias file is missing;
    - two spellings that normalise to the same key resolve silently.
 
-Step 1b is not formally accepted until the owner has reviewed these results. Step 2, step 3 and P1 are not started.
+**Owner review (2026-11-26): Step 1b accepted as delivered**, within its authorised synthetic scope and acceptance criteria. Every open point above stands, unresolved:
+- **The paired versus low-rate classification stays open.** No data source for it has been chosen, and it has not been computed from any input.
+- The literal readings and rule consequences in points 2 and 3 remain as documented.
+- The step-2 loader notes in point 4 remain for step 2.
+
+**Acceptance authorises nothing further.** Step 2 (the real MUSDB check), step 3 and P1 are not started, and each still needs its own authorisation. No real MUSDB or corpus data has been read.
