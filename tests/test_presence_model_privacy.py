@@ -759,3 +759,35 @@ def test_the_strace_reader_reports_records_it_cannot_resolve(world):
     ], "/evidence")
     assert report["unresolved"]["strace"] == 8
     assert "unresolved" in harness.violations(report)
+
+
+def test_the_strace_reader_reads_input_paths_not_returned_buffers(world):
+    """Regression (found in the experiments environment): ``readlink`` returns a link's target
+    in an output buffer, which strace prints truncated at 32 characters; ``getcwd`` returns the
+    working directory. Neither is an access. Input paths of the same calls are still
+    classified, and a truncated input path still fails closed."""
+    r = world["root"]
+    report = trace_report(world, [
+        '500 execve("/usr/bin/python3", ["python3"], 0x7ffd /* 30 vars */) = 0',
+        # returned buffers and data: not accesses
+        '500 readlink("/usr/bin/python3", "/usr/lib/a/very/long/link/target"..., 4096) = 69',  # truncated output
+        f'500 readlinkat(AT_FDCWD</evidence>, "/proc/self/exe", "{r}/validation/annotations.jsonl", 4096) = 84',
+        f'500 getcwd("{r}/validation", 4096) = 50',
+        f'500 getcwd("{r}/final-test/a/long/directory/na"..., 4096) = 90',  # truncated output
+        f'500 getxattr("/usr/lib", "user.{r}", "{r}/final-test"..., 64) = -1 ENODATA (No data available)',
+        f'500 symlink("{r}/validation/annotations.jsonl", "/evidence/link") = 0',  # the target is data
+        # input paths: still classified
+        f'500 readlink("{r}/validation/link", 0x7ffd, 4096) = -1 EINVAL (Invalid argument)',
+        f'500 readlinkat(AT_FDCWD</evidence>, "{r}/final-test/x", "short", 4096) = 5',
+        f'500 lgetxattr("{r}/identity/x", "user.y", 0x7ffd, 64) = -1 ENODATA (No data available)',
+        f'500 symlinkat("target", AT_FDCWD<{r}>, "selection/link") = 0',
+        # a truncated input path: unresolved, a violation
+        f'500 readlink("{r}/validation/annot"..., 0x7ffd, 4096) = -1 EINVAL (Invalid argument)',
+    ], "/evidence")
+    assert report["unresolved"]["strace"] == 1
+    assert "unresolved" in harness.violations(report)
+    assert harness.detected(report, "strace", "tier3:validation") == 1  # the readlink input only
+    assert harness.detected(report, "strace", "tier3:validation", "stat", "main") == 1
+    assert harness.detected(report, "strace", "tier3:final-test") == 1  # the readlinkat input only
+    assert harness.detected(report, "strace", "tier3:identity", "stat") == 1
+    assert harness.detected(report, "strace", "tier3:selection") == 1  # the new link's own path

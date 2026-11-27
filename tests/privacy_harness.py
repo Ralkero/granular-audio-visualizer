@@ -181,6 +181,18 @@ _STAT = {"stat", "lstat", "stat64", "lstat64", "newfstatat", "fstatat64", "statx
          "llistxattr"}
 _LIST = {"getdents64", "getdents"}
 _EXEC = {"execve": 0, "execveat": 1}
+# Input path positions of calls whose other quoted arguments are not accesses: program
+# arguments (exec), returned buffers (the link target of readlink and readlinkat, the directory
+# getcwd returns, an attribute's value or list) and data (an attribute's name and value, a
+# symbolic link's target). Reading those as paths would misclassify them: a truncated output
+# buffer would become a spurious unresolved access, a returned directory a spurious access.
+_INPUT_PATHS = {
+    **{name: (position,) for name, position in _EXEC.items()},
+    "readlink": (0,), "readlinkat": (1,), "getcwd": (),
+    "getxattr": (0,), "lgetxattr": (0,), "listxattr": (0,), "llistxattr": (0,),
+    "setxattr": (0,), "lsetxattr": (0,), "removexattr": (0,), "lremovexattr": (0,),
+    "symlink": (1,), "symlinkat": (2,),
+}
 _CLONE = {"clone", "clone3", "fork", "vfork"}
 _DIRFD = {"openat", "openat2", "newfstatat", "fstatat64", "statx", "faccessat", "faccessat2", "readlinkat",
           "execveat", "mkdirat", "mknodat", "unlinkat", "renameat", "renameat2", "linkat", "symlinkat",
@@ -341,8 +353,10 @@ def _kind(name):
 
 
 def _path_arguments(name, args, cwd):
-    """Resolved paths (None when unresolved) of a call's path arguments."""
-    positions = [_EXEC[name]] if name in _EXEC else range(len(args))
+    """Resolved paths (None when unresolved) of a call's input path arguments. For calls whose
+    other quoted arguments are output buffers or data (``_INPUT_PATHS``), only the input path
+    positions are read; every other call's quoted arguments are all treated as paths."""
+    positions = _INPUT_PATHS.get(name, range(len(args)))
     out = []
     for i in positions:
         if i >= len(args):
