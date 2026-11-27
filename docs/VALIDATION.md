@@ -398,4 +398,58 @@ Three further tests run the strace reader on hand-written lines in strace's form
 
 The 15 failures are the strace-recorder tests: the strace parts of PC3, PC4, PC5 and PC6, the layer-1 test, and the 10 relative-path strace cases. `ruff check` is clean.
 
-**RG1 privacy acceptance: NOT MET.** It needs strace installed and those 15 tests passing on real traces.
+**RG1 privacy acceptance at that point: not met**, because strace was not installed. It was met later the same day; see the strace validation below.
+
+### RG1 strace validation (2026-11-26): PASS
+
+The owner installed strace (package `strace 7.3-1`; `strace -- version 7.3`). Every check below ran on generated projects with **real strace recordings on this machine**. No owner data was used.
+
+**First run.**
+- All 65 privacy tests passed in the application environment.
+- In the experiments environment, 4 permitted-run tests failed closed: both PC1 tests, the strace permitted-run test, and the PC8 report stage.
+- The cause was a reader defect. `readlink` returns a link's target in an output buffer, which strace prints truncated at 32 characters, and the reader treated every quoted argument as an accessed path. The truncated buffers became unresolved accesses: false alarms, with nothing missed. `getcwd`'s returned directory was misread the same way.
+- The application environment was not affected, because its interpreter's links are short.
+
+**Correction (`30dc7af`).**
+- The reader reads only the input path positions of `readlink`, `readlinkat`, `getcwd` (none), the extended-attribute calls, `symlink` and `symlinkat`. Every other call is read as before.
+- A regression test covers truncated `readlink` output and `getcwd` results, which are not accesses. It also checks that input paths of the same calls are still classified, and that a truncated input path still fails closed.
+- Run through the previous reader, the test's lines leave 4 records unresolved and give 4 Tier 3 hits, where the test requires 1 and 1.
+- Before the correction was applied, it was checked against every recorded run: no Tier 3 detection by strace was lost except the spurious `getcwd` one.
+- No assertion was weakened.
+
+**Final results (strace 7.3, data-safe suites, visible terminal):**
+
+| Environment | Passed | Failed | Skipped |
+|---|---|---|---|
+| Experiments (Python 3.12, torch) | 339 | 0 | 0 |
+| Application (Python 3.14) | 309 | 0 | 3 (environmental: the PyTorch-only files) |
+
+`ruff check` is clean.
+
+In both environments:
+- **Permitted runs:** all 5 left no strace record unresolved and produced no violation.
+- **Injected accesses:** all 21 runs still show their violations.
+- **Negative controls:** all 5 pass.
+
+**What strace itself recorded:**
+
+| Control | Synthetic access | strace's own record | Python recorders |
+|---|---|---|---|
+| PC3 | Opening three Tier 3 files | `openat` by the main process, once per file | audit hook: open |
+| PC4 | From the project root: a relative stat of a final-test file, a listing of the final-test folder, an existence check of validation audio | `newfstatat`; `openat` plus `getdents64`; `newfstatat` | stat probes: the stat and the existence check; audit hook: the listing |
+| PC5 | Reading validation audio's details through the audio library | the `openat` inside the library itself | a stat only: Python cannot see the open |
+| PC6 | A child process opening validation annotations | `openat` by the child process | audit hook: the launch |
+
+- The 10 relative-path cases are detected in the trace, the child's through the directory it inherited.
+- strace 7.3 labels every line with its process ID, and attaches the working directory to every relative lookup.
+- Interrupted calls in the child-process runs were joined correctly.
+- Raw traces and canary values stayed in local temporary folders.
+
+**RG1 recommendation: PASS. RG1 privacy acceptance: met.**
+
+**Still outside Step 1:**
+- the MUSDB matcher (Step 1b, before step 2);
+- DU4 and DU5 over Stage 3 artifacts (RG1b);
+- every empirical timing value (step 5).
+
+P1 is still required before any real-data step.
