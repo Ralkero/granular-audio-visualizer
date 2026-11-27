@@ -45,6 +45,11 @@ KINDS = ("open", "stat", "list", "chdir", "launch", "exec", "load", "copy", "oth
 ALLOWED_STEP3 = {"development-manifest", "development-history", "tier1:validation-manifest",
                  "tier1:registry", "tier1:final-test-manifest", "tier1:fingerprints", "directory",
                  "paired-audio"}
+# Step 2 (the MUSDB check) reads only the corpus manifest, the registry and two identity files.
+# Their own categories keep them apart from the rest of identity/ (Tier 3); no step-2 category
+# (the corpus folder included) is allowed at step 3.
+ALLOWED_STEP2 = {"step2:corpus-manifest", "step2:corpus-folder", "tier1:registry", "step2:aliases", "step2:titles",
+                 "directory"}
 STRACE_SYSCALLS = "%file,%process,getdents64,fchdir"
 WILDCARDS = re.compile(r"[*?\[]")
 
@@ -451,6 +456,10 @@ def categorise(path, world, paired_audio, pattern=False):
         "presence/manifests/final-test.json": "tier1:final-test-manifest",
         "presence/fingerprints/manifests.json": "tier1:fingerprints",
         "presence/development/annotations.jsonl": "development-history",
+        "presence/identity/aliases.json": "step2:aliases",
+        "presence/identity/titles.json": "step2:titles",
+        "corpus/manifest.json": "step2:corpus-manifest",
+        "corpus": "step2:corpus-folder",
     }
     if rel in files:
         return files[rel]

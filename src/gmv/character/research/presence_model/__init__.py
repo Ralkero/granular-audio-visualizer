@@ -26,6 +26,12 @@ Step 1 (synthetic only; readiness proposal revision 4.4, provisional until Amend
 * ``timing``: exec-to-exit accounting, the projection and the scheduling simulations;
 * ``normalise``, ``augment``: normalisation interfaces and model C's augmentation.
 
+Step 1b (synthetic only):
+
+* ``musdb``: the MUSDB18-HQ overlap matcher on in-memory inputs (exact-credit, checksum,
+  title-confirmation and permissive-only matches; G_T and G_V; the test-split stop; the
+  public aggregate). Loading the real inputs and running it is step 2.
+
 The convolutional network itself needs PyTorch and lives in ``experiments/presence``, in
 the separate experiments environment. The application never imports this package.
 """

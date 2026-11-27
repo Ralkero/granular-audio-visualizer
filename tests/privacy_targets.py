@@ -13,7 +13,8 @@ from pathlib import Path
 
 from soundfile import info as soundfile_info
 
-from gmv.character.research.presence_model import b0check, enginepass, foldgen, gateway, integrity
+from gmv.character.research.presence import identity
+from gmv.character.research.presence_model import b0check, enginepass, foldgen, gateway, integrity, musdb
 
 
 def fold_generation(root, out, weights, expected):
@@ -93,6 +94,27 @@ def inject_unresolvable(root):
         os.stat("annotations.jsonl", dir_fd=fd)
     finally:
         os.close(fd)
+
+
+def musdb_check(root, corpus, categories, out, also=None):
+    """Step 2's access profile on a synthetic project: read the corpus manifest, the registry,
+    the alias file and the titles, run the matcher and write the public report only. ``also``
+    names one extra file to open (a negative control). This is test code: the real step-2
+    workflow is not implemented."""
+    root = Path(root)
+    records = json.loads(Path(corpus).read_text(encoding="utf-8"))["recordings"]
+    registry = json.loads((root / "manifests" / "split-registry.json").read_text(encoding="utf-8"))
+    aliases = identity.read_aliases(root / "identity" / "aliases.json")
+    titles = json.loads((root / "identity" / "titles.json").read_text(encoding="utf-8"))
+    if also:
+        with open(also, encoding="utf-8") as file:
+            file.read(1)
+    result = musdb.match(records, registry, aliases, titles, categories)
+    hashes = {name: integrity.file_sha256(path) for name, path in (
+        ("corpus_manifest", corpus), ("registry", root / "manifests" / "split-registry.json"),
+        ("aliases", root / "identity" / "aliases.json"), ("titles", root / "identity" / "titles.json"))}
+    Path(out).mkdir(parents=True, exist_ok=True)
+    (Path(out) / "public.json").write_text(json.dumps(musdb.public_report(result, hashes, "0" * 40)))
 
 
 def raise_after_reading(root):
