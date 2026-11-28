@@ -277,22 +277,70 @@ def configuration(policy="C"):
     return {"seed_format": FORMAT, "seed_enumeration_sha256": _checked_plan_sha256(policy)}
 
 
+HORIZON_SOURCES = ("outer-0:conv:0", "outer-0:conv:1", "inner-0:conv:0", "inner-0:conv:1")
+LENGTHS = {"C": (30, 45, 68), "B1": (60, 90, 135)}  # E, E⁺ = 1.5E, E⁺⁺ = ⌈2.25E⌉ (A3.2)
+
+
+def horizon_relations():
+    """The 16 declared ``horizon`` relations (Amendment 3, A3.3): {relation id: (base gate
+    string, shorter length, longer length)}, 2 arms × 4 gate sources × (E → E⁺, E⁺ → E⁺⁺)."""
+    out = {}
+    for arm in ARMS:
+        e, e1, e2 = LENGTHS[arm]
+        for source in HORIZON_SOURCES:
+            base = f"gmv-a5.2-gate:{arm}:{source}"
+            out[f"H-{arm}-{source}-{e1}"] = (base, e, e1)
+            out[f"H-{arm}-{source}-{e2}"] = (base, e1, e2)
+    return out
+
+
 class RunLedger:
     """Which run used which seed identity. A production identity runs once; a declared replay
-    runs once, reusing its source's string, only after the source has run."""
+    runs once, reusing its source's string, only after the source has run. A declared
+    ``horizon`` relation (A3.3) reruns a gate identity as a separate, longer complete recipe:
+    its source must already have run at the shorter length (E, or the E⁺ relation for E⁺⁺),
+    it is claimed once, and only gate identities have relations. Any other reuse stops."""
 
-    def __init__(self, seed_plan, replays=REPLAYS):
+    def __init__(self, seed_plan, replays=REPLAYS, horizons=None):
         self.allowed = {f for _b, f, _n in seed_plan.identities}
+        final = {b: f for b, f, _n in seed_plan.identities}
         self.replays = dict(replays)
+        relations = horizon_relations() if horizons is None else horizons
+        self.horizons = {k: (final.get(base, base), short, long) for k, (base, short, long) in relations.items()}
         self.used = {}
+        self.lengths = {}
         self.replayed = set()
+        self.claimed = set()
 
-    def claim_production(self, run_id, text):
+    def claim_production(self, run_id, text, epochs=None):
         if text not in self.allowed:
             raise SeedPlanError("a run asked for a seed identity outside the plan")
         if text in self.used:
             raise ReplayError("a production seed identity was reused without a declared replay")
         self.used[text] = run_id
+        self.lengths[text] = epochs
+
+    def claim_horizon(self, relation_id, text, epochs):
+        if relation_id not in self.horizons:
+            raise ReplayError("an undeclared horizon relation")
+        source, short, long = self.horizons[relation_id]
+        if text != source or family_of(text) != "gate":
+            raise ReplayError("a horizon run's seed differs from its declared gate source")
+        if epochs != long:
+            raise ReplayError("a horizon run's length is not its relation's longer length")
+        if relation_id in self.claimed:
+            raise ReplayError("a horizon relation was claimed twice")
+        if text not in self.used:
+            raise ReplayError("a horizon run ran before its source")
+        arm = arm_of(text)
+        if short == LENGTHS[arm][0]:
+            if self.lengths.get(text) != short:
+                raise ReplayError("a horizon run's source has not run at the registered length")
+        else:
+            earlier = [k for k, (s, _a, b) in self.horizons.items() if s == text and b == short]
+            if not earlier or not set(earlier) <= self.claimed:
+                raise ReplayError("the E⁺⁺ run came before its E⁺ run")
+        self.claimed.add(relation_id)
 
     def claim_replay(self, replay_id, text):
         if replay_id not in self.replays:

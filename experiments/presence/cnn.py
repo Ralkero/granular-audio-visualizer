@@ -26,8 +26,11 @@ same thing, and no frame depends on another frame or another batch item.
 Dropout is ``SeededDropout``: the same inverted dropout as ``nn.Dropout`` (each element zeroed
 with probability p, survivors scaled by 1/(1−p), identity in inference), drawing its mask
 from its own ``torch.Generator`` so it never touches PyTorch's global random state. It has
-no parameters or buffers. In training mode it refuses to run without a generator.
+no parameters or buffers. In training mode it refuses to run without a generator. With
+``record`` set to a list it appends each mask's SHA-256 (Step 4's matched-start check).
 """
+
+import hashlib
 
 import torch
 from torch import nn
@@ -83,6 +86,7 @@ class SeededDropout(nn.Module):
         super().__init__()
         self.p = p
         self.generator = None
+        self.record = None  # a list: each training-mode mask's SHA-256 is appended (the matched-start check)
 
     def forward(self, x):
         if not self.training or self.p == 0:
@@ -90,6 +94,8 @@ class SeededDropout(nn.Module):
         if self.generator is None:
             raise RuntimeError("SeededDropout needs its own generator in training mode")
         keep = torch.empty_like(x).bernoulli_(1 - self.p, generator=self.generator)
+        if self.record is not None:
+            self.record.append(hashlib.sha256(keep.to(torch.uint8).numpy().tobytes()).hexdigest())
         return x * keep / (1 - self.p)
 
 
