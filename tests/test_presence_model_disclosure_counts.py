@@ -33,7 +33,7 @@ def released(decisions):
 
 
 def test_the_model_enumerates_every_world():
-    assert len(dc.worlds()["p_a"]) == 1540 * 84 * 4
+    assert len(dc.worlds()["p_a"]) == 1540 * 84 * 4 and len(dc.Model(3, 1, 2).w["p_a"]) == 20 * 4 * 10
 
 
 def test_item_d_figures_are_always_released_exactly():

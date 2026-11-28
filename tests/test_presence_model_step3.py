@@ -133,7 +133,8 @@ def test_sensitivity_folds_use_the_restricted_hashed_order_and_publish_only_comm
     private, public, opening = step3.sensitivity_folds(world, removed)
     main_order = foldgen.outer_order(world)
     assert private["outer_order"] == [g for g in main_order if g not in removed]  # restricted, renumbered
-    assert set(public) == {"folds_commitment", "outer_folds"} and public["outer_folds"] == 7
+    assert set(public) == {"folds_commitment"}  # no fold count: it would reveal the removed set's size
+    assert len(private["folds"]) == 7
     hashes = opening.to_private_record()["hashes"]
     assert public["folds_commitment"] not in hashes.values()
     assert commitment.verify(public["folds_commitment"], opening)

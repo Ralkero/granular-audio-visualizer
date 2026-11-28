@@ -276,16 +276,17 @@ class _Reader:
         self.call(pid, call.group(1), call.group(2), call.group(3))
 
 
-def read(text, inputs, strace_exit, initial_cwd="/"):
+def read(text, inputs, strace_exit, initial_cwd="/", allowed_exits=(0,)):
     """The verdict on one trace. ``inputs``: the exact sandbox paths of the step's inputs;
-    ``strace_exit``: strace's own exit status."""
+    ``strace_exit``: strace's own exit status (the step's, under ``strace``); ``allowed_exits``:
+    the step's registered exit codes (0, or a registered stop's code)."""
     reader = _Reader(inputs, initial_cwd)
     for line in text.splitlines():
         if line.strip():
             reader.line(line)
     v = reader.v
-    if strace_exit != 0:
-        v.problems.append("strace did not exit 0")
+    if strace_exit not in allowed_exits:
+        v.problems.append("strace did not exit with a registered code")
     if reader.seen - reader.exited:
         v.problems.append("a traced process has no exit line")
     if reader.pending:

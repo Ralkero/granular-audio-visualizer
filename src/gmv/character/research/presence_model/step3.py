@@ -233,4 +233,5 @@ def sensitivity_folds(stats, removed):
         files[f"folds/{o:02d}.json"] = integrity.sha256_bytes(data)
     files["outer_order.json"] = integrity.sha256_bytes(integrity.canonical_json(order))
     public, opening = commitment.commit(files)
-    return private, {"folds_commitment": public, "outer_folds": len(order)}, opening
+    # Only the commitment is public: the number of outer folds would give away the removed set's size.
+    return private, {"folds_commitment": public}, opening
