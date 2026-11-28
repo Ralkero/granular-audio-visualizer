@@ -19,6 +19,7 @@ from pathlib import Path
 REGISTERED = (
     "gmv.character.research.presence_model.step2run:run",
     "gmv.character.research.presence_model.step3run:run",
+    "gmv.character.research.presence_model.launcher:run_job",  # step 5's jobs (Step 4, S4.7)
 )
 
 

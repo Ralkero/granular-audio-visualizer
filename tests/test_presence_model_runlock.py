@@ -88,6 +88,8 @@ def test_every_registered_runner_refuses_while_the_lock_is_held(entry, tmp_path)
         with pytest.raises(runlock.LockHeld):
             if module.endswith("step2run"):
                 run(None, tmp_path, tmp_path, lock_path=lock)
+            elif module.endswith("launcher"):
+                run([sys.executable, "-c", "pass"], cap_s=5, lock_path=lock)
             else:
                 run(tmp_path / "out", lock_path=lock)
     assert not (tmp_path / "out").exists()
