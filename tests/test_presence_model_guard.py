@@ -17,7 +17,7 @@ FORBIDDEN = re.compile("lo" + "cal" + r"[\W_]{0,8}" + "evid" + "ence", re.IGNORE
 
 def a52_sources():
     return sorted({*TESTS.glob("test_presence_model_*.py"), *TESTS.glob("privacy_*.py"),
-                   TESTS / "presence_synth.py", TESTS / "timing_toy_job.py"})
+                   TESTS / "presence_synth.py", TESTS / "step2_synth.py", TESTS / "timing_toy_job.py"})
 
 
 def test_the_guard_reads_every_a52_test_source():
