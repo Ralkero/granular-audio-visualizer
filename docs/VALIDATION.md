@@ -534,3 +534,47 @@ That is 77 more than the RG1 baseline, with no regression. `ruff check` is clean
 - The step-2 loader notes in point 4 remain for step 2.
 
 **Acceptance authorises nothing further.** Step 2 (the real MUSDB check), step 3 and P1 are not started, and each still needs its own authorisation. No real MUSDB or corpus data has been read.
+
+## 2026-11-27 addendum: Sonic Character, Phase A5.2 Step 2a (synthetic step 2 and 3 implementation)
+
+Authorised by the owner after P1 published Amendment 3 (`4848298`), for **generated data only**. Nothing real was read: no corpus manifest, registry, alias or title file, recording, annotation, history or weights, and nothing under the private evidence folder. Step 2 and step 3 have not run on project data; each still needs its own authorisation, after review RG1c.
+
+**What was built** (`gmv.character.research.presence_model`, Amendment 3, A3.4-A3.10):
+
+| Part | Module | What it does |
+|---|---|---|
+| Strict readers | `readers.py` | The corpus manifest through GMV's strict corpus schema (MUSDB fields only), the split registry through its fingerprint check, the mandatory `aliases.json` with its stops, titles of assessed recordings only, and the new credit-readings and review-decisions files. Repeated JSON keys are refused; messages carry counts only |
+| Matcher | `musdb.py` | Ambiguous credits ("and"/"with" in any capitalisation, brackets, non-Latin letters) need a registered reading or step 2 stops; records without " - " or with an empty or generic artist stop it too (MUSDB records only); credit sources are kept for the review; the paired/low-rate split is deferred to step 3 (option C); test-split rejections apply before the test-split check; a file match can never be rejected |
+| Review and wording | `review.py` | The private review file the owner opens; a counts-only summary; one neutral public sentence for every step 2 stop and one for every re-run |
+| Commitments | `commitment.py` | Hiding commitments (a fresh 32-byte secret per run) in place of plain public hashes of private inputs |
+| Step 3 | `step3.py`, `step3run.py` | The split from B0's rate check, the owner's train and validation rejections, G_T and G_V, the end codes, sensitivity-rerun feasibility over every possible removed set, sensitivity folds as commitments, and the public count report built only through the disclosure check |
+| Disclosure check (counts) | `disclosure_counts.py` | Exact over every possible world (517,440 at the registered sizes): item D exempt; the sizes of G_T and G_V and their overlap released only if every value they could show keeps every group's and every pair's match status uncertain; decisions read public figures only |
+| Sandbox and trace | `sandbox.py`, `trace.py`, `sandbox_checks.py` | The bubblewrap configuration (the proposed configuration for synthetic testing, not a proven security boundary), the traced launcher, and the live-trace reader (set-up kept apart, deny by default with a recorded baseline of interpreter start-up probes, no new programs, child processes, network, changes of directory or io_uring) |
+| Runners and lock | `step2run.py`, `runlock.py` | The step 2 runner (listing and matching phases, sandboxed and traced, accepted only on a complete trace with no violation and exactly the expected files) and the one exclusive experiment lock |
+
+**Tests** (generated data only; the sandbox and runner tests start bubblewrap 0.13.1 under strace 7.3 for real on this machine):
+
+| Area | File | Tests |
+|---|---|---|
+| Strict readers | `test_presence_model_readers.py` | 45 |
+| Matcher (Step 1b tests updated where Amendment 3 changed a rule) | `test_presence_model_musdb.py`, `test_presence_model_musdb_v2.py` | 64 + 61 |
+| Review file and commitments | `test_presence_model_review.py` | 12 |
+| Step 3 | `test_presence_model_step3.py`, `test_presence_model_step3run.py` | 17 + 8 |
+| Disclosure check (counts) | `test_presence_model_disclosure_counts.py` | 7 |
+| Sandbox and trace reader | `test_presence_model_sandbox.py`, `test_presence_model_trace.py` | 11 + 11 |
+| Step 2 runner | `test_presence_model_step2run.py` | 11 |
+| Lock | `test_presence_model_runlock.py` | 8 |
+
+What the sandbox tests showed on this machine: a full walk finds exactly the mounted paths; writes fail everywhere except `/out`; loopback, outside, host-socket and abstract-socket connections fail and are flagged; `/proc` shows only the sandbox; `/bin/sh` cannot start; a clean run has exactly three handles (the trace's is not inherited) and is accepted; a planted handle stops the step; a forced crash stores no dump; io_uring is flagged; killing strace or the launcher stops the step. The step 2 runner's sandboxed outputs equal a reference run outside the sandbox, apart from the fresh commitment.
+
+**Suites at `87ff50a`** (visible terminal run, data-safe files only): experiments environment (Python 3.12, torch CPU) **586 passed, 22 skipped** (the sandbox and runner tests, which need the application environment's packages); application environment (Python 3.14, no torch) **578 passed, 3 skipped** (the PyTorch-only files). `ruff check` is clean. An earlier run of the application suite showed 4 errors in the fold-generation tests' shared fixture ("an audio file differs from its manifest entry"); they did not reproduce alone, after the tests that precede them, or in two later full runs of the application suite, and no test shares those files. Recorded as an unexplained intermittent failure, seen once.
+
+**Findings for the owner** (not changed silently):
+1. **No sensitivity rerun could ever run under Amendment 3** (A3.7 rule 1): the exact count check shows the size of G_T can be published only when the item D MUSDB-train figure is 0-2 or 24-26 (and likewise G_V), so the trigger never reaches a feasible rerun. The owner chose option B; the proposed **Amendment 3A** (reruns decided from the item D figure, results private) is drafted and awaits approval and publication. Step 2a implements its rule (`feasibility_from_item_d`) pending that.
+2. **The approved public re-run sentence leaks** (test C4-T): a published report without it tells the reader that no assessed group had a MUSDB-test candidate before the review. Publishing only the final outcome (the report, or a single stop) keeps every before-review status uncertain. A rule change for the owner.
+
+**Not built or not covered in Step 2a:**
+- Step 3 is not sandboxed (B0's rate check needs SciPy and the engine code, outside the sandbox's seven packages), and a live-trace wrapper for step 3's host paths is not built; fold generation's own access was spy-tested in Step 1.
+- The exact duration check: step 3's voiced and no-voice totals, the breakdowns by partition and match type, and the matched-record counts are withheld as one fixed unit (N1.7 item 7); the full checker for durations and metric tables comes in step 4.
+- io_uring setup succeeds inside the sandbox; the trace reader rejecting it is the only safeguard.
+- The exact host paths of protected inputs are not verified (separately authorised preparation).
