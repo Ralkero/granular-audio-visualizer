@@ -71,12 +71,28 @@ class Figure:
     fixed_unit: str = ""
     ratio: tuple | None = None  # (numerator form, denominator form); ``form`` unused
     cuts: tuple | None = None  # ((label, lo, hi), ...): a verdict shown as one of these intervals
+    cap: Fraction | None = None  # proposed Amendment 3B: numbers only up to the cap, "above cap" beyond
 
     def zone_edges(self):
-        if self.zone is None:
-            return None, None
-        z = ceil(self.zone / self.unit) * self.unit  # rounded up to the reporting unit
-        return self.low + z, self.high - z
+        low = high = None
+        if self.zone is not None:
+            z = ceil(self.zone / self.unit) * self.unit  # rounded up to the reporting unit
+            low, high = self.low + z, self.high - z
+        if self.cap is not None:
+            high = self.cap if high is None else min(high, self.cap)
+        return low, high
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """A verdict whose outcomes may be unions (for example "the requirement failed in some seed-
+    index aggregate"): ``outcomes`` is ((label, alternatives), ...), each alternative a list of
+    (form, lo, hi) windows. A protected quantity's range over an outcome is its range over the
+    union of the alternatives, computed exactly from each alternative's extent."""
+
+    name: str
+    outcomes: tuple
+    fixed_unit: str = ""
 
 
 @dataclass(frozen=True)
@@ -219,6 +235,7 @@ class Checker:
         self.cases = cases
         self.check_limit = check_limit
         self.report = Report()
+        self.union_state = False
 
     # -- public decisions --------------------------------------------------------------------------
 
@@ -295,6 +312,8 @@ class Checker:
 
     def decide(self, figure):
         """Release or not, from the public region only."""
+        if self.union_state:
+            raise StopForReview("a figure was decided after a verdict that left the public record a union")
         if figure.fixed_unit and figure.fixed_unit in self.report.withheld_units:
             return Decision(figure.name, False, "its fixed unit is withheld")
         bracket = self._range(figure)
@@ -355,6 +374,69 @@ class Checker:
                             keep.append(nxt)
                     break
         return codes + [_number(figure, k) for k in sorted(set(keep))]
+
+    def _union_verdict(self, regions, p):
+        """``p``'s verdict over the union of ``regions`` (each not proven empty)."""
+        extents = [r.extent(p.form) for r in regions]
+        extents = [e for e in extents if not e.empty]
+        if not extents:
+            return exact.EMPTY
+        if any(not e.certain for e in extents):
+            return exact.UNCERTAIN
+        max_lo, max_hi = max(e.max_lo for e in extents), max(e.max_hi for e in extents)
+        min_lo, min_hi = min(e.min_lo for e in extents), min(e.min_hi for e in extents)
+        if p.kind == "signs":
+            if max_lo > 0 and min_hi < 0:
+                return exact.PASS
+            if max_hi <= 0 or min_lo >= 0:
+                return exact.FAIL
+            return exact.UNCERTAIN
+        if max_lo - min_hi >= p.target:
+            return exact.PASS
+        if max_hi - min_lo < p.target:
+            return exact.FAIL
+        return exact.UNCERTAIN
+
+    def decide_verdict(self, verdict):
+        """Release a ``Verdict`` or not, from the public region only (union semantics)."""
+        if self.union_state:
+            raise StopForReview("a figure was decided after a verdict that left the public record a union")
+        if verdict.fixed_unit and verdict.fixed_unit in self.report.withheld_units:
+            return Decision(verdict.name, False, "its fixed unit is withheld")
+        checks = checked = 0
+        for _label, alternatives in verdict.outcomes:
+            regions = []
+            for alternative in alternatives:
+                region = self.region.copy()
+                for form, lo, hi in alternative:
+                    region.add_window(form, lo, hi)
+                if region.empty() is not True:
+                    regions.append(region)
+            if not regions:
+                continue
+            checked += 1
+            if checks + len(self.protected) * len(regions) > self.check_limit:
+                return self._withhold_unit(verdict, "more checks than the registered size limit: its fixed unit is withheld",
+                                           checks, checked)
+            for p in self.protected:
+                checks += len(regions)
+                result = self._union_verdict(regions, p)
+                if result == exact.EMPTY:
+                    break
+                if result != exact.PASS:
+                    return Decision(verdict.name, False, "an outcome it could show would narrow a protected quantity",
+                                    checks, checked)
+        return Decision(verdict.name, True, "every outcome it could show keeps every protected quantity", checks, checked)
+
+    def release_verdict(self, verdict, label):
+        match = [alts for lab, alts in verdict.outcomes if lab == label]
+        if len(match) != 1:
+            raise ValueError("the shown label is not one of the verdict's outcomes")
+        if len(match[0]) == 1:
+            for form, lo, hi in match[0][0]:
+                self.region.add_window(form, lo, hi)
+        else:
+            self.union_state = True  # no later figure may be decided on a convex region
 
     def release(self, figure, label):
         """Add a released figure's shown outcome to the public region."""

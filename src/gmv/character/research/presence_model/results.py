@@ -109,9 +109,10 @@ def forms(st):
     return f
 
 
-def _average(name, form, n, rate):
+def _average(name, form, n, rate, cap=None):
     unit, width, hi = (RATE_UNIT, RATE_WIDTH, FPA_HI) if rate else (SHARE_UNIT, SHARE_WIDTH, Q(1))
-    return disclosure.Figure(name, form, unit, Q(0), hi, width / band_minimum(n), "main" if "seed" not in name else "seeds")
+    return disclosure.Figure(name, form, unit, Q(0), hi, width / band_minimum(n), "main" if "seed" not in name else "seeds",
+                             cap=cap if rate else None)
 
 
 def _difference(name, form, rate):
@@ -119,16 +120,19 @@ def _difference(name, form, rate):
     return disclosure.Figure(name, form, unit, -hi, hi, None, "main" if "seed" not in name else "seeds")
 
 
-def figures(st, with_ratio):
-    """The registered release order (the ratio only when B0ₜ's shown FPA_macro is ≥ 3 s/min)."""
+def figures(st, with_ratio, rule="registered", cap=None):
+    """The release order (the ratio only when B0ₜ's shown FPA_macro is ≥ 3 s/min). ``rule="3B"``:
+    the proposed Amendment 3B: false-activity averages capped at ``cap``, and the seed-index
+    aggregates replaced by one verdict (``seed_verdict``), decided last."""
     f, n, nv = forms(st), len(st.groups), len(st.voiced)
-    out = [_average("C FPA", f["C FPA"], n, True), _average("B0t FPA", f["B0t FPA"], n, True),
+    cap = cap if rule == "3B" else None
+    out = [_average("C FPA", f["C FPA"], n, True, cap), _average("B0t FPA", f["B0t FPA"], n, True, cap),
            _difference("D_FA", f["D_FA"], True), _average("C recall", f["C recall"], nv, False),
            _average("B0t recall", f["B0t recall"], nv, False), _difference("Delta_R", f["Delta_R"], False)]
     if with_ratio:
         out.append(disclosure.Figure("ratio", {}, RATIO_UNIT, Q(0), Q(20), None, "main",
                                      ratio=(f["C FPA"], f["B0t FPA"])))
-    for s in st.seeds:
+    for s in st.seeds if rule == "registered" else ():
         out += [_average(f"C FPA seed {s}", f[f"C FPA seed {s}"], n, True),
                 _difference(f"D_FA seed {s}", f[f"D_FA seed {s}"], True),
                 _average(f"C recall seed {s}", f[f"C recall seed {s}"], nv, False),
@@ -142,6 +146,42 @@ def figures(st, with_ratio):
                                      ratio=(f["C FPA"], f["B0t FPA"]),
                                      cuts=(("at most 0.5", Q(0), Q(1, 2)), ("above 0.5", Q(1, 2), Q(20)))))
     return out
+
+
+CAPS_3B = {3: Q(35), 5: Q(45), 10: Q(50)}  # proposed 3B, option B: by the smallest count of the band
+
+
+def proposed_cap(n):
+    """The proposed Amendment 3B cap for a false-activity average over n groups: below the value
+    60·(m − 1)/m (m the smallest count of n's band) above which a code window could fix every
+    group's direction, with a margin."""
+    return CAPS_3B[band_minimum(n)]
+
+
+SEED_VERDICT = "requirement held in every seed-index aggregate"
+CODED = "coded with its sources"
+
+
+def seed_verdict(st):
+    """Proposed Amendment 3B, option C: the seed spread as one verdict. "yes": every seed-index
+    aggregate has D_FA < 0 and Δ_R ≥ −0.05 (closures); "no": the union over seeds of D_FA ≥ 0 or
+    Δ_R ≤ −0.05."""
+    f = forms(st)
+    holds = [w for s in st.seeds for w in ((f[f"D_FA seed {s}"], -FPA_HI, Q(0)),
+                                           (f[f"Delta_R seed {s}"], Q(-1, 20), Q(1)))]
+    fails = [[(f[f"D_FA seed {s}"], Q(0), FPA_HI)] for s in st.seeds] + \
+        [[(f[f"Delta_R seed {s}"], Q(-1), Q(-1, 20))] for s in st.seeds]
+    return disclosure.Verdict(SEED_VERDICT, (("yes", [holds]), ("no", fails)), "verdicts")
+
+
+def seed_verdict_value(st, truth):
+    f = forms(st)
+
+    def value(form):
+        return sum((c * truth[k] for k, c in form.items()), Q(0))
+
+    ok = all(value(f[f"D_FA seed {s}"]) < 0 and value(f[f"Delta_R seed {s}"]) >= Q(-1, 20) for s in st.seeds)
+    return "yes" if ok else "no"
 
 
 COUNTS = ("C lower in groups (false activity)", "C higher in groups (false activity)",
@@ -253,12 +293,17 @@ class Outcome:
     seconds: float | None = None
 
 
-def check(st, values, reader="registered", case_limit=disclosure.CHECK_LIMIT):
+def check(st, values, reader="registered", case_limit=disclosure.CHECK_LIMIT, rule="registered", cap=None):
     """Run the disclosure check on the main tables. ``reader="registered"`` applies N1.1 and N1.7
-    item 8; ``reader="public"`` is the comparison alternative described in the module docstring."""
+    item 8; ``reader="public"`` is the reader of the proposed Amendment 3B (option A).
+    ``rule="3B"`` with ``cap`` applies the proposed options B and C (``figures``, ``seed_verdict``);
+    a difference or the ratio whose sources are shown as codes is shown as ``CODED`` (N1.6:
+    coded consistently with the figures they come from), which adds nothing to the public record."""
     import time
 
     start = time.monotonic()
+    if rule == "3B" and (reader != "public" or cap is None):
+        raise ValueError("the proposed 3B rule uses the public-record reader and a cap")
     truth = canonical(st, values)
     prot = protected(st)
     cases = None
@@ -269,14 +314,19 @@ def check(st, values, reader="registered", case_limit=disclosure.CHECK_LIMIT):
     elif reader != "public":
         raise ValueError("the reader is 'registered' or 'public'")
     checker = disclosure.Checker(limits(st), prot, cases=cases, check_limit=case_limit)
-    base = [f for f in figures(st, with_ratio=False) if f.unit == RATE_UNIT and f.name == "B0t FPA"]
     if not check_symmetry(st, figures(st, with_ratio=True)):
         raise ValueError("the layout's figures are not symmetric within classes")
-    report = checker.run(figures(st, with_ratio=False)[:2], truth)
-    shown_b = report.shown.get(base[0].name)
-    with_ratio = not isinstance(shown_b, str) and shown_b >= READINESS
-    rest = [f for f in figures(st, with_ratio) if f.name not in report.shown]
+    first = figures(st, False, rule, cap)[:2]
+    report = checker.run(first, truth)
+    shown_c, shown_b = report.shown["C FPA"], report.shown["B0t FPA"]
+    coded = any(isinstance(v, str) and v != disclosure.WITHHELD for v in (shown_c, shown_b))
+    b_above = isinstance(shown_b, str) and shown_b.startswith("above")
+    with_ratio = b_above or (not isinstance(shown_b, str) and shown_b >= READINESS)
+    rest = [f for f in figures(st, with_ratio, rule, cap) if f.name not in report.shown]
     for fig in rest:
+        if rule == "3B" and coded and fig.name in ("D_FA", "ratio"):
+            report.shown[fig.name] = CODED
+            continue
         decision = checker.decide(fig)
         report.decisions.append(decision)
         if decision.released:
@@ -285,6 +335,16 @@ def check(st, values, reader="registered", case_limit=disclosure.CHECK_LIMIT):
             checker.release(fig, label)
         else:
             report.shown[fig.name] = disclosure.WITHHELD
+    if rule == "3B":
+        verdict = seed_verdict(st)
+        decision = checker.decide_verdict(verdict)
+        report.decisions.append(decision)
+        if decision.released:
+            label = seed_verdict_value(st, truth)
+            report.shown[verdict.name] = label
+            checker.release_verdict(verdict, label)
+        else:
+            report.shown[verdict.name] = disclosure.WITHHELD
     for name in COUNTS:
         report.shown[name] = disclosure.WITHHELD
     report.withheld_units.add("counts")

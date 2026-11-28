@@ -91,3 +91,69 @@ def test_an_unknown_reader_is_refused():
     st, values = small()
     with pytest.raises(ValueError):
         results.check(st, values, reader="nobody")
+
+
+# -- the proposed Amendment 3B (options A, B and C), measured on generated worlds ----------------------
+
+
+def test_3b_publishes_the_main_comparison_the_verdicts_and_the_seed_verdict():
+    st, values = small()
+    out = results.check(st, values, reader="public", rule="3B", cap=Q(30))
+    for name in ("C FPA", "B0t FPA", "D_FA", "C recall", "B0t recall", "Delta_R", "D_FA < 0", "Delta_R >= -0.05",
+                 results.SEED_VERDICT):
+        assert out.shown[name] != disclosure.WITHHELD, name
+    assert out.shown[results.SEED_VERDICT] == results.seed_verdict_value(st, results.canonical(st, values))
+    assert not any(name.startswith("C FPA seed") for name in out.shown)  # seed aggregates stay private
+
+
+def test_3b_a_baseline_above_the_cap_is_shown_as_a_code_and_its_difference_follows_it():
+    st, values = small()
+    for g in st.groups:
+        values[g]["b"] = Q(45)
+    out = results.check(st, values, reader="public", rule="3B", cap=Q(30))
+    assert out.shown["B0t FPA"] == "above 30"
+    assert out.shown["D_FA"] == results.CODED and out.shown["ratio"] == results.CODED
+
+
+def test_3b_needs_the_public_record_reader_and_a_cap():
+    st, values = small()
+    with pytest.raises(ValueError):
+        results.check(st, values, reader="registered", rule="3B", cap=Q(30))
+    with pytest.raises(ValueError):
+        results.check(st, values, reader="public", rule="3B")
+
+
+def test_a_cap_moves_the_upper_zone_edge():
+    f = disclosure.Figure("x", {"a": 1}, Q(1, 100), Q(0), Q(60), Q(1, 10), cap=Q(30))
+    assert f.zone_edges() == (Q(1, 10), Q(30)) and disclosure.show(f, Q(31)) == "above 30"
+    g = disclosure.Figure("y", {"a": 1}, Q(1, 100), Q(0), Q(60), None, cap=Q(30))
+    assert g.zone_edges() == (None, Q(30))
+
+
+def test_a_union_verdict_uses_the_range_over_the_union():
+    """Two alternatives that each pin x0 but together leave it its width."""
+    lim = {"x0": (Q(0), Q(10)), "x1": (Q(0), Q(10))}
+    prot = [disclosure.Protected("x0", {"x0": 1}, Q(1))]
+    v = disclosure.Verdict("v", (("yes", [[({"x0": 1}, Q(3), Q(5))]]),
+                                 ("no", [[({"x0": 1}, Q(0), Q("0.5"))], [({"x0": 1}, Q("9.5"), Q(10))]])))
+    assert disclosure.Checker(lim, prot).decide_verdict(v).released
+    narrow = disclosure.Verdict("w", (("yes", [[({"x0": 1}, Q(3), Q(5))]]), ("no", [[({"x0": 1}, Q(0), Q("0.5"))]])))
+    assert not disclosure.Checker(lim, prot).decide_verdict(narrow).released
+
+
+def test_no_figure_is_decided_after_a_union_verdict_is_released():
+    lim = {"x0": (Q(0), Q(10))}
+    prot = [disclosure.Protected("x0", {"x0": 1}, Q(1))]
+    v = disclosure.Verdict("v", (("yes", [[({"x0": 1}, Q(0), Q(5))]]),
+                                 ("no", [[({"x0": 1}, Q(5), Q(7))], [({"x0": 1}, Q(8), Q(10))]])))
+    c = disclosure.Checker(lim, prot)
+    c.release_verdict(v, "no")
+    with pytest.raises(disclosure.StopForReview):
+        c.decide(disclosure.Figure("x", {"x0": 1}, Q(1, 100), Q(0), Q(10)))
+
+
+def test_the_proposed_caps_sit_below_the_direction_threshold_of_each_band():
+    for n in (3, 4, 5, 9, 10, 19):
+        m = results.band_minimum(n)
+        assert results.proposed_cap(n) < Q(60) * (m - 1) / m
+    assert [results.proposed_cap(n) for n in (3, 5, 19)] == [Q(35), Q(45), Q(50)]
