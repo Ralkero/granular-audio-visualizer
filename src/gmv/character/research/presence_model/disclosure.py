@@ -70,6 +70,7 @@ class Figure:
     zone: Fraction | None = None
     fixed_unit: str = ""
     ratio: tuple | None = None  # (numerator form, denominator form); ``form`` unused
+    cuts: tuple | None = None  # ((label, lo, hi), ...): a verdict shown as one of these intervals
 
     def zone_edges(self):
         if self.zone is None:
@@ -144,7 +145,10 @@ def _number_range(figure, lo, hi):
 
 
 def outcomes(figure, lo, hi):
-    """Every outcome of ``figure`` whose window meets [lo, hi]: codes and rounded numbers."""
+    """Every outcome of ``figure`` whose window meets [lo, hi]: codes and rounded numbers (or its
+    cuts, for a verdict)."""
+    if figure.cuts is not None:
+        return [Outcome(label, a, b) for label, a, b in figure.cuts if b >= lo and a <= hi]
     span = _number_range(figure, lo, hi)
     numbers = [] if span is None else [o for o in (_number(figure, k) for k in range(span[0], span[1] + 1)) if o]
     codes = _codes(figure, lo, hi)
@@ -153,6 +157,11 @@ def outcomes(figure, lo, hi):
 
 def outcome_of(figure, label):
     """The outcome a shown label stands for."""
+    if figure.cuts is not None:
+        match = [Outcome(lab, a, b) for lab, a, b in figure.cuts if lab == label]
+        if len(match) != 1:
+            raise ValueError("the shown label is not one of the verdict's cuts")
+        return match[0]
     if isinstance(label, str):
         match = [o for o in _codes(figure, figure.low, figure.high) if o.label == label]
         if len(match) != 1:
@@ -166,7 +175,12 @@ def outcome_of(figure, label):
 
 
 def show(figure, value):
-    """What a released figure shows for its true value (codes at the zones, else the rounded number)."""
+    """What a released figure shows for its true value (codes at the zones, else the rounded number;
+    for a verdict, the first cut whose upper end lies above the value, or the last)."""
+    if figure.cuts is not None:
+        for i, (label, _a, b) in enumerate(figure.cuts):
+            if value < b or i == len(figure.cuts) - 1:
+                return label
     low_edge, high_edge = figure.zone_edges()
     if low_edge is not None and value < low_edge:
         return f"below {low_edge}"
@@ -286,7 +300,7 @@ class Checker:
         bracket = self._range(figure)
         if bracket is None:
             return self._withhold_unit(figure, "its possible values could not be bracketed: its fixed unit is withheld")
-        if self.shortcut and figure.ratio is None:
+        if self.shortcut and figure.ratio is None and figure.cuts is None:
             candidates = self._shortcut(figure, *bracket)
             if candidates is None:
                 return self._withhold_unit(figure, "its possible outcomes could not be decided: its fixed unit is withheld")
