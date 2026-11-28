@@ -11,8 +11,9 @@ The owner approved the design (proposal revision 4) on 2026-11-26. Every rule be
 fixed without seeing any result. A later change is an **amendment**: appended at the end
 with its date and reason, and made before the predictions it could influence exist.
 
-**Amended ~~once~~ ~~twice~~ ~~three times~~ four times since registration** (Amendments 1 and 2,
-both 2026-11-26, before Stage 1; Amendments 3 and 3A, 2026-11-27, after the synthetic Stage 1 and
+**Amended ~~once~~ ~~twice~~ ~~three times~~ ~~four times~~ five times since registration** (Amendments 1
+and 2, both 2026-11-26, before Stage 1; Amendments 3 and 3A, 2026-11-27, after the synthetic Stage 1
+and before any real-data step; Amendment 3B, 2026-11-28, after Step 4's synthetic implementation and
 before any real-data step; see the end). Superseded wording is struck through and kept visible.
 
 **This is an exploratory comparison.** It measures and describes how three vocal-presence
@@ -321,8 +322,10 @@ make it exact. **No p-values are reported** from the development results.
 - **Per-group results** privately. In public: counts of groups where C is lower or higher,
   with no test~~, and quartiles of the per-group differences~~, shown as "0–2" or "17–19" at the
   ends and withheld when the disclosure check requires it (Amendment 3, A3.5).
-- **Training-seed spread:** ~~the effect sizes for each of the 5 single-seed outer models.~~ the
-  effect sizes for each seed-index aggregate s ∈ O (5 under policy C, 3 under policy D).
+- **Training-seed spread:** ~~the effect sizes for each of the 5 single-seed outer models.~~ ~~the
+  effect sizes for each seed-index aggregate s ∈ O (5 under policy C, 3 under policy D).~~ whether
+  the requirement held in every seed-index aggregate s ∈ O (5 under policy C, 3 under policy D):
+  yes or no; each aggregate's effect sizes stay private (Amendment 3B).
   Aggregate s is the cross-validation result in which every outer fold uses its outer model
   with seed index s; it combines 19 models and is not a single trained model. The primary
   effect sizes are the means of these aggregates; the ratio is a ratio of these means.
@@ -944,15 +947,17 @@ influence is seen.
   release, passes this check before publication.
   - **N1.1 Reader.** The reader knows the cumulative public record (A5.1's reports and figures
     already in this protocol, such as "52 s from 4 groups", so differences between tables and
-    releases count) and the registered structure. When results (durations, metrics, effect sizes)
+    releases count) and the registered structure. ~~When results (durations, metrics, effect sizes)
     are checked, the reader is also assumed, to be safe, to know each group's excerpt count,
     per-class eligibility, direction, leave-one-group-out outcomes, and G_T and G_V membership;
-    these are cautious assumptions, not public facts. Which groups could be in G_T or G_V (the 19
-    paired groups) is structure; which groups are is private. Directions and membership are also
-    protected in their own right: when they are checked, the reader is assumed to know no group's
-    fact of that kind, but may know the others.
-  - **N1.2 Coverage.** Checked: group averages and effect sizes for every arm, seed index and
-    comparison; effects at t ± 0.05; the §10 sensitivity results (frame collars, boundary shifts,
+    these are cautious assumptions, not public facts.~~ The reader knows nothing else about
+    individual groups (Amendment 3B). Which groups could be in G_T or G_V (the 19 paired groups) is
+    structure; which groups are is private. ~~Directions and membership are also protected in their
+    own right: when they are checked, the reader is assumed to know no group's fact of that kind,
+    but may know the others.~~ Each group's direction, leave-one-group-out outcome, per-class
+    eligibility and G_T and G_V membership are protected in their own right (N1.3; Amendment 3B).
+  - **N1.2 Coverage.** Checked: group averages and effect sizes for every arm~~, seed index~~ and
+    comparison; the seed-spread verdict (Amendment 3B); effects at t ± 0.05; the §10 sensitivity results (frame collars, boundary shifts,
     event collars); validation averages; duration-weighted main results; the false-activity ratio;
     breakdown tables and route rows; excerpt counts; onset and offset error (group averages of each
     group's mean absolute error only); direction counts; the leave-one-group-out count and pass or
@@ -961,7 +966,9 @@ influence is seen.
     point chosen per fold, and inner-seed agreement.
   - **N1.3 Protected quantities.** Each group's own value behind each published figure; the sum
     and the difference of any two groups' values; missed voice through recall (a share of the
-    group's voice), not in seconds; a group's direction (both must remain possible); counts (at
+    group's voice), not in seconds; a group's direction (both must remain possible); a group's
+    leave-one-group-out outcome and its per-class eligibility (both must remain possible;
+    Amendment 3B); counts (at
     least two whole-number values must remain possible); each group's MUSDB match status for each
     split, and its G_T and G_V membership (at least two values, for single groups and pairs).
     Item D's exemption: A3.6.
@@ -983,7 +990,10 @@ influence is seen.
     figures they come from; direction counts and other group counts are shown as "0–2" and
     "(n−2)–n" at the ends; ~~a sensitivity set's totals are published only when the removed set has
     at least 3 groups (rule 5), which does not replace the check~~ (rule 5 no longer applies:
-    sensitivity sets' totals are private, Amendment 3A).
+    sensitivity sets' totals are private, Amendment 3A); false-activity averages are shown as
+    numbers only up to 35 s/min (3–4 groups), 45 s/min (5–9) or 50 s/min (10 or more) and as
+    "above [cap] s/min" beyond, and a difference or ratio whose source is shown as a code is shown
+    as "coded with its sources" (Amendment 3B).
   - **N1.7 Suppression, withholding and stopping.** (1) The reader observes the numbers, which
     figures appear as numbers or as codes and which code, which are suppressed or withheld and
     where, whether a report was released, stopped or released after a stop, and every earlier
@@ -1003,10 +1013,12 @@ influence is seen.
     whole-number counts); otherwise every possible value is checked or a conservative fallback is
     used. (6) Structural suppression is part of (5). (7) A figure that cannot be decided from
     public information has its registered fixed unit withheld whole (units fixed in advance from
-    the table layout); with no unit, the run stops. (8) Reader knowledge that is not public
+    the table layout); with no unit, the run stops. (8) ~~Reader knowledge that is not public
     (directions, leave-one-group-out outcomes, eligibility, membership) must not be taken from
     its actual values: decisions hold for every possibility consistent with the public record,
-    and if that cannot be certified within a registered size limit, (7) applies. (9) The run stops
+    and if that cannot be certified within a registered size limit, (7) applies.~~ Decisions
+    never use private values, and no group's direction, leave-one-group-out outcome, eligibility
+    or membership is assumed known to the reader (Amendment 3B). (9) The run stops
     for the owner's review when the already-public record fails on its own, a prior range is
     narrower than its width outside Fix 1 and its extension, or (7) finds no unit; these stops are
     decided from public information and their reasons are given in public terms; a later release
@@ -1031,7 +1043,9 @@ influence is seen.
   - **N1.10 Limits.** The widths hold only under the stated reader and are not calibrated
     guarantees; the evidence for them is synthetic; collar limits, validation tables, effects at
     t ± 0.05, AUC tables and route rows were not modelled in the synthetic tests; the
-    relative-interior handling is untested.
+    relative-interior handling is untested. Under Amendment 3B the widths hold only against a
+    reader who knows the public record, and strict inequalities in verdicts enter as their closed
+    forms.
 - **The prediction seal (N2)** *[tested before use]:* a write-once seal (canonical JSON with
   format and version, run and step identity, code commit, integrity-record and fold-index hashes,
   seed format and enumeration hash, policy, adopted epochs, thresholds file hash and model file
@@ -1351,6 +1365,7 @@ DU tests and the matcher tests. New:
   expectation code never opens the seal; one refusal test per refused case; policy C against D; a
   declaration disagreeing with Amendment 6; a weights-hash mismatch.
 - **B3 at RG1b:** the synthetic end-to-end run of A3.4.
+- **Amendment 3B's rules:** the tests listed in Amendment 3B.
 
 #### A3.11 Where the wording changed
 
@@ -1423,3 +1438,105 @@ and A3.7 (rules 1, 2 and 4).
 
 **Unchanged:** everything else in Amendment 3, including the screening rule, which the reruns
 never change.
+
+### Amendment 3B — 2026-11-28, after Step 4's synthetic implementation, before any real-data step
+
+**State when made:** unchanged from Amendment 3A; in addition, Step 4's synthetic implementation had
+been built and tested on generated data only (commits up to `7b88dff`, and the measurement of this
+amendment's rules). No project data was read for it.
+
+**Why.** Step 4's measurement of the disclosure check's cost (A3.10, T8), on generated worlds at the
+registered size (15 groups with both classes and 4 with no-voice time only), found that the Stage 3
+report would publish almost none of its main results:
+
+1. *The cautious reader cannot be certified.* N1.1 assumes, when results are checked, that the reader
+   knows every group's directions, leave-one-group-out outcomes and eligibility; N1.7 item 8 forbids
+   taking them from their actual values, so every possibility must be checked within a registered
+   size limit. Even after an exact reduction, one protected group would need about 4 × 10²⁵ cases, so
+   N1.7 item 7 withholds every table: 0 of 27 figures under policy D, 0 of 35 under policy C.
+2. *Wide natural limits.* Under N1.7 item 5 a figure is released only if every value it could show is
+   safe. Once C's false-activity average is public, B0ₜ's average could in principle show a value near
+   60 s/min, which would prove C lower in every group; so it is withheld whatever its true value, and
+   D_FA and the ratio with it. A seed-index aggregate could show its largest possible value, which
+   would pin every other seed's values, so the seed aggregates are withheld.
+
+**Replacement 1, the reader (A3.5, N1.1 and N1.7 item 8).**
+- N1.1's cautious assumption is withdrawn. The reader knows the cumulative public record (A5.1's
+  reports, the figures already in this protocol, and every earlier table and release) and the
+  registered structure, and nothing else about individual groups.
+- Each group's **direction**, **leave-one-group-out outcome**, **per-class eligibility** and **G_T and
+  G_V membership** stay protected in their own right (N1.3): each must keep both of its possible
+  values, for single groups and, for membership, for pairs, whatever the public record shows.
+- N1.7 item 8 becomes: decisions never use private values, and no group's direction,
+  leave-one-group-out outcome, eligibility or membership is assumed known to the reader.
+- *Groups that the public structure cannot tell apart* may be checked through one representative:
+  when every published figure weighs the groups of a public class equally and they share the same
+  limits, the public record is unchanged by swapping them, so a range shown for one stands for all
+  of its class (and one representative pair for all pairs of the same classes). The checker verifies
+  the condition on every table and checks every group where it does not hold.
+
+**Replacement 2, display caps (A3.5, N1.6).**
+- A false-activity average (any arm, any table) is shown as a number only up to a cap fixed by its
+  table's group-count band: **35 s/min for 3–4 groups, 45 s/min for 5–9, and 50 s/min for 10 or
+  more**. A larger value is shown as "above [cap] s/min". The main results tables (19 groups) use
+  50 s/min.
+- *Why these values.* With m the smallest count of the band, a code window above 60·(m − 1)/m s/min
+  could prove that one arm is lower in every group (40, 48 and 54 s/min for 3, 5 and 10 groups); each
+  cap lies below that with a margin. They are operational choices, measured on generated worlds only.
+- A difference or ratio whose source figure is shown as a code is shown only as "coded with its
+  sources", and adds nothing to the public record (N1.6: coded consistently with the figures it comes
+  from).
+- The §13 verdicts are unchanged: whether D_FA is below 0, Δ_R at least −0.05 and the ratio at most
+  0.5 are still decided and checked as verdicts, whatever the numbers show.
+
+**Replacement 3, the seed spread (§12 "Training-seed spread"; A3.5 N1.2).**
+- Instead of "the effect sizes for each seed-index aggregate s ∈ O", the report publishes **whether the
+  requirement held in every seed-index aggregate (D_FA < 0 and Δ_R + 0.05 ≥ 0): yes or no.** Each
+  aggregate's effect sizes become private, like the individual outer models' results.
+- The primary effect sizes stay the means of the seed-index aggregates, and §13 (c)'s robustness
+  requirement is unchanged; only what is published changes.
+- The yes/no verdict is checked with **union semantics**: a protected quantity's range over the "no"
+  outcome is its range over every way the requirement could fail (any seed, either condition),
+  computed exactly from each way's own range.
+
+**Tests required before use (A3.10, added):** caps shown as codes above them, and a source shown as a
+code making its difference and ratio "coded with its sources"; the cap of each band below its
+direction threshold; the union verdict (each alternative pinning a quantity while the union keeps
+its width, and a single pinning alternative failing); no figure decided after a verdict that leaves
+the public record a union; the representative-group condition verified on every table and an
+asymmetric table caught; the proposed rules needing the public-record reader; and T8 repeated under
+the new rules.
+
+**Measured (T8, generated worlds at the registered size; a comparison, not evidence about real data):**
+
+| Policy | World | Under Amendment 3 | Under 3B (caps 20, 30 or 50 s/min) |
+|---|---|---|---|
+| D | typical | 0 of 27 | 11 of 11 main figures and verdicts at every cap |
+| D | near zero | 0 of 27 | 9 of 9 (D_FA coded with C's code "below 0.1") |
+| D | small effect | 0 of 29 | 11 of 11 |
+| D | B0ₜ around 37 s/min | — | 11 of 11; at a 30 s/min cap B0ₜ shows "above 30" and D_FA and the ratio are coded; at 50 it shows the number |
+| C | typical, near zero, small effect | 0 of 35-37 | 11 of 11 (9 of 9 near zero) |
+| C | B0ₜ around 37 s/min | — | 11 of 11 at caps 20 and 30 (B0ₜ "above 30" at 30) |
+
+(The counts are over fewer figures under 3B because the seed-index aggregates are replaced by one
+verdict.) With baselines just above the cap and C near zero, B0ₜ's average was published at caps up
+to 40 s/min for 3 groups, 45 for 4, 45 for 5 and 50 for 9-10, and withheld above those, as the
+threshold predicts.
+
+**Not covered by this amendment (still to be modelled before step 6):** the counts unit of the main
+results (direction counts, the leave-one-group-out count and verdict, and the screening class, which
+depends on the leave-one-group-out verdict) and the other tables (breakdowns and route rows, AUC
+tables, effects at t ± 0.05, the §10 sensitivity results, onset and offset errors, validation). Until
+they are modelled they are withheld whole (N1.7 item 7). Step 3's durations stay a fixed unit.
+
+**Limits (N1.10, added).** The widths now hold only against a reader who knows the public record; a
+reader with private knowledge of individual groups (for example, how a particular artist's recordings
+sound) is not modelled. Strict inequalities in verdicts enter as their closed forms, as rounding
+windows do.
+
+**Where the wording changed** (originals struck through and kept visible): the amendment note at the
+top; §12 (training-seed spread); Amendment 3, A3.5 (N1.1, N1.2, N1.3, N1.6, N1.7 item 8, N1.10) and
+A3.10.
+
+**Unchanged:** everything else, including the screening rule, the widths, the zones near the lower
+limits, the effect sizes and their robustness requirement, and Amendment 3A.
