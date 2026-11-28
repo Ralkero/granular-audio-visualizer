@@ -42,11 +42,13 @@ from PySide6.QtWidgets import (
 )
 
 from .. import host, paths, sources
+from ..character.live import LiveCharacter
 from ..visualizer.state import ROWS
 from ..visualizer.themes import DEFAULT as DEFAULT_THEME
 from ..visualizer.themes import THEMES
 from ..visualizer.themes import radiant_palette
 from ..visualizer.window import VisualizerWindow
+from .character_monitor import CharacterMonitor
 from .controller import (
     DEFAULT_EDGES,
     SessionController,
@@ -862,6 +864,10 @@ class MainWindow(QWidget):
         self.restart_wanted = False
         self.problem = ""
         self.view = VisualizerWindow(self)
+        # Sonic Character, Phase B: one more subscriber of the same bus, with its own queue and
+        # worker; the monitor window only reads it. Neither touches the view or the analysis.
+        self.character = LiveCharacter()
+        self.monitor = CharacterMonitor(self.character, self, STYLE)
         self.drawer = SettingsDrawer(self.view, self)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -970,6 +976,17 @@ class MainWindow(QWidget):
         self.expressive_button.toggled.connect(self.drawer.expressive.setChecked)
         self.drawer.expressive.toggled.connect(self.expressive_button.setChecked)
         line.addWidget(self.expressive_button)
+        # The Sonic Character Monitor: a separate diagnostic window (C). It changes nothing
+        # in the visualizer.
+        self.character_button = QPushButton("Character", objectName="section")
+        self.character_button.setCheckable(True)
+        self.character_button.setToolTip(
+            "Open or close the Sonic Character Monitor (C): the seven live measurements of the "
+            "sound and their confidence. Diagnostic only; the visualizer does not change."
+        )
+        self.character_button.toggled.connect(self.show_monitor)
+        self.monitor.visibility_changed.connect(self.monitor_shown)
+        line.addWidget(self.character_button)
         line.addSpacing(10)
         for widget in (self.apply, self.toggle, self.settings_button):
             line.addWidget(widget)
@@ -1039,9 +1056,23 @@ class MainWindow(QWidget):
         self.drawer.setFixedHeight(max(100, self.height() - self.view.geometry().top()))
         self.drawer.move(self.drawer_position(self.drawer_open))
 
+    def show_monitor(self, opened):
+        if opened and not self.monitor.isVisible():
+            self.monitor.show()
+            self.monitor.raise_()
+        elif not opened and self.monitor.isVisible():
+            self.monitor.hide()
+
+    def monitor_shown(self, shown):
+        self.character_button.blockSignals(True)
+        self.character_button.setChecked(shown)
+        self.character_button.blockSignals(False)
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_F11:
             self.toggle_fullscreen()
+        elif event.key() == Qt.Key.Key_C:
+            self.show_monitor(not self.monitor.isVisible())
         elif event.key() == Qt.Key.Key_Escape and self.drawer_open:
             self.show_settings(False)
         elif event.key() == Qt.Key.Key_Escape and self.isFullScreen():
@@ -1083,11 +1114,13 @@ class MainWindow(QWidget):
         try:
             engine = self.controller.prepare(self.drawer.settings())
             self.view.attach(engine.bus, **self.controller.describe())
+            self.character.attach(engine.bus)
             engine.start()
         except Exception as exc:
             self.problem = "Unable to start: " + str(exc)
             if not self.controller.running:
                 self.view.detach()
+                self.character.detach()
         self.poll()
 
     def stop(self):
@@ -1095,6 +1128,7 @@ class MainWindow(QWidget):
         if self.controller.replaying is not None:
             self.view.detach()
             self.controller.stop_replay()
+            self.character.detach()
         self.controller.stop()
         self.poll()
 
@@ -1125,6 +1159,7 @@ class MainWindow(QWidget):
                 # As recorded; a recording without its configuration has none.
                 band_edges=session.configuration.get("band_edges"),
             )
+            self.character.attach(session.bus)
             session.start()
         except Exception as exc:
             self.problem = "Unable to replay: " + str(exc)
@@ -1170,6 +1205,8 @@ class MainWindow(QWidget):
         engine = controller.engine
         if engine is not None and engine.error and not running:
             self.problem = "Error: " + engine.error
+        if self.character.attached and not running and replaying is None:
+            self.character.detach()  # the stream has ended: keep the last values, stop the worker
         stopping = running and engine.stop_event.is_set()
         busy = running or replaying is not None
         self.toggle.setText("Stopping…" if stopping else "Stop" if busy else "Start")
@@ -1260,6 +1297,8 @@ class MainWindow(QWidget):
         self.poller.stop()
         if self.remember:
             QSettings().setValue("settings", json.dumps(self.drawer.remembered()))
+        self.monitor.close()
+        self.character.detach()
         self.view.close()
         self.controller.shutdown()
         event.accept()
