@@ -11,9 +11,9 @@ The owner approved the design (proposal revision 4) on 2026-11-26. Every rule be
 fixed without seeing any result. A later change is an **amendment**: appended at the end
 with its date and reason, and made before the predictions it could influence exist.
 
-**Amended ~~once~~ ~~twice~~ three times since registration** (Amendments 1 and 2, both
-2026-11-26, before Stage 1; Amendment 3, 2026-11-27, after the synthetic Stage 1 and before any
-real-data step; see the end). Superseded wording is struck through and kept visible.
+**Amended ~~once~~ ~~twice~~ ~~three times~~ four times since registration** (Amendments 1 and 2,
+both 2026-11-26, before Stage 1; Amendments 3 and 3A, 2026-11-27, after the synthetic Stage 1 and
+before any real-data step; see the end). Superseded wording is struck through and kept visible.
 
 **This is an exploratory comparison.** It measures and describes how three vocal-presence
 detectors differ on the owner's development artists. It does **not** test hypotheses:
@@ -981,8 +981,9 @@ influence is seen.
     and sums use z = the full width; step 3 totals below 10 s are shown as "below 10 s"; zone edges
     are rounded up to the reporting unit; differences and the ratio are coded consistently with the
     figures they come from; direction counts and other group counts are shown as "0–2" and
-    "(n−2)–n" at the ends; a sensitivity set's totals are published only when the removed set has
-    at least 3 groups (rule 5), which does not replace the check.
+    "(n−2)–n" at the ends; ~~a sensitivity set's totals are published only when the removed set has
+    at least 3 groups (rule 5), which does not replace the check~~ (rule 5 no longer applies:
+    sensitivity sets' totals are private, Amendment 3A).
   - **N1.7 Suppression, withholding and stopping.** (1) The reader observes the numbers, which
     figures appear as numbers or as codes and which code, which are suppressed or withheld and
     where, whether a report was released, stopped or released after a stop, and every earlier
@@ -1114,9 +1115,9 @@ influence is seen.
     If the owner confirms any pair, that is a **research-safety stop**: A5.2 halts for a separate
     owner decision. It is decided from private data and the owner's judgment, before any figure
     exists, and is not a disclosure stop (N1.7).
-  - **Public wording:** every step 2 stop, whatever its cause: "Step 2 stopped for owner review. No
+  - **Public wording:** ~~every step 2 stop, whatever its cause: "Step 2 stopped for owner review. No
     figures from this run are published." Every re-run: "Step 2 re-run after the owner corrected a
-    private input." Never published: counts from before the review, the number of pairs shown or
+    private input."~~ only step 2's final outcome is public (replaced by Amendment 3A). Never published: counts from before the review, the number of pairs shown or
     rejected, or any wording saying matches were found, reviewed, rejected or confirmed. These
     sentences, when they appear, whether a report is published, the public commitment and the
     item D figures enter the membership check (N1).
@@ -1165,19 +1166,21 @@ influence is seen.
   smaller sample. "Infeasible under the registered procedure" or "not run within the approved
   compute limit" when a check fails. No substitute analysis is ever run.
 - **The rules** (C5, option a):
-  1. **Trigger:** a rerun may go ahead only if the published size code of its removed set shows at
+  1. **Trigger:** ~~a rerun may go ahead only if the published size code of its removed set shows at
      least three groups removed: an exact count of 3 or more, or the top end code "17–19". If the
      size is shown as "0–2" or withheld, that rerun is not run. The trigger never uses unpublished
-     membership.
-  2. **Feasibility without membership:** F2-F5 and F6 must pass for every possible removed set of
+     membership.~~ Replaced by Amendment 3A, rule 1.
+  2. **Feasibility without membership:** ~~F2-F5 and F6 must pass for every possible removed set of
      the published size among the 19 paired groups, not only the actual one; F6 prices the most
      expensive case (removing the groups with the fewest excerpts). F1 fails from the size alone
-     when 14 or more groups are removed, so "17–19" always ends as infeasible.
+     when 14 or more groups are removed, so "17–19" always ends as infeasible.~~ Replaced by
+     Amendment 3A, rule 2.
   3. **Order:** G_T first; G_V only if F6 shows both fit.
   4. **Authorisation and checking:** the final go stays with the Stage 3 authorisation, which must
-     name the reruns. Whether a rerun ran, any "not run because…" statement, and every rerun
+     name the reruns. ~~Whether a rerun ran, any "not run because…" statement, and every rerun
      figure that depends on which groups were removed (excerpt totals, eligible-group counts,
-     compute and timing records) go through both the results check and the membership check (N1).
+     compute and timing records) go through both the results check and the membership check (N1).~~
+     The rest of this rule is replaced by Amendment 3A, rule 4: rerun results are private.
   - Cost: each rerun is about 78% of the main run's training.
 
 #### A3.8 Timing, resources and running alone
@@ -1365,3 +1368,58 @@ restricted above; the no-p-values policy and the allowed and forbidden wording; 
 row 3's seed wording; validation's descriptive role and Stage 4's order (freeze, seal, then
 access); the registered seed formula; the bootstrap's computation and its caveat; the
 average-single-model estimand with no ensembles.
+
+### Amendment 3A — 2026-11-27, after the synthetic Stage 1, before any real-data step
+
+**State when made:** unchanged from Amendment 3; in addition, Step 2a's synthetic implementation
+had been built and tested on generated data only (commits up to `d20ab59`). No project data was
+read for it.
+
+**Why.** Under Amendment 3's disclosure check (A3.5, N1.7), the item D exemption (A3.6) and the end
+codes, the size of G_T can be published only when the item D MUSDB-train figure is 0–2 (shown as
+"0–2") or 24–26 (shown as "17–19"); the same holds for G_V. For every value in between, one value
+the size could show would reveal that the low-rate group and every validation group have no
+match, so the check withholds it. Step 2a's exact count check proves this for every value. A3.7's
+trigger (a published size of 3 or more) could therefore never reach a feasible rerun.
+
+**Replacement of A3.7, rules 1, 2 and 4** (rule 3, G_T first, is unchanged):
+
+- **Rule 1, trigger.** The G_T rerun is considered only from the published item D MUSDB-train figure d,
+   and the G_V rerun only from the MUSDB-validation figure, never from membership or from the size
+   of G_T or G_V. It is considered when d is at least 3. Given d, the removed set can hold from
+   max(0, d − 7) to min(19, d) paired groups (7 is the number of assessed groups that are not
+   paired: the low-rate group and the 6 validation groups).
+- **Rule 2, feasibility.** F1–F5, and F6 at step 5, must pass for every possible removed set of every
+   possible size of one or more in that range, among the 19 paired groups. F1 fails from the
+   figure alone when d is 14 or more. F6 prices the most expensive possible set. If the actual
+   removed set turns out to be empty, the rerun still runs and repeats the main run, so whether a
+   rerun ran never depends on membership.
+- **Rule 4, results are private.** Every rerun result and verdict, the actual size of the removed set,
+   the rerun's compute and timing records, and every step 3 figure computed without the removed
+   groups (the sensitivity sets' voiced and no-voice durations included) stay private, for the
+   owner only. The only public facts are whether each rerun was considered and run, which follow
+   from the public item D figures and the public feasibility outcome, and planning estimates
+   priced at the most expensive possible set. The public report says only: "A sensitivity rerun
+   without the groups exposed to MUSDB [training | validation] material was [run | not run]; its
+   results are private."
+
+**Replacement of A3.6's public wording for step 2 stops and re-runs** (a second finding, Step 2a
+test C4-T): with the approved re-run sentence published, a report that lacks it tells a reader
+that no assessed group had any MUSDB-test candidate before the owner's review, which fixes every
+group's before-review test status. Instead, **only step 2's final outcome is public**: either the
+published report (after RG2) or, if A5.2 halts, the single sentence "Step 2 stopped for owner
+review. No figures from this run are published." Intermediate stops and re-runs, and their
+authorisations, are recorded only in the private run records. C4-T shows that every
+before-review status then stays uncertain.
+
+**Consequences for other text.** A3.5's N1.6 rule 5 (publishing a sensitivity set's totals when
+the removed set has at least 3 groups) no longer applies, since those totals are now private. The
+sensitivity folds stay recorded only as hiding commitments (A3.6). The N2 seal verifier uses the
+private sensitivity sets.
+
+**Where the wording changed** (originals struck through and kept visible): the amendment note at
+the top; Amendment 3, A3.5 (N1.6, rule 5), A3.6 (the public wording of step 2 stops and re-runs)
+and A3.7 (rules 1, 2 and 4).
+
+**Unchanged:** everything else in Amendment 3, including the screening rule, which the reruns
+never change.
