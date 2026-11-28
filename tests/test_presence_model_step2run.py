@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import step2_synth  # noqa: E402
 
 from gmv.character.research.presence import identity  # noqa: E402
-from gmv.character.research.presence_model import commitment, review, runlock, sandbox, step2run  # noqa: E402
+from gmv.character.research.presence_model import commitment, runlock, sandbox, step2run  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 SITE = Path(sys.prefix) / "lib" / "python3.14" / "site-packages"
@@ -104,7 +104,7 @@ def test_a_test_split_match_stops_with_a_private_review_of_the_test_pairs(tmp_pa
     w = world(tmp_path, extra_records=[step2_synth.corpus_record(f"Artist group-00 {CANARY} - Leak", "test")])
     outcome = run(w, tmp_path, "test-stop")
     assert outcome.status == "test-split stop" and outcome.accepted
-    assert outcome.public_sentence == review.STOP
+    assert outcome.public_sentence is None  # Amendment 3A: only the final outcome is public
     body = json.loads((outcome.run_dir / "out" / "review.json").read_text())
     assert [(i["group"], i["corpus_split"]) for i in body["pairs"]] == [("group-00", "test")]
 
@@ -113,7 +113,8 @@ def test_rejecting_the_test_pair_lets_a_re_run_complete_with_the_neutral_sentenc
     track = f"Artist group-00 {CANARY} - Leak"
     w = world(tmp_path, extra_records=[step2_synth.corpus_record(track, "test")], decisions=[(track, "group-00")])
     outcome = run(w, tmp_path, "rerun", follows_stop=True)
-    assert outcome.status == "completed" and outcome.public_sentence == review.RERUN
+    assert outcome.status == "completed" and outcome.public_sentence is None
+    assert json.loads((outcome.run_dir / "record.json").read_text())["follows_stop"] is True  # private only
     matches = json.loads((outcome.run_dir / "out" / "matches.json").read_text())
     assert not any(t == track for t, *_x in matches["matches"])
 
@@ -125,7 +126,7 @@ def test_faults_stop_with_the_same_neutral_sentence_and_counts_only(tmp_path, fa
     if fault == "no alias file":
         w["aliases"].unlink()
     outcome = run(w, tmp_path, f"fault-{fault.replace(' ', '-')}")
-    assert outcome.status == "stop" and outcome.public_sentence == review.STOP
+    assert outcome.status == "stop" and outcome.public_sentence is None
     if fault != "no alias file":
         stop = json.loads((outcome.run_dir / "out" / "stop.json").read_text())
         assert CANARY not in stop["message"] and identity.normalise(CANARY) not in stop["message"]

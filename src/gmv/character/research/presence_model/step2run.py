@@ -14,8 +14,9 @@ attestations.
   public figures to ``/out``.
 
 **Stops.** Unparsed MUSDB records, any input fault and a test-split match stop the step (a
-test-split stop also writes the review file of the test pairs). Publicly, every stop reads
-``review.STOP`` and every run after a stop ``review.RERUN``; nothing else distinguishes them.
+test-split stop also writes the review file of the test pairs). Under Amendment 3A only step 2's
+final outcome is public, so the runner never produces public wording: stops and re-runs are
+recorded in the private run record only, and ``review.HALT`` is used only if A5.2 halts.
 
 **Outside the sandbox** the launcher takes the exclusive experiment lock, checks the source
 tree is clean at the authorised commit, launches, reads the trace, and accepts the run only if
@@ -82,7 +83,7 @@ class Declaration:
 class Outcome:
     status: str  # listed, completed, stop, test-split stop, rejected
     accepted: bool
-    public_sentence: str | None  # the only public wording of a stop or re-run
+    public_sentence: None = None  # Amendment 3A: intermediate stops and re-runs have no public wording
     trace: dict = field(default_factory=dict)  # counts only
     run_dir: Path | None = None
 
@@ -196,7 +197,7 @@ def run(declaration, src, site_packages, lock_path=None, check_commit=True, time
         missing = sum(1 for host in inputs.values() if not Path(host).is_file())
         if missing:
             _record(run_dir, declaration, "stop", None, f"{missing} declared input file(s) are missing", set())
-            return Outcome("stop", True, review.STOP, {}, run_dir)
+            return Outcome("stop", True, None, {}, run_dir)
         layout = sandbox.Layout(inputs, run_dir / "out", Path(src), Path(site_packages))
         launched = sandbox.launch(layout, sandbox.startup(MODULE, "sandbox_main", declaration.phase, declaration.commit),
                                   run_dir / "trace" / "strace.log", timeout)
@@ -210,11 +211,7 @@ def run(declaration, src, site_packages, lock_path=None, check_commit=True, time
         _record(run_dir, declaration, status, verdict.public(), None, files)
         if not accepted:
             status = "rejected"
-        if status in ("completed", "listed"):
-            sentence = review.RERUN if declaration.follows_stop else None
-        else:
-            sentence = review.STOP
-        return Outcome(status, accepted, sentence, verdict.public(), run_dir)
+        return Outcome(status, accepted, None, verdict.public(), run_dir)
 
 
 def _record(run_dir, declaration, status, verdict, note, files):

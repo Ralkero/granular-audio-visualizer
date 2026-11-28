@@ -8,11 +8,13 @@
 * Decisions go into the review-decisions file (``readers.read_decisions``): only name-based
   pairs can be marked "not the same artist"; a file match cannot be rejected; nothing can be
   added (a missed match is fixed in ``aliases.json``).
-* **Stops.** Every step 2 stop, whatever its cause, is reported publicly with ``STOP`` only;
-  every re-run with ``RERUN`` only. A test-split stop writes a review file for the test pairs.
+* **Stops** (Amendment 3A): only step 2's final outcome is public, the report after RG2 or, if
+  A5.2 halts, the single sentence ``HALT``. Intermediate stops and re-runs are recorded only in
+  the private run records. A test-split stop writes a review file for the test pairs.
   If the owner rejects every test pair, step 2 may re-run under a new authorisation with those
   rejections as a registered input; if the owner confirms any, that is a research-safety stop:
-  A5.2 halts for a separate owner decision. Nothing in the public wording distinguishes these.
+  A5.2 halts for a separate owner decision. Nothing public distinguishes a run that had stops or
+  re-runs from one that had none.
 """
 
 import json
@@ -23,8 +25,7 @@ from pathlib import Path
 from . import musdb
 
 FORMAT = "a5.2-musdb-review"
-STOP = "Step 2 stopped for owner review. No figures from this run are published."
-RERUN = "Step 2 re-run after the owner corrected a private input."
+HALT = "Step 2 stopped for owner review. No figures from this run are published."  # only if A5.2 halts
 
 
 def _names(registry, key):

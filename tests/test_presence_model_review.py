@@ -78,12 +78,11 @@ def test_a_test_split_stop_gives_a_review_file_of_the_test_pairs_only(tmp_path):
         "name_based_pairs": 1, "file_matches": 0, "pairs_by_split": {"test": 1}}
 
 
-def test_every_step_2_stop_and_rerun_has_one_neutral_public_sentence():
-    for sentence in (review.STOP, review.RERUN):
-        lowered = sentence.lower()
-        assert not any(word in lowered for word in ("match", "test", "musdb", "confirm", "reject", "alias", "review file"))
-    assert review.STOP == "Step 2 stopped for owner review. No figures from this run are published."
-    assert review.RERUN == "Step 2 re-run after the owner corrected a private input."
+def test_the_only_public_step_2_sentence_is_the_halt_and_it_names_no_cause():
+    lowered = review.HALT.lower()
+    assert not any(word in lowered for word in ("match", "test", "musdb", "confirm", "reject", "alias", "review file"))
+    assert review.HALT == "Step 2 stopped for owner review. No figures from this run are published."
+    assert not hasattr(review, "RERUN")  # Amendment 3A: re-runs have no public wording
 
 
 # -- commitments -------------------------------------------------------------------------------------------

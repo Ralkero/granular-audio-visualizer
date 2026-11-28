@@ -138,9 +138,9 @@ def pinned(worlds, sizes):
 
 
 @pytest.mark.parametrize("sizes", ((3, 1, 2), (4, 1, 2)))
-def test_c4t_the_approved_re_run_sentence_reveals_that_no_group_had_a_test_candidate(sizes):
-    """A finding for the owner: with the approved public re-run sentence, a report without it
-    tells the reader that no assessed group had any MUSDB-test candidate before the review."""
+def test_c4t_the_superseded_re_run_sentence_revealed_that_no_group_had_a_test_candidate(sizes):
+    """Why Amendment 3A replaced the public re-run sentence: with it, a report without it told the
+    reader that no assessed group had any MUSDB-test candidate before the review."""
     worlds = c4t_worlds(sizes)
     groups = {}
     for w in worlds:
@@ -152,6 +152,7 @@ def test_c4t_the_approved_re_run_sentence_reveals_that_no_group_had_a_test_candi
 
 @pytest.mark.parametrize("sizes", ((3, 1, 2), (4, 1, 2)))
 def test_c4t_publishing_only_the_final_outcome_keeps_every_before_review_status_uncertain(sizes):
+    """Amendment 3A's rule, as the runner now implements it."""
     worlds = c4t_worlds(sizes)
     groups = {}
     for w in worlds:
