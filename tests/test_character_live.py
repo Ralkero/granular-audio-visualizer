@@ -258,9 +258,11 @@ def test_the_queue_is_bounded_drops_are_counted_and_the_newest_state_wins(monkey
     messages = stream(20.0, onsets_every=0)
     for message in messages:
         bus.publish(message)
-    assert live.backlog <= 64 and live.dropped >= len(messages) - 64 - 1
+    # The stalled worker may already hold one batch (at most 512 messages); the queue holds 64.
+    assert live.backlog <= 64 and live.dropped >= len(messages) - 64 - 512 and live.dropped > 0
     release.set()
     assert wait_until(lambda: live.backlog == 0 and live.snapshot() is not None)
+    assert wait_until(lambda: live.stats.messages + live.dropped == len(messages))  # every one accounted for
     sleep(0.1)
     newest = messages[-1].timestamp
     assert live.snapshot().time >= newest - live.sample_s  # no backlog of old results

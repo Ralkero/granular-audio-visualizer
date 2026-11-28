@@ -159,7 +159,8 @@ class LiveCharacter:
     @property
     def dropped(self):
         """Messages the queue dropped because the worker fell behind (all subscriptions)."""
-        return self._dropped_before + (self.subscription.dropped if self.subscription else 0)
+        subscription = self.subscription  # a queue is falsy when empty: compare with None
+        return self._dropped_before + (subscription.dropped if subscription is not None else 0)
 
     @property
     def backlog(self):
