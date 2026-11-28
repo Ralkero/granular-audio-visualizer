@@ -166,6 +166,45 @@ def feasibility(code, stats):
     return Feasibility(True, None, checked)
 
 
+NON_PAIRED = 7  # assessed groups that are not paired: the low-rate group and the 6 validation groups
+
+
+def possible_sizes(d, paired=19, non_paired=NON_PAIRED):
+    """The removed-set sizes an item D figure d allows (proposed Amendment 3A): the paired groups
+    among d matched assessed groups, from max(0, d − non-paired) to min(paired, d)."""
+    if not (isinstance(d, int) and 0 <= d <= paired + non_paired):
+        raise ValueError("an item D figure must be a whole number of assessed groups")
+    return list(range(max(0, d - non_paired), min(paired, d) + 1))
+
+
+def rerun_considered_from_item_d(d):
+    """Proposed Amendment 3A, rule 1: a rerun is considered when the public item D figure is at
+    least 3; membership and the sizes of G_T and G_V are never read."""
+    return d >= 3
+
+
+def feasibility_from_item_d(d, stats, non_paired=NON_PAIRED):
+    """Proposed Amendment 3A, rule 2: F1-F5 for every possible removed set of every possible size
+    of one or more that the public item D figure allows. An empty removed set needs no check: the
+    rerun then repeats the main run."""
+    if not rerun_considered_from_item_d(d):
+        raise ValueError("no rerun is considered for this item D figure")
+    paired = sorted(stats)
+    n = len(paired)
+    sizes = [s for s in possible_sizes(d, n, non_paired) if s >= 1]
+    if any(n - k < MIN_REMAINING for k in sizes):  # decided from the figure alone, before any set is tried
+        return Feasibility(False, "F1", 0)
+    checked = 0
+    for k in sizes:
+        for removed in itertools.combinations(paired, k):
+            remaining = [g for g in paired if g not in removed]
+            checked += 1
+            failed = _counts_ok(remaining, stats) or _folds_ok(remaining, stats)
+            if failed:
+                return Feasibility(False, failed, checked)
+    return Feasibility(True, None, checked)
+
+
 def worst_case_excerpts(code, excerpt_counts):
     """For F6: the largest number of excerpts P′ can keep for the published size (removing
     the groups with the fewest excerpts), so the compute check prices the most expensive set."""

@@ -97,6 +97,33 @@ def test_the_compute_check_prices_the_most_expensive_removed_set():
     assert step3.worst_case_excerpts("3", counts) == 33 - (1 + 3 + 5)
 
 
+# -- proposed Amendment 3A: the decision from the public item D figure ---------------------------------------
+
+
+def test_the_item_d_figure_bounds_the_removed_set_size():
+    assert step3.possible_sizes(0) == [0]
+    assert step3.possible_sizes(5) == [0, 1, 2, 3, 4, 5]
+    assert step3.possible_sizes(10) == [3, 4, 5, 6, 7, 8, 9, 10]
+    assert step3.possible_sizes(26) == [19]
+
+
+def test_a_rerun_is_considered_from_the_item_d_figure_alone():
+    assert [step3.rerun_considered_from_item_d(d) for d in range(27)] == [False] * 3 + [True] * 24
+
+
+def test_item_d_feasibility_checks_every_size_and_every_set():
+    world = stats_world(n=12)
+    result = step3.feasibility_from_item_d(3, world)  # sizes 1-3 (0 repeats the main run)
+    assert result.feasible
+    assert result.removed_sets_checked == sum(len(list(itertools.combinations(range(12), k))) for k in (1, 2, 3))
+
+
+def test_an_item_d_figure_of_14_or_more_fails_f1_with_19_paired_groups():
+    world = stats_world()
+    for d in (14, 20, 26):
+        assert step3.feasibility_from_item_d(d, world) == step3.Feasibility(False, "F1", 0)
+
+
 # -- sensitivity folds ---------------------------------------------------------------------------------------
 
 
