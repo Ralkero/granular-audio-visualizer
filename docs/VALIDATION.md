@@ -580,3 +580,71 @@ What the sandbox tests showed on this machine: a full walk finds exactly the mou
 - The exact duration check: step 3's voiced and no-voice totals, the breakdowns by partition and match type, and the matched-record counts are withheld as one fixed unit (N1.7 item 7); the full checker for durations and metric tables comes in step 4.
 - io_uring setup succeeds inside the sandbox; the trace reader rejecting it is the only safeguard.
 - The exact host paths of protected inputs are not verified (separately authorised preparation).
+
+## 2026-11-28 addendum: Sonic Character, Phase A5.2 Step 4 (synthetic Stage 2 implementation)
+
+Authorised by the owner after Amendment 3A was published (`3daebef`), for **generated data only** (A3.4: step 4 may open generated data only). Nothing real was read: no recording, annotation, manifest, registry or B0 weight file, and nothing under the private evidence folder; B0's normalisation constants and scores are generated stand-ins in every test. No model was trained on project data. Step 5 needs reviews RG1b and RG2 and its own authorisation.
+
+**What was built** (Amendment 3, A3.9's step 4 list):
+
+| Part | Module | What it does |
+|---|---|---|
+| B1 trainer | `presence_model/b1train.py` | 548 → 128 ReLU → 1 sigmoid (70,401 parameters); B0's initialisation scheme and hand-written Adam (bias correction, L2 1e-2 on the weight matrices); 1e-3, then 3e-4 after `E // 2` epochs; a seeded permutation of every frame with weight > 0 in batches of 1024 with batch loss J·Σw·ℓ; the float32 path of B0's script; inference by the engine's activity-model formula; the float64 gate loss; a deterministic model file |
+| C inputs | `presence_model/cbatches.py` | Rows with up to 1.5 s of context at weight 0; B15 statistics before augmentation; B16 mixing partners (same-group no-voice, voiced never mixed); V7 draws from four streams; the order mix → gain → tilt → log → standardise → mask; R22 |
+| C trainer | `experiments/presence/ctrain.py` | Batches of 8 whole excerpts in seeded order (end padding at weight 0); AdamW (B17) with a closed-form per-step cosine 1e-3 → 1e-5; seeded dropout; float64 probabilities from the logit; the gate loss; matched-start records; a deterministic model file |
+| Ledger and matched start | `seedplan.RunLedger.claim_horizon`, `presence_model/matched.py` | The 16 declared `horizon` relations and their rules; the matched-start check for B1 (initial parameters, data order, parameters at the end of the shorter recipe's first half) and C (initial parameters, data order, augmentation draws, dropout masks, parameters after optimiser step 1) |
+| Scoring | `presence_model/scoring.py` | Post-processing over the whole segment, per-group counts, exact J(t), the tie rule, J̄ over the policy's inner seeds, seed-index aggregates, effect sizes as their means, leave-one-group-out rows, t ± 0.05, t_final |
+| Policy D in screening | `presence_model/screening.py` | The seed-index set follows the policy (5 under C, 3 under D); the result names the policy and says when its seed criterion is less demanding |
+| AUC | `presence_model/auc.py` | B20: ROC-AUC with ties half, average precision over distinct scores, exact; quiet frames scored 0; eligibility at 2 s of each class; macro per seed index then over O |
+| Gates | `presence_model/gates.py` | B18's matched complete-recipe rule (stage 1 and stage 2, S1-S5), the 16 h gate, the policy-flip safeguard, the caps and the registered timing stops |
+| Recorders and launcher | `presence_model/recorders.py`, `presence_model/launcher.py` | Host activity as aggregate counters only; V6 memory (Pss + SwapPss over the job's tree); the disturbance and memory stops; jobs in their own group dying with the launcher; the experiment lock; the synthetic-data guard |
+| N2 | `presence_model/seal.py` | The write-once seal; the expectation built from the design, Amendment 5's fold index (hash-checked) and sets, Amendment 6 and the declaration, recorded before the seal is opened; every listed refusal |
+| N1 for results | `presence_model/exact.py`, `presence_model/disclosure.py`, `presence_model/results.py` | Exact rational verification (HiGHS proposes; weak-duality bounds, exact vertices, an exact relative-interior point from public information, forced equalities, emptiness proofs); the release engine (every outcome a figure could show, codes and zones, ratios, verdicts, fixed units, stops, the self-check, the extreme-value shortcut with its soundness argument for linear figures); the main results tables with representative protected quantities justified by exchangeability |
+| End-to-end (B3) | `experiments/presence/synthetic_run.py` | A whole synthetic development run under policy D: 102 models, operating points, metrics, screening, AUC, B1's registered gate pairs with the ledger and matched-start check, the seal and the run record, written by output class |
+
+**Tests** (generated data only):
+
+| Area | File | Tests |
+|---|---|---|
+| B1 trainer | `test_presence_model_b1train.py` | 17 |
+| C inputs | `test_presence_model_cbatches.py` | 10 |
+| C trainer and C's matched start (PyTorch) | `test_presence_model_ctrain.py` | 20 |
+| Horizon ledger and B1's matched start | `test_presence_model_matched.py` | 14 |
+| Scoring and policy D | `test_presence_model_scoring.py` | 16 |
+| AUC | `test_presence_model_auc.py` | 12 |
+| Gates | `test_presence_model_gates.py` | 14 |
+| Recorders and launcher (Linux `/proc`) | `test_presence_model_recorders.py` | 11 |
+| Lock (the launcher added to the registered runners) | `test_presence_model_runlock.py` | 9 |
+| N2 seal | `test_presence_model_seal.py` | 20 |
+| Exact verification | `test_presence_model_exact.py` | 14 |
+| Release engine (regression mechanisms, T1-T7, T9) | `test_presence_model_disclosure.py` | 27 |
+| Main results layout (T8) | `test_presence_model_results.py` | 9 |
+| End-to-end, B3 (PyTorch) | `test_presence_model_endtoend.py` | 6 |
+
+Highlights: B1's training reproduces B0's script's update loop bit for bit, and its inference equals the engine's `ActivityModel.scores` bit for bit; AUC and average precision equal brute-force definitions with ties; every branch of the gate rule; a memory block shared by four processes is counted once, copy-on-write children are not double-counted and swapped-out memory still counts (the tests' own pages, paged out); the recorder opens no name, command-line or environment file; one test per refused N2 case; ties at exactly the width pass and an unprovable case is never passed; the shortcut agrees with checking every outcome (T7); decisions are identical across thread counts (T9); the end-to-end run is byte-identical when repeated, and changing only metadata and the run's name changes only allowed provenance fields.
+
+**T8 measurement** (generated worlds, 15 groups with both classes and 4 with no-voice time only, three scenarios, a scratch script outside the repository):
+
+| Policy | World | Registered reader | Public-record reader (comparison only) |
+|---|---|---|---|
+| D (27 figures) | typical | 0 published | 6 |
+| D | near zero | 0 | 6 |
+| D (29 with the ratio) | small effect | 0 | 10 |
+| C (35 figures) | typical | 0 | 8 |
+| C | near zero | 0 | 8 |
+| C (37 with the ratio) | small effect | 0 | 12 |
+
+Each world took 9-20 s with the public-record reader; the registered reader decides from the case count alone (about 4 × 10²⁵ cases for one protected group).
+
+**Suites at `c1435e7`** (visible terminal run, data-safe files only): experiments environment (Python 3.12, torch CPU) **777 passed, 22 skipped** (the sandbox and runner tests, which need the application environment's packages); application environment (Python 3.14, no torch) **743 passed, 5 skipped** (the PyTorch-only files); `ruff check` is clean.
+
+**Findings for the owner** (not changed silently):
+1. **The approved disclosure rules publish almost none of the main results** (test T8, generated worlds at the registered size, 15 + 4 groups). With the registered reader (N1.1, which assumes the reader knows every group's directions, leave-one-group-out outcomes and eligibility, together with N1.7 item 8, which forbids taking them from their actual values), one protected group needs about 4 × 10²⁵ cases even after the exact exchangeability reduction, so every unit is withheld: 0 of 27 (policy D) and 0 of 35 (policy C) figures in every world. With a reader who knows only the public record (a comparison alternative, not an approved rule), 6-8 figures are published in typical and near-zero worlds and 10-12 in a small-effect world; B0ₜ's false-activity average, D_FA, the ratio and nearly every seed-index aggregate stay withheld, because an extreme value each could show (B0ₜ's average near 60 s/min; one seed aggregate at its largest possible value) would reveal every group's direction or pin the other seeds. Options for an Amendment 3B are in the PR description; the owner decides.
+2. **An unexplained one-off difference in C's training.** In the first run of the end-to-end test, one of the 102 models of the third run (a C inner model) differed from the first two runs in 47 bytes after its single optimiser step; the identical rerun before it matched exactly. It did not recur in 30 isolated repeats of that model, 40 repeats with shifted memory allocations, 6 further whole runs at 4 threads (306 C and 306 B1 trainings) or the next full run of the test. Recorded as unexplained, seen once. If it happens in step 5, the replay check (S5) stops the run, as designed; the end-to-end test stays strict.
+
+**Not built or not covered in Step 4:**
+- The counts unit of the results tables (direction counts, the leave-one-group-out count and verdict, the screening class) is not modelled by the checker and is withheld whole; other tables (breakdowns and route rows, AUC tables, effects at t ± 0.05, the §10 sensitivity results, onset and offset errors, validation tables) have no figure model yet. Step 3's durations remain the Step 2a fixed unit.
+- The shortcut's soundness rests on a written concavity argument for linear figures, checked against exhaustive outcomes on small worlds (T7); it still needs RG1b's review.
+- C's gate rule is tested on generated values; the end-to-end run makes gate records for B1 only.
+- The relative-interior handling is tested on small constructed systems only (N1.10).
+- Timing measurements, the T1-T4 schedule and the traced rehearsals are step 5's; nothing was timed here.
