@@ -37,7 +37,7 @@ def test_zones_follow_the_band_of_each_average():
 
 def test_the_registered_reader_needs_astronomically_many_cases_so_every_unit_is_withheld():
     st, values = small()
-    out = results.check(st, values, reader="registered")
+    out = results.check(st, values, reader="registered", rule="3")
     assert out.registered_cases > 10**9
     assert all(v == disclosure.WITHHELD for v in out.shown.values())
     assert results.registered_cases(results.Structure(15, 4, (0, 1, 2))) > 10**20
@@ -47,11 +47,11 @@ def test_with_the_public_record_reader_b0ts_average_is_still_suppressed_by_direc
     """Once C's average is public, an extreme value B0ₜ's average could show (near 60 s/min) would
     reveal every group's direction, so it is suppressed whatever its true value (N1.7 item 5)."""
     st, values = small()
-    out = results.check(st, values, reader="public")
+    out = results.check(st, values, reader="public", rule="3")
     assert out.shown["C FPA"] != disclosure.WITHHELD
     assert out.shown["B0t FPA"] == disclosure.WITHHELD and out.shown["D_FA"] == disclosure.WITHHELD
     checker = disclosure.Checker(results.limits(st), results.protected(st))
-    figs = results.figures(st, False)
+    figs = results.figures(st, False, rule="3")
     truth = results.canonical(st, values)
     checker.release(figs[0], disclosure.show(figs[0], disclosure._value(figs[0], truth)))
     top = disclosure.outcome_of(figs[1], f"above {figs[1].zone_edges()[1]}")
@@ -62,19 +62,19 @@ def test_with_the_public_record_reader_b0ts_average_is_still_suppressed_by_direc
 
 def test_seed_aggregates_are_suppressed_because_an_extreme_one_would_pin_the_others():
     st, values = small()
-    out = results.check(st, values, reader="public")
+    out = results.check(st, values, reader="public", rule="3")
     assert all(out.shown[f"C FPA seed {s}"] == disclosure.WITHHELD for s in st.seeds)
 
 
 def test_verdicts_are_coarse_enough_to_be_released():
     st, values = small()
-    out = results.check(st, values, reader="public")
+    out = results.check(st, values, reader="public", rule="3")
     assert out.shown["D_FA < 0"] == "below 0" and out.shown["Delta_R >= -0.05"] in ("at least -0.05", "below -0.05")
 
 
 def test_the_counts_unit_is_not_modelled_and_withheld_whole():
     st, values = small()
-    out = results.check(st, values, reader="public")
+    out = results.check(st, values)
     assert "counts" in out.withheld_units and all(out.shown[name] == disclosure.WITHHELD for name in results.COUNTS)
 
 
@@ -115,12 +115,15 @@ def test_3b_a_baseline_above_the_cap_is_shown_as_a_code_and_its_difference_follo
     assert out.shown["D_FA"] == results.CODED and out.shown["ratio"] == results.CODED
 
 
-def test_3b_needs_the_public_record_reader_and_a_cap():
+def test_3b_is_the_default_needs_the_public_record_reader_and_caps_by_table_size():
     st, values = small()
     with pytest.raises(ValueError):
-        results.check(st, values, reader="registered", rule="3B", cap=Q(30))
+        results.check(st, values, reader="registered", rule="3B")
     with pytest.raises(ValueError):
-        results.check(st, values, reader="public", rule="3B")
+        results.figures(st, False, rule="registered")
+    default = results.check(st, values)
+    assert results.SEED_VERDICT in default.shown and not any("seed 0" in k for k in default.shown)
+    assert {f.cap for f in results.figures(st, False) if f.name in ("C FPA", "B0t FPA")} == {results.proposed_cap(5)}
 
 
 def test_a_cap_moves_the_upper_zone_edge():

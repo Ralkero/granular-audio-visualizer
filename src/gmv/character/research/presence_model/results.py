@@ -28,11 +28,12 @@ places. One representative group per class (and one representative pair per pair
 then stands for all: a range shown for the representative holds for every group of its class.
 ``check_symmetry`` verifies the condition on the built figures.
 
-**Reader knowledge** (N1.1, N1.7 item 8): ``registered_cases`` counts the possibilities the
-registered reader would need checked (every group's directions, leave-one-group-out outcomes and
-eligibility, none taken from actual values), even after the exchangeability reduction.
-``reader="public"`` is an *alternative for comparison, not the registered rule*: a reader who knows
-the public record only.
+**The rules in force are Amendment 3B's** (``rule="3B"``, the default): the reader knows the public
+record only (option A), false-activity averages are capped by table size with differences and the
+ratio of coded sources shown as coded (option B), and the seed spread is one yes/no verdict (option
+C). ``rule="3"`` keeps Amendment 3's superseded layout for the T8 comparison only:
+``registered_cases`` counts the possibilities its cautious reader (N1.1 before 3B, with N1.7 item 8)
+would need checked, even after the exchangeability reduction.
 """
 
 from dataclasses import dataclass
@@ -120,19 +121,22 @@ def _difference(name, form, rate):
     return disclosure.Figure(name, form, unit, -hi, hi, None, "main" if "seed" not in name else "seeds")
 
 
-def figures(st, with_ratio, rule="registered", cap=None):
-    """The release order (the ratio only when B0ₜ's shown FPA_macro is ≥ 3 s/min). ``rule="3B"``:
-    the proposed Amendment 3B: false-activity averages capped at ``cap``, and the seed-index
-    aggregates replaced by one verdict (``seed_verdict``), decided last."""
+def figures(st, with_ratio, rule="3B", cap=None):
+    """The release order (the ratio only when B0ₜ's shown FPA_macro is ≥ 3 s/min). ``rule="3B"``
+    (Amendment 3B): false-activity averages capped at ``cap`` (default: ``proposed_cap``), and the
+    seed-index aggregates replaced by one verdict (``seed_verdict``), decided last. ``rule="3"``:
+    Amendment 3's superseded layout (uncapped, every seed-index aggregate), for comparison."""
+    if rule not in ("3", "3B"):
+        raise ValueError("the rule is '3B' or the superseded '3'")
     f, n, nv = forms(st), len(st.groups), len(st.voiced)
-    cap = cap if rule == "3B" else None
+    cap = (cap if cap is not None else proposed_cap(len(st.groups))) if rule == "3B" else None
     out = [_average("C FPA", f["C FPA"], n, True, cap), _average("B0t FPA", f["B0t FPA"], n, True, cap),
            _difference("D_FA", f["D_FA"], True), _average("C recall", f["C recall"], nv, False),
            _average("B0t recall", f["B0t recall"], nv, False), _difference("Delta_R", f["Delta_R"], False)]
     if with_ratio:
         out.append(disclosure.Figure("ratio", {}, RATIO_UNIT, Q(0), Q(20), None, "main",
                                      ratio=(f["C FPA"], f["B0t FPA"])))
-    for s in st.seeds if rule == "registered" else ():
+    for s in st.seeds if rule == "3" else ():
         out += [_average(f"C FPA seed {s}", f[f"C FPA seed {s}"], n, True),
                 _difference(f"D_FA seed {s}", f[f"D_FA seed {s}"], True),
                 _average(f"C recall seed {s}", f[f"C recall seed {s}"], nv, False),
@@ -148,11 +152,11 @@ def figures(st, with_ratio, rule="registered", cap=None):
     return out
 
 
-CAPS_3B = {3: Q(35), 5: Q(45), 10: Q(50)}  # proposed 3B, option B: by the smallest count of the band
+CAPS_3B = {3: Q(35), 5: Q(45), 10: Q(50)}  # Amendment 3B, option B: by the smallest count of the band
 
 
 def proposed_cap(n):
-    """The proposed Amendment 3B cap for a false-activity average over n groups: below the value
+    """Amendment 3B's cap for a false-activity average over n groups: below the value
     60·(m − 1)/m (m the smallest count of n's band) above which a code window could fix every
     group's direction, with a margin."""
     return CAPS_3B[band_minimum(n)]
@@ -163,7 +167,7 @@ CODED = "coded with its sources"
 
 
 def seed_verdict(st):
-    """Proposed Amendment 3B, option C: the seed spread as one verdict. "yes": every seed-index
+    """Amendment 3B, option C: the seed spread as one verdict. "yes": every seed-index
     aggregate has D_FA < 0 and Δ_R ≥ −0.05 (closures); "no": the union over seeds of D_FA ≥ 0 or
     Δ_R ≤ −0.05."""
     f = forms(st)
@@ -293,17 +297,19 @@ class Outcome:
     seconds: float | None = None
 
 
-def check(st, values, reader="registered", case_limit=disclosure.CHECK_LIMIT, rule="registered", cap=None):
-    """Run the disclosure check on the main tables. ``reader="registered"`` applies N1.1 and N1.7
-    item 8; ``reader="public"`` is the reader of the proposed Amendment 3B (option A).
-    ``rule="3B"`` with ``cap`` applies the proposed options B and C (``figures``, ``seed_verdict``);
-    a difference or the ratio whose sources are shown as codes is shown as ``CODED`` (N1.6:
-    coded consistently with the figures they come from), which adds nothing to the public record."""
+def check(st, values, reader="public", case_limit=disclosure.CHECK_LIMIT, rule="3B", cap=None):
+    """Run the disclosure check on the main tables under Amendment 3B (the default): the
+    public-record reader, the cap (default ``proposed_cap``), and the seed verdict; a difference or
+    the ratio whose sources are shown as codes is shown as ``CODED`` (N1.6), which adds nothing to the
+    public record. ``rule="3"`` with ``reader="registered"`` (Amendment 3's cautious reader) or
+    ``"public"`` reproduces the superseded rules for the T8 comparison."""
     import time
 
     start = time.monotonic()
-    if rule == "3B" and (reader != "public" or cap is None):
-        raise ValueError("the proposed 3B rule uses the public-record reader and a cap")
+    if rule == "3B" and reader != "public":
+        raise ValueError("Amendment 3B's rule uses the public-record reader")
+    if rule == "3B" and cap is None:
+        cap = proposed_cap(len(st.groups))
     truth = canonical(st, values)
     prot = protected(st)
     cases = None

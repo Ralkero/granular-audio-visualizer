@@ -71,7 +71,7 @@ class Figure:
     fixed_unit: str = ""
     ratio: tuple | None = None  # (numerator form, denominator form); ``form`` unused
     cuts: tuple | None = None  # ((label, lo, hi), ...): a verdict shown as one of these intervals
-    cap: Fraction | None = None  # proposed Amendment 3B: numbers only up to the cap, "above cap" beyond
+    cap: Fraction | None = None  # Amendment 3B: numbers only up to the cap, "above cap" beyond
 
     def zone_edges(self):
         low = high = None
