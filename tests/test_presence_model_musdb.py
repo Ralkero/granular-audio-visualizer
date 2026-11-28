@@ -48,7 +48,7 @@ def world():
         record(f"Lowrate {CANARY} - Song", "train"),  # exact -> low-rate group (not exposure)
         record(f"Valgroup {CANARY} - Song", "validation"),  # exact -> validation partition
         record(f"Reserved {CANARY} - Song", "train"),  # matches only a reserved group: not assessed
-        record("NoSeparatorHere", "test"),  # unparsed, no match
+        record("Someone Else - Nothing", "test"),  # parsed, no match
         record("Unrelated - Nothing", "test"),
         {"dataset": "mdbdrums", "dataset_track_id": f"Alpha {CANARY} - Other", "split": "train", "sha256": "x"},  # other dataset
     ]
@@ -75,6 +75,16 @@ def world():
     return records, registry, aliases, titles, categories
 
 
+# The ambiguous "Charlie … and Delta" credit (L3) is read as a single name here, so it stays the
+# report-only permissive case it was built for; the readings themselves are tested further down.
+READINGS = {f"Charlie {CANARY} and Delta": "single-name"}
+
+
+def match(*args, **kwargs):
+    kwargs.setdefault("readings", READINGS)
+    return musdb.match(*args, **kwargs)
+
+
 @pytest.fixture
 def inputs():
     return world()
@@ -82,7 +92,7 @@ def inputs():
 
 @pytest.fixture
 def result(inputs):
-    return musdb.match(*inputs)
+    return match(*inputs)
 
 
 def private_pairs(result):
@@ -108,14 +118,20 @@ def test_track_identifiers_split_at_the_first_spaced_hyphen(track_id, expected):
     assert musdb.parse_track_id(track_id) == expected
 
 
-def test_unparsed_records_are_counted_and_still_matched(inputs):
+def test_unparsed_musdb_records_stop_the_check(inputs):
+    """Amendment 3, A3.6: an id without " - " (or with an empty or generic artist) is no longer
+    counted and matched; it stops step 2 before G_T and G_V are fixed."""
     records, registry, aliases, titles, categories = inputs
-    registry["entries"]["paired-whole"] = entry("development", ["wholename"])
-    categories["paired-whole"] = "paired"
-    records.append(record("WholeName", "train"))  # unparsed: artist and title are the whole id
-    result = musdb.match(records, registry, aliases, titles, categories)
-    assert result.unparsed == {"train": 1, "validation": 0, "test": 1}
-    assert ("WholeName", "paired-whole") in private_pairs(result)
+    for bad in ("WholeName", " - Title Only", "Various Artists - Compilation"):
+        with pytest.raises(musdb.UnparsedRecords) as caught:
+            match([*records, record(bad, "train")], registry, aliases, titles, categories)
+        assert CANARY not in str(caught.value) and "1 with" in str(caught.value)
+
+
+def test_other_datasets_never_trigger_the_unparsed_stop(inputs):
+    records, *rest = inputs
+    result = match([*records, record("WholeName", "train", dataset="mdbdrums")], *rest)
+    assert result.unparsed == {"train": 0, "validation": 0, "test": 0}
 
 
 @pytest.mark.parametrize("bad", (
@@ -132,16 +148,16 @@ def test_unparsed_records_are_counted_and_still_matched(inputs):
 def test_malformed_records_stop_the_check(inputs, bad):
     records, *rest = inputs
     with pytest.raises(musdb.MusdbInputError) as caught:
-        musdb.match([*records, bad], *rest)
+        match([*records, bad], *rest)
     assert CANARY not in str(caught.value)
 
 
 def test_other_datasets_are_ignored_but_an_empty_musdb_set_stops(inputs):
     _records, *rest = inputs
     with pytest.raises(musdb.MusdbInputError):
-        musdb.match([record("A - B", "train", dataset="mdbdrums")], *rest)
+        match([record("A - B", "train", dataset="mdbdrums")], *rest)
     with pytest.raises(musdb.MusdbInputError):
-        musdb.match([], *rest)
+        match([], *rest)
 
 
 # -- 3-6: exact credit, aliases, one link step, checksums -------------------------------------------------
@@ -155,8 +171,8 @@ def test_exact_credit_matches_include_featured_artists_and_never_generic_names(r
     categories["paired-guest"] = "paired"
     registry["entries"]["paired-generic"] = entry("development", ["various artists", ""])
     categories["paired-generic"] = "paired"
-    records.append(record("Various Artists - Compilation", "train"))
-    again = private_pairs(musdb.match(records, registry, aliases, titles, categories))
+    records.append(record("Somebody - Compilation (feat. Various Artists)", "train"))  # a generic credit
+    again = private_pairs(match(records, registry, aliases, titles, categories))
     assert again[(f"Bravo {CANARY} - Bright Day (feat. Guest)", "paired-guest")] == ("exact",)  # credited in the title
     assert not any(k == "paired-generic" for _t, k in again)
 
@@ -178,7 +194,7 @@ def test_checksum_matches_need_the_identical_sha256(result, inputs):
     assert pairs[("Some Artist - Copied Track", f"paired-check-{CANARY}")] == ("checksum",)
     records, *rest = inputs
     near = [r if r["dataset_track_id"] != "Some Artist - Copied Track" else dict(r, sha256="f" * 64) for r in records]
-    assert ("Some Artist - Copied Track", f"paired-check-{CANARY}") not in private_pairs(musdb.match(near, *rest))
+    assert ("Some Artist - Copied Track", f"paired-check-{CANARY}") not in private_pairs(match(near, *rest))
 
 
 # -- 7, 8: report-only match types ----------------------------------------------------------------------
@@ -192,7 +208,7 @@ def test_title_confirmation_is_reported_but_never_needed_or_sufficient_for_expos
     # the same title under another artist: no exact match, so neither confirmation nor exposure
     records, registry, aliases, titles, categories = inputs
     swapped = [r for r in records if not r["dataset_track_id"].startswith("Titled")] + [record("Stranger - Night Owl", "train")]
-    other = musdb.match(swapped, registry, aliases, titles, categories)
+    other = match(swapped, registry, aliases, titles, categories)
     assert not any(k == titled for _t, k in private_pairs(other)) and titled not in other.g_t
 
 
@@ -202,7 +218,7 @@ def test_a_checksum_match_with_a_matching_title_gets_no_title_confirmation(input
     own = next(n[4:] for n in registry["entries"][f"paired-titled-{CANARY}"]["nodes"] if n.startswith("rec:"))
     swapped = [r for r in records if not r["dataset_track_id"].startswith("Titled")]
     swapped.append(record("Stranger - Night Owl", "train", digest=own))  # same title, checksum, other artist
-    pairs = private_pairs(musdb.match(swapped, registry, aliases, titles, categories))
+    pairs = private_pairs(match(swapped, registry, aliases, titles, categories))
     assert pairs[("Stranger - Night Owl", f"paired-titled-{CANARY}")] == ("checksum",)
 
 
@@ -211,7 +227,7 @@ def test_a_misspelt_partition_cannot_hide_a_test_split_match(inputs):
     registry["entries"]["mis"] = entry("Development", ["bravo two"])
     records.append(record("Bravo Two - Song", "test"))
     with pytest.raises(musdb.MusdbInputError):  # refused, not skipped
-        musdb.match(records, registry, aliases, titles, categories)
+        match(records, registry, aliases, titles, categories)
 
 
 def test_permissive_only_matches_are_reported_but_never_expose(result):
@@ -241,7 +257,7 @@ def test_groups_with_several_records_or_match_types_are_counted_once_per_cell(in
     alpha = f"paired-alpha-{CANARY}"
     registry["entries"][alpha]["nodes"].append(f"rec:{records[0]['sha256']}")  # exact and checksum at once
     records.append(record(f"Alpha {CANARY} - Third Song", "validation"))  # the same group in G_V too
-    result = musdb.match(records, registry, aliases, titles, categories)
+    result = match(records, registry, aliases, titles, categories)
     assert private_pairs(result)[(f"Alpha {CANARY} - First Song", alpha)] == ("exact", "checksum")
     # Alpha's two training records, the alias, the link and the titled record
     assert cell(result, "train", "paired", "exact") == {"groups": 4, "records": 5}
@@ -258,7 +274,7 @@ def test_reserved_and_other_partitions_are_never_assessed(inputs, result):
     changed = copy.deepcopy(registry)
     changed["entries"][f"reserved-{CANARY}"] = {"partition": "reserved", "nodes": [f"name:alpha {CANARY.lower()}", "rec:bad"]}
     changed["entries"]["final"] = {"partition": "final_test", "nodes": None}
-    assert musdb.match(records, changed, aliases, titles, categories) == result  # nothing outside is read
+    assert match(records, changed, aliases, titles, categories) == result  # nothing outside is read
 
 
 @pytest.mark.parametrize(("track_id", "digest"), (
@@ -273,14 +289,14 @@ def test_a_credit_or_checksum_match_to_a_test_record_stops_everything(inputs, tr
     own = next(n[4:] for n in registry["entries"][f"paired-titled-{CANARY}"]["nodes"] if n.startswith("rec:"))
     records.append(record(track_id, "test", digest=own if digest else None))
     with pytest.raises(musdb.TestSplitOverlap) as caught:
-        musdb.match(records, registry, aliases, titles, categories)
+        match(records, registry, aliases, titles, categories)
     assert CANARY not in str(caught.value) and "1 record(s), 1 group(s)" in str(caught.value)
 
 
 def test_report_only_matches_to_test_records_do_not_stop(inputs):
     records, *rest = inputs
     records.append(record(f"Charlie {CANARY} and Delta - Tune 2", "test"))  # permissive only
-    result = musdb.match(records, *rest)
+    result = match(records, *rest)
     assert cell(result, "test", "paired", "permissive-only") == {"groups": 1, "records": 1}
 
 
@@ -376,7 +392,7 @@ def test_results_do_not_depend_on_input_order(inputs, result):
         items = list(registry["entries"].items())
         rng.shuffle(items)
         links = rng.sample(aliases[1], len(aliases[1]))
-        again = musdb.match(shuffled_records, {"entries": dict(items)}, (aliases[0], links), titles,
+        again = match(shuffled_records, {"entries": dict(items)}, (aliases[0], links), titles,
                             dict(rng.sample(sorted(categories.items()), len(categories))))
         assert again == result and again.matches == result.matches
         assert musdb.public_report(again, FINGERPRINTS, "abc1234") == musdb.public_report(result, FINGERPRINTS, "abc1234")
@@ -442,7 +458,7 @@ def broken(inputs, what):
 ))
 def test_missing_malformed_duplicated_or_conflicting_inputs_stop(inputs, what):
     with pytest.raises(musdb.MusdbInputError) as caught:
-        musdb.match(*broken(inputs, what))
+        match(*broken(inputs, what))
     assert CANARY not in str(caught.value) and CANARY.lower() not in str(caught.value)
 
 
@@ -460,4 +476,4 @@ def test_the_public_report_refuses_malformed_fingerprints_or_commit(result, fing
 def test_titles_of_recordings_outside_assessed_groups_are_never_used(inputs, result):
     records, registry, aliases, titles, categories = inputs
     extra = dict(titles, **{sha("someone else's recording"): 12, "not-a-checksum": None})  # never looked up
-    assert musdb.match(records, registry, aliases, extra, categories) == result
+    assert match(records, registry, aliases, extra, categories) == result
