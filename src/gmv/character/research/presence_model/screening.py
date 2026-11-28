@@ -18,10 +18,10 @@ D_FA = FPA(candidate) − FPA(B0ₜ) and Δ_R = R(candidate) − R(B0ₜ).
 
 **Robust** (both modes, §13 (c)) requires two complete sets of recomputations:
 
-* the single-seed set: one (seed_index, D_FA, Δ_R) row for each of the registered outer and
-  final seed indices 0-4 (§7), and only those. A missing, duplicated or unexpected index
-  makes the set incomplete, so four rows, six rows, or one seed's result repeated never
-  pass;
+* the seed-index set: one (seed_index, D_FA, Δ_R) row for each seed-index aggregate of the
+  policy in force (Amendment 3, A3.1): indices 0-4 under policy C, 0-2 under policy D, and only
+  those. A missing, duplicated or unexpected index makes the set incomplete, so four rows, six
+  rows, or one seed's result repeated never pass under policy C;
 * the leave-one-group-out set: one (group, D_FA, Δ_R) row for every expected group, and
   only those; the caller supplies the expected groups. A missing, duplicated or unexpected
   group makes the set incomplete.
@@ -40,8 +40,16 @@ from dataclasses import dataclass
 READINESS_S_PER_MIN = 3.0
 RATIO_TARGET = 0.50
 RECALL_MARGIN = 0.05
-SEED_INDICES = frozenset(range(5))  # §7: outer and final training seed indices 0-4
+POLICY_SEEDS = {"C": frozenset(range(5)), "D": frozenset(range(3))}  # A3.1: O under each policy
+SEED_INDICES = POLICY_SEEDS["C"]  # §7: outer and final training seed indices 0-4 (policy C)
 SEED_RECOMPUTATIONS = len(SEED_INDICES)
+POLICY_D_NOTE = "Policy D was in force; its seed criterion (3 seed-index aggregates) is less demanding than policy C's (5)."
+
+
+def seed_indices(policy):
+    if policy not in POLICY_SEEDS:
+        raise ValueError("the policy must be C or D")
+    return POLICY_SEEDS[policy]
 EPSILON = 1e-12  # float tolerance for the registered boundaries (≤ 0.50, ≥ −0.05)
 
 
@@ -70,6 +78,12 @@ class Screening:
     robustness: str  # the robustness check's reason, counts only
     result: str  # "promising", "mixed" or "not promising"
     reason: str
+    policy: str = "C"
+
+    @property
+    def policy_note(self):
+        """§12: the report names the policy and says when the seed criterion is less demanding."""
+        return POLICY_D_NOTE if self.policy == "D" else "Policy C was in force (5 seed-index aggregates)."
 
 
 def _number(name, value, low=None, high=None):
@@ -111,8 +125,9 @@ def _completeness(supplied, wanted):
             sum(1 for key in counts if key not in wanted))
 
 
-def check_robustness(seed_recomputations, group_recomputations, expected_groups):
-    """``seed_recomputations``: (seed_index, D_FA, Δ_R) triples, one for each index 0-4.
+def check_robustness(seed_recomputations, group_recomputations, expected_groups, policy="C"):
+    """``seed_recomputations``: (seed_index, D_FA, Δ_R) triples, one for each index of the
+    policy (0-4 under C, 0-2 under D).
     ``group_recomputations``: (group, D_FA, Δ_R) triples, one per expected group.
     ``expected_groups``: the groups the leave-one-group-out analysis must cover, given by
     the caller."""
@@ -128,12 +143,14 @@ def check_robustness(seed_recomputations, group_recomputations, expected_groups)
             raise ValueError("a leave-one-group-out recomputation must be (group, D_FA, Δ_R)") from None
         rows.append((group, *_pair((d_fa, d_recall))))
 
-    def result(passed, reason):
-        return Robustness(passed, reason, SEED_RECOMPUTATIONS, len(seeds), len(expected), len(rows))
+    wanted = seed_indices(policy)
 
-    missing, duplicated, unexpected = _completeness([index for index, _, _ in seeds], SEED_INDICES)
-    if missing or duplicated or unexpected or len(seeds) != SEED_RECOMPUTATIONS:
-        return result(False, f"the seed set is incomplete or invalid: {len(seeds)} of {SEED_RECOMPUTATIONS} rows, "
+    def result(passed, reason):
+        return Robustness(passed, reason, len(wanted), len(seeds), len(expected), len(rows))
+
+    missing, duplicated, unexpected = _completeness([index for index, _, _ in seeds], wanted)
+    if missing or duplicated or unexpected or len(seeds) != len(wanted):
+        return result(False, f"the seed set is incomplete or invalid: {len(seeds)} of {len(wanted)} rows, "
                              f"{missing} missing, {duplicated} duplicated, {unexpected} unexpected")
     if not expected:
         return result(False, "no expected groups were given for the leave-one-group-out set")
@@ -149,18 +166,18 @@ def check_robustness(seed_recomputations, group_recomputations, expected_groups)
     return result(True, f"the direction held in all {len(seeds)} seed and all {len(rows)} leave-one-group-out recomputations")
 
 
-def robust(seed_recomputations, group_recomputations, expected_groups):
-    return check_robustness(seed_recomputations, group_recomputations, expected_groups).passed
+def robust(seed_recomputations, group_recomputations, expected_groups, policy="C"):
+    return check_robustness(seed_recomputations, group_recomputations, expected_groups, policy).passed
 
 
 def screen(fpa_candidate, fpa_baseline, recall_candidate, recall_baseline,
-           seed_recomputations=(), group_recomputations=(), expected_groups=()):
+           seed_recomputations=(), group_recomputations=(), expected_groups=(), policy="C"):
     """Classify a candidate against B0ₜ; robustness needs the complete sets described above."""
     fpa_c = _number("FPA(candidate)", fpa_candidate, low=0.0)
     fpa_b = _number("FPA(baseline)", fpa_baseline, low=0.0)
     d_recall = _number("recall(candidate)", recall_candidate, 0.0, 1.0) - _number("recall(baseline)", recall_baseline, 0.0, 1.0)
     d_fa = fpa_c - fpa_b
-    check = check_robustness(seed_recomputations, group_recomputations, expected_groups)
+    check = check_robustness(seed_recomputations, group_recomputations, expected_groups, policy)
     recall_ok = d_recall + RECALL_MARGIN >= -EPSILON
     if fpa_b >= READINESS_S_PER_MIN:
         ratio = fpa_c / fpa_b
@@ -173,7 +190,8 @@ def screen(fpa_candidate, fpa_baseline, recall_candidate, recall_baseline,
             result, reason = "promising", "at least a 50% reduction, recall within the margin, robust"
         else:
             result, reason = "mixed", "lower false activity without meeting every promising condition"
-        return Screening("relative", fpa_c, fpa_b, d_fa, ratio, fifty, d_recall, check.passed, check.reason, result, reason)
+        return Screening("relative", fpa_c, fpa_b, d_fa, ratio, fifty, d_recall, check.passed, check.reason, result, reason,
+                         policy)
     # Amendment 1, A1.1: the baseline already meets the readiness target.
     if not recall_ok:
         result, reason = "not promising", "recall below margin"
@@ -185,4 +203,5 @@ def screen(fpa_candidate, fpa_baseline, recall_candidate, recall_baseline,
         result, reason = "not promising", "maintained: equal false activity is not an improvement; retain B0"
     else:
         result, reason = "mixed", "lower false activity without robustness"
-    return Screening("absolute", fpa_c, fpa_b, d_fa, None, "not applicable", d_recall, check.passed, check.reason, result, reason)
+    return Screening("absolute", fpa_c, fpa_b, d_fa, None, "not applicable", d_recall, check.passed, check.reason, result,
+                     reason, policy)
