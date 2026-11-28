@@ -530,10 +530,11 @@ five passes):
 On the real recordings the median was 45 µs a frame beside 0.74 to 0.82 ms for the analysis
 pass. A profile is only built when it is asked for; the per-frame update builds none.
 
-Nothing in the application calls this yet, so **the running application's performance is
+(Phase A.) Nothing in the application calls this yet, so **the running application's performance is
 unchanged by construction**: the capture, the analysis pass, the visual state and every
 renderer are byte-for-byte what they were. The cost above is what Phase B will add when it
-runs the tracker live, to be measured again there. The diagnostics run offline only.
+runs the tracker live, to be measured again there. The diagnostics run offline only. Phase B now runs it
+live and measures it there: see [Phase B](#phase-b-live-analysis-and-the-sonic-character-monitor).
 
 ## What Phase A did not do, and what remains for Phase B
 
@@ -561,3 +562,157 @@ For Phase B:
 5. **Widen the calibration** beyond one collection before trusting the ends of the scales.
 6. If roughness needs to be more than a proxy, try the delayed harmonic/percussive
    measure the engine already has (see the inventory).
+
+## Phase B: live analysis and the Sonic Character Monitor
+
+Phase B runs the Phase A tracker on the live stream and shows what it measures, so the
+values can be judged against what is heard during playback. **No visual uses them**: Radiant,
+Spectrum bars, Classic, the shaders, colours and particles are unchanged, and so is the visual
+state. Deciding which dimensions deserve a visual comes after watching them on real music.
+
+### How it runs
+
+`gmv.character.live.LiveCharacter` is one more subscriber of the `EventBus`, beside the
+visualizer and the session writer. There is no second capture or analysis pipeline:
+
+- **Its own bounded queue** (4,096 messages, about a minute of frames). Publishing a message
+  puts it on this queue and returns, as for every subscriber; nothing of the character
+  analysis runs in the capture path or the analysis pass. If the worker ever fell a minute
+  behind, the oldest messages would be dropped and counted, as for every subscriber.
+- **Its own worker thread** takes the feature frames and onset events in publication order and
+  hands them to an unchanged `SonicCharacter`. Given the same messages it gives exactly the
+  profiles Phase A gives offline, whatever the sizes of the batches it drains (tested, and
+  checked against `gmv character analyze` on the same file).
+- **Snapshots, not a stream of results.** Once per 0.5 s of audio time the worker builds the
+  short (4 s), medium (20 s) and long (90 s) profiles and keeps the seven values, their
+  confidences and the profile's warnings: one latest snapshot and a rolling two-minute history
+  (240 points). Nothing accumulates, so a stalled or closed monitor never sees stale results
+  when it looks again.
+- **Playback.** A new session (Start, a source change, Apply changes, a replay) starts
+  everything afresh. Inside a session the tracker's own rules apply: a new capture segment, a
+  restart or a seek starts afresh; silence and pauses hold the values without ageing them (the
+  monitor says "No music at the moment (values held)"); a pause during which nothing is
+  published changes nothing. Stop keeps the last values readable ("Stopped, last values").
+- **Local only.** Nothing is written or sent: no audio, no per-frame measurements, no
+  snapshots. Closing the application stops the worker.
+
+In the application's default mode the engine runs in its own process and the live analysis
+runs in the window's process, on the forwarded messages. With `GMV_ANALYSIS=thread` it shares
+the engine's interpreter; the benchmark below measures that case, the closer of the two to
+the analysis pass.
+
+### The monitor
+
+Open it with the **Character** button in the top bar or the **C** key; close it with its
+Close button, the window's own close button, the Character button or C again. It is a
+separate window: the visualizer's layout and drawing do not change while it is open, and it
+can be moved to another screen.
+
+- **Seven rows**, one per dimension: a bar on a labelled 0–1 scale with the value written
+  beside it, and under it a thinner bar and the number for its confidence.
+- **"not enough signal"** replaces the value when there is none yet or its confidence is under
+  0.3. That threshold is a display choice of the monitor; the values and confidences are Phase
+  A's, unchanged. Confidence is how much signal supports a value (enough music, the
+  measurements it needs, enough onsets), not the chance that it is right.
+- **Window**: Short (last 4 s) follows the music within seconds; Medium (20 s) a passage; Long
+  (90 s) the track's identity, which takes a minute or more to settle on a new track.
+- **History**: the last two minutes of audio, one line per dimension, faint and dashed where
+  the confidence is under 0.3 and broken where there was no value.
+- **State and warnings** in words: waiting for music, measuring (and how many seconds of music
+  were heard), no music at the moment, stopped; "under five seconds of music", "the level is
+  close to the silence threshold", and so on.
+- **Counters** at the bottom: frames taken in, messages dropped (should stay 0), messages
+  waiting, and the update cost per frame.
+
+It refreshes four times a second while it is open and redraws only when a new snapshot has
+arrived; closed, it does nothing.
+
+### Performance (measured on CachyOS)
+
+`scripts/benchmark_character_live.py`: generated audio (not a recording) played through the
+real engine at real-time pace in one process, alternately without and with the live analysis,
+two rounds of 60 s each; then 20 minutes of audio as fast as it goes; then the monitor drawn
+offscreen. Ryzen 9 5950X, Python 3.14.10, 2026-11-28.
+
+| | without | with the live analysis |
+|---|---:|---:|
+| Process time, share of one core (round 1 / round 2) | 7.4% / 7.2% | 7.9% / 8.0% |
+| Analysis pass per frame, 95th percentile (ms) | 1.13 / 1.11 | 1.08 / 1.11 |
+| Analysis pass per frame, worst (ms) | 1.61 / 1.71 | 1.49 / 1.62 |
+| Estimated capture to publication, 95th percentile (ms) | 28.5 / 28.2 | 28.1 / 28.2 |
+| Dropped audio blocks, discontinuities | 0, 0 | 0, 0 |
+
+| Live analysis | |
+|---|---:|
+| Tracker update per frame (real time, on its thread, waits for the interpreter included) | 92–93 µs |
+| The same, running as fast as it goes (20 min of audio) | 64 µs |
+| Worst single update (20 min) | 0.67 ms |
+| One snapshot (three profiles), about two per audio second | 0.81 ms |
+| Messages waiting at most (queue of 4,096) | 8 |
+| Messages dropped, errors | 0, 0 |
+| Process memory over 20 minutes of audio | 122.0 MB to 122.4 MB |
+| History kept | 240 points, fixed |
+| Monitor: refresh and draw with two minutes of history | 3.4 ms (95th percentile 3.6 ms), 4 times a second while open |
+| Monitor: refresh with nothing new | 0.005 ms |
+
+So the live analysis adds about half a percentage point of one core, and the analysis pass,
+the queues and the timing of publication are the same with it as without it. The per-frame
+update is slower than Phase A's offline 41 µs because it is timed on a thread that shares the
+interpreter with the analysis pass and includes onset events. These are generated-audio runs
+on this machine, not live playback.
+
+### Tests
+
+`tests/test_character_live.py` (25) and `tests/test_character_monitor.py` (12): exact
+agreement with Phase A for the same messages through the bus and worker, and with `gmv
+character analyze` on the same file; batch sizes from one message to all; history points equal
+the offline profile at each sample time; pause with silence or with no frames; stop and a new
+start; new sessions, segments and restarts; empty input; too little signal and confidence
+passed through unchanged; the bounded queue under a stalled worker (drops counted, newest
+state wins); readers on other threads; clean attach and detach with no threads left; a
+failing message counted and skipped; snapshots holding no audio or per-frame data; the
+visualizer seeing the same messages and state with the live analysis attached; the monitor's
+text, low-signal display, redrawing only on new data, fixed history, timer only while open;
+the Character button and C key; a running session, stop and restart; the view's state the same
+with the monitor open or closed; shutdown.
+
+### Limits
+
+- **Phase A's main finding stands.** The two reference tracks with different musical
+  personalities measured alike as whole recordings; the dimensions describe broad production
+  characteristics (dense or sparse, dark or bright, forceful or gentle, even or dynamic) better
+  than musical personality. Phase B does not change the measurements and does not address
+  this: it makes it possible to see how they behave during real playback.
+- **Track changes are not detected.** With system capture, one session can span many tracks:
+  the short window follows a new track within seconds, the long one takes a minute or two
+  (faster after three seconds of silence). Pressing Stop and Start begins afresh.
+- **Not yet run on real playback.** The tests and the benchmark use generated audio; nobody has
+  watched the monitor against music they know. Not run on Windows.
+- If messages were ever dropped (the counter shows it), the live profile would rest on fewer
+  frames than an offline analysis of the same session.
+
+### Testing it by ear
+
+1. Start GMV. In **Settings**, under Audio source, choose **System audio (PipeWire)** on
+   CachyOS (the system output on Windows), or an audio file. Press **Start**, then
+   **Character** (or C). Move the monitor next to the visualizer or onto the other screen.
+2. Play a track you know well. For the first seconds most rows read "not enough signal";
+   brightness and roughness come first, dynamics and regularity last (they need 12 to 20 s).
+3. Watch the **Short** window during the track and check:
+   - **Force** and **density** rise when the full band comes in and fall in a quiet intro or a
+     breakdown;
+   - **brightness** rises with cymbals, distorted guitars or a bright mix and falls on a dark,
+     bass-heavy passage;
+   - **pace** follows how many notes and hits there are a second; **regularity** is high for a
+     steady beat and low for rubato or free playing;
+   - **roughness** is high for noisy, percussive, distorted sound and low for clean, tonal sound;
+   - **dynamics** (Medium or Long) is high when quiet and loud passages alternate and low for a
+     track mastered at one level.
+4. Pause the player: the state should read "No music at the moment (values held)" and the
+   values should not move. Resume: they should carry on.
+5. After a few minutes, switch to **Long** and compare two tracks you hear as different. Note
+   where the values agree with what you hear and where they do not; remember that two dense,
+   modern productions may measure alike even when they feel different.
+6. Report back: the tracks (as you like to name them), which rows matched what you heard,
+   which did not and when, whether "not enough signal" appeared where you expected, and whether
+   the counters showed any dropped messages.

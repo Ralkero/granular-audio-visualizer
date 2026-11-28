@@ -144,7 +144,7 @@ See [capture test matrix and legacy single-file import format](docs/CAPTURE_VALI
 
 ## Sonic Character diagnostics (analysis only)
 
-`gmv character analyze` measures what kind of sound a recording is (forceful or gentle, dark or bright, how busy and how steady its rhythm is, smooth or rough, sparse or crowded, even or dynamic) from audio files or recorded sessions that you name, and writes a report, JSON and one chart per recording into the ignored `local-evidence/` folder. It only reads the files; nothing is searched for, copied or uploaded. The visualizer does not use these values yet. See [docs/SONIC_CHARACTER.md](docs/SONIC_CHARACTER.md).
+`gmv character analyze` measures what kind of sound a recording is (forceful or gentle, dark or bright, how busy and how steady its rhythm is, smooth or rough, sparse or crowded, even or dynamic) from audio files or recorded sessions that you name, and writes a report, JSON and one chart per recording into the ignored `local-evidence/` folder. It only reads the files; nothing is searched for, copied or uploaded. The visualizer does not use these values yet. While analysis runs, the **Character** button (or the C key) opens the Sonic Character Monitor, a separate window that shows the seven values and their confidence live, with a two-minute history; it changes nothing in the visualizer. See [docs/SONIC_CHARACTER.md](docs/SONIC_CHARACTER.md).
 
 ```
 gmv character analyze "track one.flac" "track two.mp3"
