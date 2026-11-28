@@ -72,6 +72,19 @@ Run every data-safe test:
 The spy test needs `strace` (layer 1). Each control is checked per recorder, so without strace
 the 15 tests that require strace's own detections fail by design.
 
+## Step 4: Stage 2's synthetic implementation
+
+Added for Step 4 (generated data only; Amendment 3, A3.9):
+- `presence_model/`: `b1train` (B1's trainer), `cbatches` (model C's inputs), `matched` (the
+  matched-start check), `scoring`, `auc`, `gates`, `recorders`, `launcher`, `seal` (N2), and the
+  disclosure check for results: `exact`, `disclosure`, `results`;
+- `seedplan.RunLedger.claim_horizon` (the `horizon` relations) and policy D in `screening`;
+- `experiments/presence/ctrain.py` (model C's training loop) and `synthetic_run.py` (B3's synthetic
+  end-to-end run); `cnn.SeededDropout` can record its mask digests.
+
+`tests/test_presence_model_ctrain.py` and `tests/test_presence_model_endtoend.py` need PyTorch and
+run in this environment; the end-to-end test trains 102 small models three times (about a minute).
+
 ## Status
 
 - **Stage 0 is done:** the protocol is registered and the environment set up.
@@ -79,4 +92,5 @@ the 15 tests that require strace's own detections fail by design.
 - **Still outstanding:** the real fold files with their hashes, and the aggregate MUSDB18-HQ
   overlap check (its matcher exists since Step 1b; running it is step 2). Both need separate
   authorisation to use real project data.
+- **Step 4 is built for generated data only;** review RG1b is next.
 - **Not yet run:** nothing has been run on the owner's music.
